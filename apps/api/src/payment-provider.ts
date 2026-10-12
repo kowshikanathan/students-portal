@@ -417,6 +417,40 @@ export class PaymentProviderController {
            WHERE id=$1`,
           [inserted.id],
         );
+        // Close an existing investigation only when this authenticated, correlated
+        // provider event establishes a terminal mandate outcome. The case closes
+        // for operations visibility; it neither retries nor moves money.
+        if (['active', 'failed', 'revoked'].includes(event.status)) {
+          const resolved = await c.query(
+            `UPDATE mandate_reconciliation_cases c
+             SET status='resolved_signed',resolved_at=now(),
+                 resolution_provider_event_id=$4,updated_at=now()
+             FROM payment_mandate_setup_requests r
+             WHERE c.setup_id=r.id AND c.tenant_id=r.tenant_id
+               AND c.tenant_id=$1 AND c.status='open'
+               AND r.provider=$2 AND r.provider_reference=$3
+               AND r.schedule_id=$5 AND r.rail=$6
+               AND r.status IN('active','failed')
+             RETURNING c.id,c.setup_id`,
+            [
+              tenantId,
+              provider,
+              event.providerReference,
+              inserted.id,
+              event.scheduleId,
+              event.rail,
+            ],
+          );
+          for (const row of resolved.rows) {
+            await this.db.audit(
+              c,
+              'provider:' + provider,
+              'fees.mandate_reconciliation.resolved_signed',
+              row.id,
+              { setupId: row.setup_id, providerEventId: event.eventId, mandateStatus: event.status },
+            );
+          }
+        }
         await this.db.audit(c, 'provider:' + provider, 'fees.mandate.provider_status', mandate.id, {
           providerEventId: event.eventId,
           scheduleId: event.scheduleId,
