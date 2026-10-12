@@ -267,3 +267,75 @@ for (const providerStatus of ['accepted', 'rejected'] as const) {
     }
   });
 }
+
+test('a lost worker response cannot replay a bank debit after durable submission claim', async () => {
+  const originalFetch = globalThis.fetch;
+  const previous = {
+    mode: process.env.AUTOPAY_PROVIDER_MODE,
+    url: process.env.AUTOPAY_DEBIT_CREATE_URL,
+    hosts: process.env.AUTOPAY_ALLOWED_HOSTS,
+    key: process.env.AUTOPAY_API_KEY,
+  };
+  process.env.AUTOPAY_PROVIDER_MODE = 'mandate_api';
+  process.env.AUTOPAY_DEBIT_CREATE_URL = 'https://payments.example.invalid/debits';
+  process.env.AUTOPAY_ALLOWED_HOSTS = 'payments.example.invalid';
+  process.env.AUTOPAY_API_KEY = 'synthetic-test-key';
+  let state = 'queued';
+  let failureCode = '';
+  let providerCalls = 0;
+  const audits: string[] = [];
+  globalThis.fetch = async () => {
+    assert.equal(state, 'uncertain', 'durable reservation must precede the bank request');
+    assert.equal(failureCode, 'PROVIDER_SUBMISSION_PENDING');
+    providerCalls++;
+    throw new Error('Bank request was sent, but the worker lost its response');
+  };
+  const db = {
+    query: async () => [{ ...attempt, status: state }],
+    tx: async (callback: (client: object) => Promise<unknown>) =>
+      callback({
+        query: async (sql: string) => {
+          if (sql.includes('SELECT a.id'))
+            return { rowCount: state === 'queued' ? 1 : 0, rows: state === 'queued' ? [{ id: attempt.id }] : [] };
+          if (sql.includes("failure_code='PROVIDER_SUBMISSION_PENDING'") && sql.includes('RETURNING id')) {
+            assert.equal(state, 'queued');
+            state = 'uncertain';
+            failureCode = 'PROVIDER_SUBMISSION_PENDING';
+            return { rowCount: 1, rows: [{ id: attempt.id }] };
+          }
+          if (sql.includes("failure_code='PROVIDER_SUBMIT_UNCERTAIN'")) {
+            assert.equal(state, 'uncertain');
+            failureCode = 'PROVIDER_SUBMIT_UNCERTAIN';
+            return { rowCount: 1, rows: [] };
+          }
+          throw new Error('Unexpected debit SQL: ' + sql);
+        },
+      }),
+    audit: async (_client: unknown, _actor: string, action: string) => {
+      audits.push(action);
+    },
+  } as unknown as Db;
+  try {
+    assert.equal(await submitAutopayDebit(db, 'interrupted-bank-call'), 'reconciliation_required');
+    assert.equal(state, 'uncertain');
+    assert.equal(failureCode, 'PROVIDER_SUBMIT_UNCERTAIN');
+    assert.equal(providerCalls, 1);
+    assert.equal(await submitAutopayDebit(db, 'interrupted-bank-call'), 'reconciliation_required');
+    assert.equal(providerCalls, 1, 'no duplicate bank request is allowed');
+    assert.deepEqual(audits, [
+      'fees.autopay.submission_claimed',
+      'fees.autopay.reconciliation_required',
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [key, value] of Object.entries({
+      AUTOPAY_PROVIDER_MODE: previous.mode,
+      AUTOPAY_DEBIT_CREATE_URL: previous.url,
+      AUTOPAY_ALLOWED_HOSTS: previous.hosts,
+      AUTOPAY_API_KEY: previous.key,
+    })) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
