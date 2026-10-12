@@ -127,7 +127,11 @@ export class PaymentProviderController {
       }
 
       if (event.type === 'payment_failed') {
-        const checkoutFailure = await c.query(
+        // A merchantAttemptId explicitly denotes a recurring debit rather
+        // than a one-time checkout. Never mutate a checkout using its callback.
+        const checkoutFailure = event.merchantAttemptId
+          ? { rowCount: 0 }
+          : await c.query(
           `UPDATE payment_checkout_sessions
            SET status='failed',failure_code=$4,updated_at=now()
            WHERE tenant_id=$1 AND provider=$2 AND provider_reference=$3
