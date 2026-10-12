@@ -64,7 +64,7 @@ const toMinor = (value: FormDataEntryValue | null) => {
 };
 
 export function FeeOperations() {
-  const { request } = useAdminApi();
+  const { request, session } = useAdminApi();
   const [overview, setOverview] = useState<any>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
@@ -78,6 +78,7 @@ export function FeeOperations() {
   const [lateFees, setLateFees] = useState<any[]>([]);
   const [mandateSetups, setMandateSetups] = useState<any[]>([]);
   const [mandateCases, setMandateCases] = useState<any[]>([]);
+  const [mandateEvidence, setMandateEvidence] = useState<any[]>([]);
   const [autopayAttempts, setAutopayAttempts] = useState<any[]>([]);
   const [checkoutSessions, setCheckoutSessions] = useState<any[]>([]);
   const [message, setMessage] = useState('');
@@ -91,7 +92,7 @@ export function FeeOperations() {
 
   const load = async () => {
     try {
-      const [o, s, p, m, st, py, cm, pe, ps, an, lf, ms, aa, cs, mc] = await Promise.all([
+      const [o, s, p, m, st, py, cm, pe, ps, an, lf, ms, aa, cs, mc, me] = await Promise.all([
         request('admin/fees/overview'),
         request<Schedule[]>('admin/fees/schedules'),
         request<any[]>('admin/fees/payments'),
@@ -107,6 +108,7 @@ export function FeeOperations() {
         request<any[]>('admin/fees/autopay-attempts'),
         request<any[]>('admin/fees/checkout-sessions'),
         request<any[]>('admin/fees/mandate-reconciliation-cases'),
+        request<any[]>('admin/fees/mandate-reconciliation-evidence'),
       ]);
       setOverview(o);
       setSchedules(s);
@@ -121,6 +123,7 @@ export function FeeOperations() {
       setLateFees(lf);
       setMandateSetups(ms);
       setMandateCases(mc);
+      setMandateEvidence(me);
       setAutopayAttempts(aa);
       setCheckoutSessions(cs);
       setMessage('');
@@ -217,6 +220,40 @@ export function FeeOperations() {
       setMessage(
         'Investigation recorded. Mandate remains blocked pending verified provider evidence.',
       );
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
+  async function submitMandateEvidence(e: FormEvent<HTMLFormElement>, caseId: string) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fields = new FormData(form);
+    try {
+      await request(
+        'admin/fees/mandate-reconciliation-cases/' + encodeURIComponent(caseId) + '/evidence',
+        'POST',
+        {
+          providerEvidenceReference: String(fields.get('providerEvidenceReference') || ''),
+          finding: String(fields.get('finding') || 'provider_inquiry_pending'),
+        },
+      );
+      await load();
+      setMessage('Provider evidence recorded. A separate owner must review it.');
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
+  async reviewMandateEvidence(evidenceId: string, decision: string) {
+    try {
+      await request(
+        'admin/fees/mandate-reconciliation-evidence/' + encodeURIComponent(evidenceId) + '/review',
+        'POST',
+        { decision },
+      );
+      await load();
+      setMessage('Independent review recorded. Mandate remains blocked until signed confirmation.');
     } catch (e) {
       setMessage((e as Error).message);
     }
@@ -938,6 +975,69 @@ export function FeeOperations() {
                       <span>{existingCase?.provider_case_reference || 'No provider case'}</span>
                       <span className="status-pill">{setup.status}</span>
                     </div>
+                    {existingCase && (
+                      <div>
+                        <form
+                          className="admin-form"
+                          onSubmit={(e) => submitMandateEvidence(e, existingCase.id)}
+                        >
+                          <label>
+                            Provider evidence reference
+                            <input
+                              name="providerEvidenceReference"
+                              required
+                              minLength={3}
+                              maxLength={120}
+                              pattern="[A-Za-z0-9._:-]+"
+                              autoComplete="off"
+                            />
+                          </label>
+                          <label>
+                            Provider investigation finding
+                            <select name="finding" defaultValue="provider_inquiry_pending">
+                              <option value="provider_inquiry_pending">Inquiry pending</option>
+                              <option value="provider_reports_registered">
+                                Provider reports registration exists
+                              </option>
+                              <option value="provider_reports_not_registered">
+                                Provider reports registration absent
+                              </option>
+                              <option value="provider_outcome_inconclusive">Inconclusive</option>
+                            </select>
+                          </label>
+                          <button type="submit">Record provider evidence</button>
+                        </form>
+                        {mandateEvidence
+                          .filter((entry) => entry.case_id === existingCase.id)
+                          .map((entry) => (
+                            <div className="record-row" key={entry.id}>
+                              <strong>{entry.provider_evidence_reference}</strong>
+                              <span>{entry.finding}</span>
+                              <span className="status-pill">
+                                {entry.decision || 'Review required'}
+                              </span>
+                              {!entry.decision && entry.submitted_by !== session.user.id && (
+                                <div>
+                                  <button
+                                    className="button outline"
+                                    onClick={() => void reviewMandateEvidence(entry.id, 'verified')}
+                                  >
+                                    Verify evidence
+                                  </button>
+                                  <button
+                                    className="button outline"
+                                    onClick={() =>
+                                      void reviewMandateEvidence(entry.id, 'insufficient_evidence')
+                                    }
+                                  >
+                                    Insufficient evidence
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    )}
                     {!existingCase && (
                       <form className="admin-form" onSubmit={(e) => openMandateCase(e, setup.id)}>
                         <label>
