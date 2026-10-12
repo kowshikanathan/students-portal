@@ -280,6 +280,29 @@ export class AuthController {
       },
     };
   }
+  @Post('logout-all')
+  @UseGuards(AuthGuard)
+  @Roles('owner', 'editor', 'sales', 'analyst')
+  async logoutAll(
+    @Req() req: AuthedRequest,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const count = await this.db.tx(async (c) => {
+      // Account-wide sign-out is self-service and must not depend on which
+      // institution is currently selected. All session tokens remain hashed.
+      const revoked = await c.query(
+        'UPDATE sessions SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL RETURNING id',
+        [req.actor.id],
+      );
+      await this.db.audit(c, req.actor.id, 'auth.sessions.revoke_all', req.actor.id, {
+        revokedSessions: revoked.rowCount,
+      });
+      return revoked.rowCount;
+    });
+    res.clearCookie('jodo_session', secureCookie());
+    return { status: 'signed_out_everywhere', revokedSessions: count };
+  }
+
   @Post('logout') @UseGuards(AuthGuard) @Roles('owner', 'editor', 'sales', 'analyst') async logout(
     @Req() req: AuthedRequest,
     @Res({ passthrough: true }) res: Response,
