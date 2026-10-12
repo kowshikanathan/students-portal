@@ -203,6 +203,7 @@ export class PayerMandateController {
     try {
       const response = await fetch(createUrl, {
         method: 'POST',
+        redirect: 'error',
         headers: {
           Authorization: 'Bearer ' + secret,
           'Content-Type': 'application/json',
