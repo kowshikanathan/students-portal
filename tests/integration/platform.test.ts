@@ -3608,3 +3608,56 @@ test('session revocation invalidates subsequent access', async () => {
   await call('/v1/auth/logout', 'POST', {}, {}, true);
   assert.equal((await call('/v1/admin/content', 'GET', undefined, {}, true)).r.status, 401);
 });
+
+test('account-wide self-revocation logs out every workspace session, including a restricted tenant', async () => {
+  const user = (
+    await owner.query('SELECT id FROM users WHERE lower(email)=lower($1)', [
+      process.env.OWNER_EMAIL,
+    ])
+  ).rows[0]!;
+  const makeSession = async (tenantId: string) => {
+    const raw = token();
+    const csrfToken = keyed('csrf:' + raw);
+    await owner.query(
+      `INSERT INTO sessions(user_id,tenant_id,token_hash,csrf_hash,expires_at)
+       VALUES($1,$2,$3,$4,now()+interval '8 hours')`,
+      [user.id, tenantId, digest(raw), digest(csrfToken)],
+    );
+    return { raw, csrf: csrfToken };
+  };
+  const restricted = await makeSession(secondaryTenantId);
+  const active = await makeSession(primaryTenantId);
+  await owner.query("UPDATE tenants SET status='restricted' WHERE id=$1", [secondaryTenantId]);
+  cookie = 'jodo_session=' + restricted.raw;
+  csrf = restricted.csrf;
+
+  assert.equal((await call('/v1/auth/me', 'GET', undefined, {}, true)).r.status, 200);
+  const activeBefore = await fetch(base + '/v1/auth/me', {
+    headers: { Cookie: 'jodo_session=' + active.raw },
+  });
+  assert.equal(activeBefore.status, 200);
+
+  const result = await call('/v1/auth/logout-all', 'POST', {}, {}, true);
+  assert.equal(result.r.status, 201, JSON.stringify(result.data));
+  assert.equal(result.data.status, 'signed_out_everywhere');
+  assert.ok(result.data.revokedSessions >= 2);
+  assert.equal((await call('/v1/auth/me', 'GET', undefined, {}, true)).r.status, 401);
+  const activeAfter = await fetch(base + '/v1/auth/me', {
+    headers: { Cookie: 'jodo_session=' + active.raw },
+  });
+  assert.equal(activeAfter.status, 401);
+  const remaining = (
+    await owner.query(
+      'SELECT count(*)::int AS count FROM sessions WHERE user_id=$1 AND revoked_at IS NULL',
+      [user.id],
+    )
+  ).rows[0]!;
+  assert.equal(remaining.count, 0);
+  const audit = (
+    await owner.query(
+      "SELECT id FROM audit WHERE action='auth.sessions.revoke_all' AND object_id=$1 ORDER BY id DESC LIMIT 1",
+      [user.id],
+    )
+  ).rows[0];
+  assert.ok(audit);
+});
