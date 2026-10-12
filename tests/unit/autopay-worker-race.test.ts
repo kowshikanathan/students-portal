@@ -54,8 +54,11 @@ for (const providerStatus of ['accepted', 'rejected'] as const) {
         callback({
           query: async (sql: string) => {
             queries.push(sql);
-            // Simulate a verified callback confirming the debit before the
-            // worker receives the HTTP response.
+            // The durable reservation wins first, then simulate a signed
+            // callback winning the race against the later HTTP response.
+            if (sql.includes('SELECT a.id')) return { rowCount: 1, rows: [{ id: attempt.id }] };
+            if (sql.includes('PROVIDER_SUBMISSION_PENDING') && sql.includes('RETURNING id'))
+              return { rowCount: 1, rows: [{ id: attempt.id }] };
             return { rowCount: 0, rows: [] };
           },
         }),
@@ -66,10 +69,14 @@ for (const providerStatus of ['accepted', 'rejected'] as const) {
 
     try {
       assert.equal(await submitAutopayDebit(db, 'synthetic-outbox-event'), 'provider_accepted');
-      const update = queries.find((query) => query.includes('UPDATE autopay_debit_attempts'));
+      const update = queries.find(
+        (query) =>
+          query.includes('UPDATE autopay_debit_attempts') &&
+          (query.includes("status='submitted'") || query.includes("status='failed'")),
+      );
       assert.ok(update);
-      assert.ok(update.includes("status IN('queued','uncertain')"));
-      assert.deepEqual(auditActions, []);
+      assert.ok(update.includes("failure_code='PROVIDER_SUBMISSION_PENDING'"));
+      assert.deepEqual(auditActions, ['fees.autopay.submission_claimed']);
     } finally {
       globalThis.fetch = originalFetch;
       for (const [key, value] of Object.entries({
@@ -122,7 +129,10 @@ test('an ineligible queued debit is cancelled without charging the payer', async
   const db = {
     query: async () => (queries++ === 0 ? [{ ...attempt }] : []),
     tx: async (callback: (client: object) => Promise<void>) =>
-      callback({ query: async () => ({ rowCount: 1 }) }),
+      callback({
+        query: async (sql: string) =>
+          sql.includes('SELECT a.id') ? { rowCount: 0, rows: [] } : { rowCount: 1, rows: [] },
+      }),
     audit: async (_client: unknown, _actor: string, action: string) => {
       audits.push(action);
     },
@@ -160,8 +170,9 @@ test('an unknown provider debit response is held for reconciliation', async () =
     tx: async (callback: (client: object) => Promise<void>) =>
       callback({
         query: async (sql: string) => {
+          if (sql.includes('SELECT a.id')) return { rowCount: 1, rows: [{ id: attempt.id }] };
           updates.push(sql);
-          return { rowCount: 1 };
+          return { rowCount: 1, rows: [] };
         },
       }),
     audit: async (_client: unknown, _actor: string, action: string) => {
@@ -170,9 +181,14 @@ test('an unknown provider debit response is held for reconciliation', async () =
   } as unknown as Db;
   try {
     assert.equal(await submitAutopayDebit(db, 'timed-out-event'), 'reconciliation_required');
-    assert.equal(updates.length, 1);
+    assert.equal(updates.length, 2);
+    assert.ok(updates[0].includes("failure_code='PROVIDER_SUBMISSION_PENDING'"));
+    assert.ok(updates[1].includes("failure_code='PROVIDER_SUBMIT_UNCERTAIN'"));
     assert.ok(updates.join('\n').includes('next_retry_at=NULL'));
-    assert.deepEqual(audits, ['fees.autopay.reconciliation_required']);
+    assert.deepEqual(audits, [
+      'fees.autopay.submission_claimed',
+      'fees.autopay.reconciliation_required',
+    ]);
   } finally {
     globalThis.fetch = originalFetch;
     for (const [key, value] of Object.entries({
@@ -217,6 +233,7 @@ for (const providerStatus of ['accepted', 'rejected'] as const) {
       tx: async (callback: (client: object) => Promise<void>) =>
         callback({
           query: async (sql: string) => {
+            if (sql.includes('SELECT a.id')) return { rows: [{ id: attempt.id }], rowCount: 1 };
             if (sql.includes('FROM payment_records'))
               return { rows: [{ id: 'signed-payment-1' }], rowCount: 1 };
             if (sql.includes('UPDATE autopay_debit_attempts')) updates.push(sql);
@@ -229,9 +246,13 @@ for (const providerStatus of ['accepted', 'rejected'] as const) {
     } as unknown as Db;
     try {
       assert.equal(await submitAutopayDebit(db, 'early-confirmed'), 'provider_accepted');
-      assert.equal(updates.length, 1);
-      assert.ok(updates[0].includes("status='confirmed'"));
-      assert.deepEqual(actions, ['fees.autopay.early_confirmation_reconciled']);
+      assert.equal(updates.length, 2);
+      assert.ok(updates[0].includes("failure_code='PROVIDER_SUBMISSION_PENDING'"));
+      assert.ok(updates[1].includes("status='confirmed'"));
+      assert.deepEqual(actions, [
+        'fees.autopay.submission_claimed',
+        'fees.autopay.early_confirmation_reconciled',
+      ]);
     } finally {
       globalThis.fetch = originalFetch;
       for (const [key, value] of Object.entries({
