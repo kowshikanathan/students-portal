@@ -108,13 +108,16 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
     const retrySql =
       attempt.attempt_no < maxAttempts ? nextRetry(Number(attempt.attempt_no)) : 'NULL';
     await db.tx(async (c) => {
-      await c.query(
+      const updated = await c.query(
         `UPDATE autopay_debit_attempts
          SET provider_reference=$2,status='failed',failure_code=$3,
              next_retry_at=${retrySql},updated_at=now()
-         WHERE id=$1`,
+         WHERE id=$1 AND status IN('queued','uncertain')`,
         [attempt.id, result.providerReference, result.reasonCode || 'PROVIDER_REJECTED'],
       );
+      // A signed provider callback may have confirmed this debit while the HTTP
+      // request was in flight. Never downgrade the confirmed financial state.
+      if (!updated.rowCount) return;
       await db.audit(c, 'worker', 'fees.autopay.rejected', attempt.id, {
         installmentId: attempt.installment_id,
         providerReference: result.providerReference,
@@ -126,13 +129,16 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
   }
 
   await db.tx(async (c) => {
-    await c.query(
+    const updated = await c.query(
       `UPDATE autopay_debit_attempts
        SET provider_reference=$2,status='submitted',failure_code=NULL,next_retry_at=NULL,
            submitted_at=now(),updated_at=now()
-       WHERE id=$1`,
+       WHERE id=$1 AND status IN('queued','uncertain')`,
       [attempt.id, result.providerReference],
     );
+    // The authoritative signed callback can arrive before the submission
+    // response. Preserve confirmed/cancelled outcomes and their audit trail.
+    if (!updated.rowCount) return;
     await db.audit(c, 'worker', 'fees.autopay.submitted', attempt.id, {
       installmentId: attempt.installment_id,
       providerReference: result.providerReference,
