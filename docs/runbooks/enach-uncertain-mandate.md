@@ -150,3 +150,17 @@ and the case's age in hours. Open cases are prioritized oldest first, and a
 24-hour age indicator helps owners identify items needing follow-up. Age is
 not evidence of failure, and no timer authorizes retries, mandate activation,
 or payment confirmation.
+
+## First mandate callback correlation
+
+Signed mandate-status webhooks cannot create the first local mandate unless
+the registration can be traced to a prior platform setup. New provider
+integrations should echo `merchantSetupId`; the existing handler checks the
+exact tenant, schedule, provider, rail, and provider reference before applying
+that callback. For legacy providers omitting `merchantSetupId`, the exact
+provider reference must already be stored against a matching setup in
+`created` or `active` status. An otherwise signed but orphaned event is
+recorded as `MANDATE_SETUP_NOT_FOUND`; when registration remains uncertain
+the more specific `MANDATE_SETUP_CORRELATION_REQUIRED` applies. Neither
+rejection inserts a mandate or confirms a payment. Lifecycle events for
+previously matched mandates continue to use the existing verified handler.
