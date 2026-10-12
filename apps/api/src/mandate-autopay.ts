@@ -362,7 +362,8 @@ export class AutopayAdminController {
   reconciliationCases(@Req() req: AuthedRequest) {
     return this.db.query(
       `SELECT c.id,c.setup_id,c.provider_case_reference,c.evidence_summary,
-              c.status,c.created_at,c.updated_at,r.schedule_id,r.rail,
+              c.status,c.created_at,c.updated_at,c.resolved_at,
+              c.resolution_provider_event_id,r.schedule_id,r.rail,
               r.status AS mandate_setup_status,s.account_reference
        FROM mandate_reconciliation_cases c
        JOIN payment_mandate_setup_requests r
