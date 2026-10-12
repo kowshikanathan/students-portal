@@ -70,10 +70,12 @@ export function AdminShell() {
       document.removeEventListener('visibilitychange', visibility);
     };
   }, []);
-  async function logout() {
-    if (!session) return;
+  async function signOut(everywhere: boolean) {
+    if (!session || busy) return;
+    setBusy(true);
+    setError('');
     try {
-      await api('/v1/auth/logout', {
+      await api(everywhere ? '/v1/auth/logout-all' : '/v1/auth/logout', {
         method: 'POST',
         headers: { 'X-CSRF-Token': session.csrf },
         body: '{}',
@@ -86,6 +88,8 @@ export function AdminShell() {
       } catch {}
     } catch (e) {
       setError((e as Error).message);
+    } finally {
+      setBusy(false);
     }
   }
   if (loading)
@@ -262,7 +266,18 @@ export function AdminShell() {
                 </label>
               )}
               <span className="status-pill">MFA session</span>
-              <button onClick={logout}>Sign out</button>
+              <button disabled={busy} onClick={() => void signOut(false)}>
+                Sign out
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  if (window.confirm('Sign out every session on all devices and workspaces?'))
+                    void signOut(true);
+                }}
+              >
+                Sign out everywhere
+              </button>
             </div>
           </div>
           <div className="admin-notice">
