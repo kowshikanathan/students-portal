@@ -255,7 +255,50 @@ export class PayerMandateController {
           ],
         )
       ).rows[0];
-      if (!row) throw new ConflictException('Mandate setup state changed before provider response');
+      if (!row) {
+        // A verified bank callback may activate the mandate before the
+        // provider's create-request HTTP response reaches this process.
+        // Respect that signed outcome; never revert an active mandate.
+        const current = (
+          await c.query(
+            `SELECT id,status,provider_reference,authorization_url,expires_at
+             FROM payment_mandate_setup_requests
+             WHERE id=$1 AND tenant_id=$2 AND schedule_id=$3 AND payer_id=$4
+             FOR UPDATE`,
+            [setup.id, access.tenant_id, access.schedule_id, access.payer_id],
+          )
+        ).rows[0];
+        if (!current || current.provider_reference !== providerResult.providerReference)
+          throw new ConflictException('Mandate setup state changed before provider response');
+
+        if (current.status === 'active') {
+          // The return page reads verified state, not a browser-side
+          // assumption. No second bank authorization is necessary.
+          return { ...current, authorization_url: returnUrl };
+        }
+        if (current.status === 'created' && !current.authorization_url) {
+          // A signed pending callback correlated the reference before the
+          // hosted authorization URL arrived. Fill only the missing URL.
+          const pending = (
+            await c.query(
+              `UPDATE payment_mandate_setup_requests
+               SET authorization_url=$2,expires_at=coalesce($3::timestamptz,now()+interval '30 minutes'),
+                   updated_at=now()
+               WHERE id=$1 AND status='created' AND provider_reference=$4
+                 AND authorization_url IS NULL
+               RETURNING id,status,authorization_url,expires_at`,
+              [
+                setup.id,
+                providerResult.authorizationUrl,
+                providerResult.expiresAt || null,
+                providerResult.providerReference,
+              ],
+            )
+          ).rows[0];
+          if (pending) return pending;
+        }
+        throw new ConflictException('Mandate setup state changed before provider response');
+      }
       await this.db.audit(c, 'payer:' + access.payer_id, 'fees.mandate_setup.created', setup.id, {
         rail: v.rail,
         providerReference: providerResult.providerReference,
