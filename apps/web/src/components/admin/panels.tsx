@@ -24,7 +24,10 @@ export function Dashboard() {
           <div className="dashboard-stats">
             {[
               ['Published pages', data.stats.published],
-              [data.scope === 'institution' ? 'Accepted enquiries' : 'Accepted leads', data.stats.leads],
+              [
+                data.scope === 'institution' ? 'Accepted enquiries' : 'Accepted leads',
+                data.stats.leads,
+              ],
               ['New enquiries', data.stats.new_leads],
               ['Open tasks', data.stats.open_tasks],
             ].map(([title, n]) => (
