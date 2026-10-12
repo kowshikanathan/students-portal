@@ -172,7 +172,12 @@ The existing `v1/provider/payments/webhook` handler supports optional
 signing key to `PAYMENT_WEBHOOK_SECRET`. Both keys must be independently
 generated, distinct, and at least 48 characters. Enable the old key only
 during a provider-approved cutover, deploy the new key as primary, and then
-remove the previous key after the provider confirms the switch. Callbacks
+remove the previous key after the provider confirms the switch. Every configured
+previous key must also have a `PAYMENT_WEBHOOK_PREVIOUS_SECRET_EXPIRES_AT`
+UTC timestamp no more than seven days in the future at service startup.
+The old key is automatically rejected after this deadline, even if the
+configuration remains. A missing or invalid deadline fails startup checks;
+the current signing key continues working when the old key expires. Callbacks
 must still satisfy the timestamp window, HMAC signature, strict payload
 schema, and replay/idempotency controls. A signature using an unconfigured
 or retired key is rejected before accessing the database. No key material
