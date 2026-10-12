@@ -286,9 +286,9 @@ export class PaymentProviderController {
             await c.query(
               `SELECT id FROM payment_mandate_setup_requests
                WHERE tenant_id=$1 AND schedule_id=$2
-                 AND provider=$3 AND rail=$4 AND status='uncertain'
+                 AND status='uncertain'
                LIMIT 1`,
-              [tenantId, event.scheduleId, provider, event.rail],
+              [tenantId, event.scheduleId],
             )
           ).rows[0];
           if (uncertain) {
