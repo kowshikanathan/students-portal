@@ -62,10 +62,11 @@ export function Dashboard() {
               <p className="eyebrow">Needs attention</p>
               {data.scope === 'institution' ? (
                 <>
-                  <h2>Tenant delivery status is separate</h2>
+                  <h2>{data.stats.attention} unread institution notifications</h2>
                   <p>
-                    Shared worker delivery records are not counted here. Use your institution
-                    notifications and enquiry inbox for tenant-owned updates.
+                    This count belongs to your active institution and your staff account. Review
+                    institution notifications for newly received enquiries. Shared delivery records
+                    remain separate and inaccessible here.
                   </p>
                 </>
               ) : (
