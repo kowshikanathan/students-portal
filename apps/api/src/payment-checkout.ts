@@ -138,6 +138,21 @@ export class PayerCheckoutController {
         throw new ConflictException('Installment does not belong to this fee account');
       if (installment.status === 'paid' || installment.status === 'cancelled')
         throw new ConflictException('This installment is not payable');
+      // Unknown checkout creation outcomes are not proof of failed payment.
+      // Serialize against other creation requests under the installment lock.
+      const openCheckout = (
+        await c.query(
+          `SELECT id FROM payment_checkout_sessions
+           WHERE tenant_id=$1 AND installment_id=$2
+             AND status IN('requested','created','uncertain')
+           LIMIT 1`,
+          [access.tenant_id, v.installmentId],
+        )
+      ).rows[0];
+      if (openCheckout)
+        throw new ConflictException(
+          'A checkout is awaiting verified provider outcome. Do not start another payment',
+        );
       // An unresolved eNACH/UPI debit may already be moving money. A second
       // checkout for the same installment risks collecting twice.
       const automaticDebitInFlight = await c.query(
