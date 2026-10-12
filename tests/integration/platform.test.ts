@@ -3533,6 +3533,21 @@ test('signed eNACH status correlates an uncertain registration without a second 
       ) VALUES($1,$2,$3,$4,'qa_enach_gateway','enach',$5,'uncertain','PROVIDER_CREATE_UNCERTAIN')`,
       [setupId, schedule.data.id, payer.data.id, randomUUID(), randomUUID()],
     );
+    const investigator = (
+      await owner.query(
+        `SELECT user_id FROM memberships WHERE tenant_id=$1 AND role_key='owner'
+         AND status='active' LIMIT 1`,
+        [primaryTenantId],
+      )
+    ).rows[0];
+    assert.ok(investigator);
+    const caseId = randomUUID();
+    await owner.query(
+      `INSERT INTO mandate_reconciliation_cases(
+        id,tenant_id,setup_id,provider_case_reference,evidence_summary,created_by
+      ) VALUES($1,$2,$3,$4,'provider_inquiry_opened',$5)`,
+      [caseId, primaryTenantId, setupId, 'QA-CASE-' + randomUUID().slice(0, 8), investigator.user_id],
+    );
     const reference = 'enach_' + randomUUID().replaceAll('-', '');
     const event = {
       eventId: 'evt_' + randomUUID(),
@@ -3560,6 +3575,11 @@ test('signed eNACH status correlates an uncertain registration without a second 
     ).rows[0];
     assert.equal(before.status, 'uncertain');
     assert.equal(before.provider_reference, null);
+    const unresolvedCase = (
+      await owner.query('SELECT status,resolution_provider_event_id FROM mandate_reconciliation_cases WHERE id=$1', [caseId])
+    ).rows[0];
+    assert.equal(unresolvedCase.status, 'open');
+    assert.equal(unresolvedCase.resolution_provider_event_id, null);
 
     const valid = await sendSigned(event);
     assert.equal(valid.r.status, 202, JSON.stringify(valid.data));
@@ -3572,6 +3592,15 @@ test('signed eNACH status correlates an uncertain registration without a second 
     ).rows[0];
     assert.equal(setup.status, 'active');
     assert.equal(setup.provider_reference, reference);
+    const resolvedCase = (
+      await owner.query(
+        'SELECT status,resolved_at,resolution_provider_event_id FROM mandate_reconciliation_cases WHERE id=$1',
+        [caseId],
+      )
+    ).rows[0];
+    assert.equal(resolvedCase.status, 'resolved_signed');
+    assert.ok(resolvedCase.resolved_at);
+    assert.ok(resolvedCase.resolution_provider_event_id);
     const mandates = (
       await owner.query(
         'SELECT status,rail FROM payment_mandates WHERE schedule_id=$1 AND provider_reference=$2',
@@ -3585,6 +3614,10 @@ test('signed eNACH status correlates an uncertain registration without a second 
     const replay = await sendSigned(event);
     assert.equal(replay.r.status, 202);
     assert.equal(replay.data.duplicate, true);
+    const afterReplayCase = (
+      await owner.query('SELECT resolution_provider_event_id FROM mandate_reconciliation_cases WHERE id=$1', [caseId])
+    ).rows[0];
+    assert.equal(afterReplayCase.resolution_provider_event_id, resolvedCase.resolution_provider_event_id);
     const count = (
       await owner.query(
         'SELECT count(*)::int AS count FROM payment_mandates WHERE schedule_id=$1 AND provider_reference=$2',
