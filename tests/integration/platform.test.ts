@@ -3193,7 +3193,7 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
     };
     const activated = await send(mandateEvent);
     assert.equal(activated.r.status, 202, JSON.stringify(activated.data));
-    assert.equal(activated.data.status, 'applied');
+    assert.equal(activated.data.status, 'applied', JSON.stringify(activated.data));
 
     const returnToken = new URL(providerReturnUrl).pathname.split('/').filter(Boolean).pop()!;
     const returned = await call('/v1/mandate-return/' + returnToken);
@@ -3375,7 +3375,7 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
       status: 'active',
       occurredAt: new Date().toISOString(),
     });
-    assert.equal(newMandate.data.status, 'applied');
+    assert.equal(newMandate.data.status, 'applied', JSON.stringify(newMandate.data));
     await tick(db);
     const interruptedAttempts = await db.query(
       'SELECT * FROM autopay_debit_attempts WHERE installment_id=$1',
