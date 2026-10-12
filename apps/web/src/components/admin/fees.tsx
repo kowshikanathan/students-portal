@@ -77,6 +77,7 @@ export function FeeOperations() {
   const [analytics, setAnalytics] = useState<any>(null);
   const [lateFees, setLateFees] = useState<any[]>([]);
   const [mandateSetups, setMandateSetups] = useState<any[]>([]);
+  const [mandateCases, setMandateCases] = useState<any[]>([]);
   const [autopayAttempts, setAutopayAttempts] = useState<any[]>([]);
   const [checkoutSessions, setCheckoutSessions] = useState<any[]>([]);
   const [message, setMessage] = useState('');
@@ -90,7 +91,7 @@ export function FeeOperations() {
 
   const load = async () => {
     try {
-      const [o, s, p, m, st, py, cm, pe, ps, an, lf, ms, aa, cs] = await Promise.all([
+      const [o, s, p, m, st, py, cm, pe, ps, an, lf, ms, aa, cs, mc] = await Promise.all([
         request('admin/fees/overview'),
         request<Schedule[]>('admin/fees/schedules'),
         request<any[]>('admin/fees/payments'),
@@ -105,6 +106,7 @@ export function FeeOperations() {
         request<any[]>('admin/fees/mandate-setups'),
         request<any[]>('admin/fees/autopay-attempts'),
         request<any[]>('admin/fees/checkout-sessions'),
+        request<any[]>('admin/fees/mandate-reconciliation-cases'),
       ]);
       setOverview(o);
       setSchedules(s);
@@ -118,6 +120,7 @@ export function FeeOperations() {
       setAnalytics(an);
       setLateFees(lf);
       setMandateSetups(ms);
+      setMandateCases(mc);
       setAutopayAttempts(aa);
       setCheckoutSessions(cs);
       setMessage('');
@@ -190,6 +193,28 @@ export function FeeOperations() {
         'Draft fee schedule created. Review components, concessions and installments before activation.',
       );
       await load();
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
+  const uncertainMandateSetups = mandateSetups.filter((setup) => setup.status === 'uncertain');
+
+  async function openMandateCase(e: FormEvent<HTMLFormElement>, setupId: string) {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const fields = new FormData(form);
+    try {
+      await request(
+        'admin/fees/mandate-setups/' + encodeURIComponent(setupId) + '/reconciliation',
+        'POST',
+        {
+          providerCaseReference: String(fields.get('providerCaseReference') || ''),
+          evidenceSummary: String(fields.get('evidenceSummary') || 'provider_inquiry_opened'),
+        },
+      );
+      await load();
+      setMessage('Investigation recorded. Mandate remains blocked pending verified provider evidence.');
     } catch (e) {
       setMessage((e as Error).message);
     }
@@ -892,6 +917,56 @@ export function FeeOperations() {
             collected by this console. Verified callbacks remain the source of truth for final
             payment and mandate status.
           </p>
+          {uncertainMandateSetups.length > 0 && (
+            <div className="admin-notice" role="status">
+              <strong>{uncertainMandateSetups.length} mandate setup(s) require investigation.</strong>
+              <p>
+                Do not create another authorization for the same schedule. Record only the approved
+                provider support case reference; never enter bank details, OTPs or credentials.
+              </p>
+              {uncertainMandateSetups.map((setup) => {
+                const existingCase = mandateCases.find((entry) => entry.setup_id === setup.id);
+                return (
+                  <div key={setup.id}>
+                    <div className="record-row">
+                      <strong>{setup.account_reference}</strong>
+                      <span>{setup.rail}</span>
+                      <span>{existingCase?.provider_case_reference || 'No provider case'}</span>
+                      <span className="status-pill">{setup.status}</span>
+                    </div>
+                    {!existingCase && (
+                      <form className="admin-form" onSubmit={(e) => openMandateCase(e, setup.id)}>
+                        <label>
+                          Provider case reference
+                          <input
+                            name="providerCaseReference"
+                            required
+                            minLength={3}
+                            maxLength={120}
+                            pattern="[A-Za-z0-9._:/-]+"
+                            autoComplete="off"
+                          />
+                        </label>
+                        <label>
+                          Investigation reason
+                          <select name="evidenceSummary" defaultValue="provider_inquiry_opened">
+                            <option value="provider_inquiry_opened">Provider inquiry opened</option>
+                            <option value="provider_reference_not_returned">
+                              Provider reference not returned
+                            </option>
+                            <option value="provider_status_not_confirmed">
+                              Provider status not confirmed
+                            </option>
+                          </select>
+                        </label>
+                        <button type="submit">Record investigation</button>
+                      </form>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
           {uncertainCheckouts.length > 0 && (
             <div className="admin-notice" role="status">
               <strong>
