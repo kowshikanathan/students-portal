@@ -478,17 +478,11 @@ export class AutopayAdminController {
   }
 
   @Post('mandate-reconciliation-cases/:caseId/provider-inquiry')
-  async inquireReconciliationProvider(
-    @Req() req: AuthedRequest,
-    @Param('caseId') caseId: string,
-  ) {
+  async inquireReconciliationProvider(@Req() req: AuthedRequest, @Param('caseId') caseId: string) {
     const id = z.uuid().parse(caseId);
     if (process.env.AUTOPAY_RECONCILE_MODE !== 'read_only')
       throw new ServiceUnavailableException('Provider reconciliation inquiries are disabled');
-    const url = safeProviderUrl(
-      process.env.AUTOPAY_RECONCILE_URL || '',
-      'AUTOPAY_RECONCILE_URL',
-    );
+    const url = safeProviderUrl(process.env.AUTOPAY_RECONCILE_URL || '', 'AUTOPAY_RECONCILE_URL');
     const secret = process.env.AUTOPAY_API_KEY!;
     const timeoutMs = Number(process.env.AUTOPAY_TIMEOUT_MS || 5000);
     const caseRow = (
@@ -574,8 +568,7 @@ export class AutopayAdminController {
           ],
         )
       ).rows[0];
-      if (!evidence)
-        throw new ConflictException('Provider inquiry reference was already recorded');
+      if (!evidence) throw new ConflictException('Provider inquiry reference was already recorded');
       await this.db.audit(
         c,
         req.actor.id,
