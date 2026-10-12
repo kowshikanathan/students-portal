@@ -66,7 +66,7 @@ for (const providerStatus of ['accepted', 'rejected'] as const) {
       assert.equal(await submitAutopayDebit(db, 'synthetic-outbox-event'), 'provider_accepted');
       const update = queries.find((query) => query.includes('UPDATE autopay_debit_attempts'));
       assert.ok(update);
-      assert.match(update, /status IN\\('queued','uncertain'\\)/);
+      assert.ok(update.includes("status IN('queued','uncertain')"));
       assert.deepEqual(auditActions, []);
     } finally {
       globalThis.fetch = originalFetch;
@@ -83,3 +83,55 @@ for (const providerStatus of ['accepted', 'rejected'] as const) {
     }
   });
 }
+
+test('an uncertain debit is not submitted to the provider again', async () => {
+  const previousMode = process.env.AUTOPAY_PROVIDER_MODE;
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  process.env.AUTOPAY_PROVIDER_MODE = 'mandate_api';
+  globalThis.fetch = async () => {
+    calls++;
+    throw new Error('Unexpected provider resubmission');
+  };
+  const db = {
+    query: async () => [{ ...attempt, status: 'uncertain' }],
+  } as unknown as Db;
+  try {
+    assert.equal(await submitAutopayDebit(db, 'uncertain-event'), 'reconciliation_required');
+    assert.equal(calls, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousMode === undefined) delete process.env.AUTOPAY_PROVIDER_MODE;
+    else process.env.AUTOPAY_PROVIDER_MODE = previousMode;
+  }
+});
+
+test('an ineligible queued debit is cancelled without charging the payer', async () => {
+  const previousMode = process.env.AUTOPAY_PROVIDER_MODE;
+  const originalFetch = globalThis.fetch;
+  process.env.AUTOPAY_PROVIDER_MODE = 'mandate_api';
+  let queries = 0;
+  let charged = false;
+  const audits: string[] = [];
+  globalThis.fetch = async () => {
+    charged = true;
+    throw new Error('Stale debit submitted');
+  };
+  const db = {
+    query: async () => (queries++ === 0 ? [{ ...attempt }] : []),
+    tx: async (callback: (client: object) => Promise<void>) =>
+      callback({ query: async () => ({ rowCount: 1 }) }),
+    audit: async (_client: unknown, _actor: string, action: string) => {
+      audits.push(action);
+    },
+  } as unknown as Db;
+  try {
+    assert.equal(await submitAutopayDebit(db, 'stale-event'), 'provider_accepted');
+    assert.equal(charged, false);
+    assert.deepEqual(audits, ['fees.autopay.stale_cancelled']);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (previousMode === undefined) delete process.env.AUTOPAY_PROVIDER_MODE;
+    else process.env.AUTOPAY_PROVIDER_MODE = previousMode;
+  }
+});
