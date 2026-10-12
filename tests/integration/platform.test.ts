@@ -3064,6 +3064,14 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
     const expiredReplay = await call('/v1/payer/' + payerToken + '/mandates', 'POST', winningBody);
     assert.equal(expiredReplay.r.status, 409);
     assert.equal(mandateCalls, 1);
+    // An expired URL does not prove bank rejection; a fresh idempotency key
+    // must not create another mandate while the earlier setup is unresolved.
+    const replacementAttempt = await call('/v1/payer/' + payerToken + '/mandates', 'POST', {
+      ...winningBody,
+      idempotencyKey: randomUUID(),
+    });
+    assert.equal(replacementAttempt.r.status, 409);
+    assert.equal(mandateCalls, 1);
     await owner.query(
       "UPDATE payment_mandate_setup_requests SET expires_at=now()+interval '15 minutes' WHERE id=$1",
       [setup.data.setupId],
