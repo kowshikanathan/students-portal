@@ -71,11 +71,13 @@ export function checkConfig() {
   if (!['disabled', 'read_only'].includes(process.env.AUTOPAY_RECONCILE_MODE || 'disabled'))
     throw Error('Unsupported autopay provider reconciliation mode');
   if (process.env.AUTOPAY_RECONCILE_MODE === 'read_only') {
-    if (
-      process.env.AUTOPAY_PROVIDER_MODE !== 'mandate_api' ||
-      process.env.PAYMENT_PROVIDER_MODE !== 'signed_hmac'
-    )
-      throw Error('Provider reconciliation requires configured mandate API and signed callbacks');
+    if (process.env.PAYMENT_PROVIDER_MODE !== 'signed_hmac')
+      throw Error('Provider reconciliation requires signed payment callbacks');
+    if (!process.env.AUTOPAY_API_KEY || process.env.AUTOPAY_API_KEY.length < 24)
+      throw Error('Read-only provider reconciliation requires a secure AUTOPAY_API_KEY');
+    const timeout = Number(process.env.AUTOPAY_TIMEOUT_MS || 5000);
+    if (!Number.isInteger(timeout) || timeout < 1000 || timeout > 15000)
+      throw Error('Invalid AUTOPAY_TIMEOUT_MS');
     let url: URL;
     try {
       url = new URL(process.env.AUTOPAY_RECONCILE_URL || '');
