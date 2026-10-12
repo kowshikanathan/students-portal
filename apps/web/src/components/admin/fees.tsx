@@ -889,9 +889,9 @@ export function FeeOperations() {
           </p>
           {uncertainAttempts.length > 0 && (
             <p className="admin-notice" role="status">
-              <strong>{uncertainAttempts.length} debit(s) require reconciliation.</strong>{' '}
-              Check the signed provider outcome before collecting again. Never assume payment
-              success from a redirect or a timeout.
+              <strong>{uncertainAttempts.length} debit(s) require reconciliation.</strong> Check the
+              signed provider outcome before collecting again. Never assume payment success from a
+              redirect or a timeout.
             </p>
           )}
           <div className="record-row">
