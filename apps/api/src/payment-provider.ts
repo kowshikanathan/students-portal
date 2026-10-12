@@ -62,7 +62,6 @@ export class PaymentProviderController {
     if (process.env.PAYMENT_PROVIDER_MODE !== 'signed_hmac')
       throw new ServiceUnavailableException('Payment provider webhook is not activated');
 
-    const secret = process.env.PAYMENT_WEBHOOK_SECRET!;
     const provider = process.env.PAYMENT_PROVIDER_NAME!;
     const raw = req.rawBody;
     if (!raw?.length) throw new ForbiddenException('Raw signed payload is unavailable');
@@ -72,14 +71,24 @@ export class PaymentProviderController {
     if (!Number.isInteger(ts) || Math.abs(Date.now() / 1000 - ts) > tolerance)
       throw new ForbiddenException('Webhook timestamp is outside the accepted window');
 
-    const expected = createHmac('sha256', secret)
-      .update(String(ts))
-      .update('.')
-      .update(raw)
-      .digest('hex');
+    // During an approved secret rotation, accept either the primary key or
+    // the explicitly configured previous key. Never accept arbitrary secrets
+    // supplied by a webhook or include key material in logs/response bodies.
+    const secrets = [
+      process.env.PAYMENT_WEBHOOK_SECRET,
+      process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET,
+    ].filter((value): value is string => Boolean(value));
     const supplied = (signature || '').replace(/^sha256=/i, '');
-    if (!safeEqualHex(expected, supplied))
-      throw new ForbiddenException('Webhook signature is invalid');
+    let verified = false;
+    for (const secret of secrets) {
+      const expected = createHmac('sha256', secret)
+        .update(String(ts))
+        .update('.')
+        .update(raw)
+        .digest('hex');
+      verified = safeEqualHex(expected, supplied) || verified;
+    }
+    if (!verified) throw new ForbiddenException('Webhook signature is invalid');
 
     const event = paymentProviderEventSchema.parse(body);
     const bodyHash = createHash('sha256').update(raw).digest('hex');
