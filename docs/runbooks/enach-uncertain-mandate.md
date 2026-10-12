@@ -78,3 +78,17 @@ must not enable retries until the separate, independently approved disposition
 workflow and real partner reconciliation integration are developed, tested and
 activated. Signed callbacks remain authoritative for bank outcomes. Single-owner
 installations must retain an unresolved case rather than self-approve.
+
+## Automatic closure from signed final provider outcomes (migration 030)
+
+An open investigation case moves to `resolved_signed` only inside the existing
+HMAC-authenticated mandate-status callback transaction when the provider reports
+`active`, `failed`, or `revoked` and its reference matches the tenant,
+provider, fee schedule, and mandate rail. The case stores the applied provider
+event ID and resolution time. Replayed events do not create additional
+resolutions; stale or mismatched events cannot close a case.
+
+A signed `pending` event does not close the case. Operator-entered evidence,
+even if independently reviewed as verified, does not close the case or change the
+bank's status. Resolved cases remain visible as read-only history in the existing
+fee-operations console. This closure is not a second authorization or payment.
