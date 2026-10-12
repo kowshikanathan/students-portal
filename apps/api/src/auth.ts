@@ -90,6 +90,7 @@ export class AuthGuard implements CanActivate {
       isTenantReadOnly(row.tenant_status) &&
       !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
       path !== '/v1/auth/logout' &&
+      path !== '/v1/auth/logout-all' &&
       path !== '/v1/auth/switch-tenant'
     ) {
       await this.db.tx((c) =>
