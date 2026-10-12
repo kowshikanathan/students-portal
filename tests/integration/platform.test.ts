@@ -3045,6 +3045,20 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
     assert.equal(setupRetry.data.setupId, setup.data.setupId);
     assert.equal(mandateCalls, 1);
 
+    // An idempotency replay must not redirect a payer to a bank authorization
+    // link that has already expired, even when the provider returned it before.
+    await owner.query(
+      "UPDATE payment_mandate_setup_requests SET expires_at=now()-interval '1 minute' WHERE id=$1",
+      [setup.data.setupId],
+    );
+    const expiredReplay = await call('/v1/payer/' + payerToken + '/mandates', 'POST', winningBody);
+    assert.equal(expiredReplay.r.status, 409);
+    assert.equal(mandateCalls, 1);
+    await owner.query(
+      "UPDATE payment_mandate_setup_requests SET expires_at=now()+interval '15 minutes' WHERE id=$1",
+      [setup.data.setupId],
+    );
+
     const competingSetup = await call('/v1/payer/' + payerToken + '/mandates', 'POST', {
       ...setupBody,
       idempotencyKey: randomUUID(),
