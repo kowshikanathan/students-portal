@@ -3587,6 +3587,20 @@ test('signed eNACH status correlates an uncertain registration without a second 
     ).rows[0];
     assert.equal(uncorrelatedMandates.count, 0);
 
+    // A different mandate rail must not bypass a still-uncertain registration
+    // on the same schedule by omitting merchantSetupId.
+    const crossRail = await sendSigned({
+      eventId: 'evt_' + randomUUID(),
+      type: 'mandate_status',
+      scheduleId: schedule.data.id,
+      rail: 'upi_autopay',
+      providerReference: 'upi_' + randomUUID().replaceAll('-', ''),
+      status: 'active',
+      occurredAt: new Date().toISOString(),
+    });
+    assert.equal(crossRail.r.status, 202, JSON.stringify(crossRail.data));
+    assert.equal(crossRail.data.code, 'MANDATE_SETUP_CORRELATION_REQUIRED');
+
     const mismatchedEventId = 'evt_' + randomUUID();
     const invalid = await sendSigned({
       ...event,
