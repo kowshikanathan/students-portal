@@ -382,7 +382,7 @@ export class AutopayAdminController {
     const uuid = z.uuid().parse(setupId);
     const input = z
       .object({
-        providerCaseReference: z.string().trim().regex(/^[A-Za-z0-9._:\\/-]{3,120}$/),
+        providerCaseReference: z.string().trim().regex(/^[A-Za-z0-9._:-]{3,120}$/),
         evidenceSummary: z.enum([
           'provider_inquiry_opened',
           'provider_reference_not_returned',
