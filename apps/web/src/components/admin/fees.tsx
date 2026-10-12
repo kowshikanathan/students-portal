@@ -228,7 +228,9 @@ export function FeeOperations() {
   async function inquireMandateProvider(caseId: string) {
     try {
       await request(
-        'admin/fees/mandate-reconciliation-cases/' + encodeURIComponent(caseId) + '/provider-inquiry',
+        'admin/fees/mandate-reconciliation-cases/' +
+          encodeURIComponent(caseId) +
+          '/provider-inquiry',
         'POST',
         {},
       );
