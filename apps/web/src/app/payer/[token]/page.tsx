@@ -142,8 +142,8 @@ export default async function PayerPortal({ params, searchParams }: Props) {
                   <span className="status-pill">{i.status}</span>
                   {pendingAutomaticDebit && (
                     <p className="small" role="status">
-                      Automatic debit pending bank confirmation. Do not pay again until the institute
-                      reconciles this attempt.
+                      Automatic debit pending bank confirmation. Do not pay again until the
+                      institute reconciles this attempt.
                     </p>
                   )}
                   {payable && (
