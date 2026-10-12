@@ -202,3 +202,12 @@ responses leave the case unresolved. Inquiries never update mandate status,
 unlock retries, or confirm payments; only signed provider callbacks do so.
 Actual response semantics must be adapted and accepted with the chosen bank
 partner before enabling the inquiry integration in production.
+
+## Provider inquiry response limits
+
+Read-only reconciliation queries reject non-JSON replies and responses larger
+than 16 KiB, whether or not the partner supplies a Content-Length header.
+Malformed or unexpectedly large responses are treated as unavailable, never as
+proof of registration or failure. No evidence, mandate status, retry permission,
+or payment state is changed on an invalid inquiry response. Providers should
+return only the inquiry reference and the defined outcome enum.
