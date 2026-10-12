@@ -2949,7 +2949,9 @@ test('hosted checkout is idempotent, provider-gated and reconciles to the fee le
     assert.equal(uncertainRecords[0]?.failure_code, 'PROVIDER_CREATE_UNCERTAIN');
     const ownerQueue = await call('/v1/admin/fees/checkout-sessions', 'GET', undefined, {}, true);
     assert.equal(ownerQueue.r.status, 200);
-    const reviewItem = ownerQueue.data.find((row: any) => row.installment_id === unknownInstallment);
+    const reviewItem = ownerQueue.data.find(
+      (row: any) => row.installment_id === unknownInstallment,
+    );
     assert.equal(reviewItem?.status, 'uncertain');
     assert.equal(reviewItem?.amount_minor, '25000');
     assert.ok(!JSON.stringify(reviewItem).includes('checkoutUrl'));
