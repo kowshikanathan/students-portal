@@ -132,7 +132,7 @@ export class PaymentProviderController {
            SET status='failed',failure_code=$4,updated_at=now()
            WHERE tenant_id=$1 AND provider=$2 AND provider_reference=$3
              AND installment_id=$5 AND amount_minor=$6 AND currency=$7
-             AND status IN('requested','created')`,
+             AND status IN('requested','created','uncertain')`,
           [
             tenantId,
             provider,
