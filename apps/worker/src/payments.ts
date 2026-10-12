@@ -158,10 +158,10 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
   await db.tx(async (c) => {
     // Payment confirmation callbacks lock the same installment. This lock
     // serializes a fast signed webhook with the slower debit-create response.
-    await c.query(
-      'SELECT id FROM fee_installments WHERE id=$1 AND tenant_id=$2 FOR UPDATE',
-      [attempt.installment_id, attempt.tenant_id],
-    );
+    await c.query('SELECT id FROM fee_installments WHERE id=$1 AND tenant_id=$2 FOR UPDATE', [
+      attempt.installment_id,
+      attempt.tenant_id,
+    ]);
     const confirmedPayment = (
       await c.query(
         `SELECT id FROM payment_records
