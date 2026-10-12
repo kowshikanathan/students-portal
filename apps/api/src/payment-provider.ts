@@ -148,21 +148,33 @@ export class PaymentProviderController {
           ],
         );
         const debitFailure = await c.query(
-          `UPDATE autopay_debit_attempts
-           SET status='failed',failure_code=$4,
+          `UPDATE autopay_debit_attempts a
+           SET provider_reference=coalesce(a.provider_reference,$3),
+               status='failed',failure_code=$4,
                next_retry_at=CASE
-                 WHEN attempt_no < greatest(1,least(10,$5::int))
+                 WHEN a.attempt_no < greatest(1,least(10,$5::int))
                    THEN now() + CASE
-                     WHEN attempt_no=1 THEN interval '1 hour'
-                     WHEN attempt_no=2 THEN interval '24 hours'
+                     WHEN a.attempt_no=1 THEN interval '1 hour'
+                     WHEN a.attempt_no=2 THEN interval '24 hours'
                      ELSE interval '48 hours'
                    END
                  ELSE NULL
                END,
                updated_at=now()
-           WHERE tenant_id=$1 AND provider=$2 AND provider_reference=$3
-             AND installment_id=$6 AND amount_minor=$7 AND currency=$8
-             AND status IN('submitted','queued','uncertain')`,
+           WHERE a.tenant_id=$1 AND a.provider=$2
+             AND a.installment_id=$6 AND a.amount_minor=$7 AND a.currency=$8
+             AND a.status IN('submitted','queued','uncertain')
+             AND (
+               ($9::uuid IS NULL AND a.provider_reference=$3)
+               OR ($9::uuid IS NOT NULL AND a.id=$9
+                   AND a.status IN('submitted','uncertain')
+                   AND (a.provider_reference IS NULL OR a.provider_reference=$3)
+                   AND NOT EXISTS (
+                     SELECT 1 FROM autopay_debit_attempts rival
+                     WHERE rival.tenant_id=$1 AND rival.provider=$2
+                       AND rival.provider_reference=$3 AND rival.id<>a.id
+                   ))
+             )`,
           [
             tenantId,
             provider,
@@ -172,6 +184,7 @@ export class PaymentProviderController {
             event.installmentId,
             event.amountMinor,
             event.currency,
+            event.merchantAttemptId || null,
           ],
         );
         // A signed event is not necessarily a valid transaction outcome.
