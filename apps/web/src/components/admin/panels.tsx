@@ -3,14 +3,24 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/client';
 import { DataTable, useAdminApi } from './context';
 export function Dashboard() {
-  const { request } = useAdminApi();
-  const [data, setData] = useState<any>(null),
-    [error, setError] = useState('');
+  const { request, session } = useAdminApi();
+  const [result, setResult] = useState<{ tenantId: string; value: any } | null>(null);
+  const [error, setError] = useState('');
+  const data = result?.tenantId === session.tenant.id ? result.value : null;
   useEffect(() => {
+    let active = true;
+    setError('');
     request('admin/overview')
-      .then(setData)
-      .catch((e) => setError(e.message));
-  }, []);
+      .then((value) => {
+        if (active) setResult({ tenantId: session.tenant.id, value });
+      })
+      .catch((e) => {
+        if (active) setError(e.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [session.tenant.id]);
   return (
     <>
       {error ? (
