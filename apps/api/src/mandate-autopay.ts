@@ -155,11 +155,13 @@ export class PayerMandateController {
         await c.query(
           `SELECT id,status FROM payment_mandate_setup_requests
            WHERE schedule_id=$1 AND status IN('requested','created','uncertain')
-             AND (expires_at IS NULL OR expires_at>now())
            ORDER BY created_at DESC LIMIT 1`,
           [access.schedule_id],
         )
       ).rows[0];
+      // Expiry of the bank authorization URL is not proof that the mandate
+      // failed. Keep every non-terminal setup blocking replacement until a
+      // verified provider result or independently approved reconciliation.
       if (open) throw new ConflictException('A mandate setup is already in progress');
 
       return (
