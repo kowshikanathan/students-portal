@@ -447,7 +447,11 @@ export class PaymentProviderController {
               'provider:' + provider,
               'fees.mandate_reconciliation.resolved_signed',
               row.id,
-              { setupId: row.setup_id, providerEventId: event.eventId, mandateStatus: event.status },
+              {
+                setupId: row.setup_id,
+                providerEventId: event.eventId,
+                mandateStatus: event.status,
+              },
             );
           }
         }
