@@ -21,14 +21,16 @@ such attempts move from `requested` to `uncertain`, not `failed`.
    internal setup ID and the original provider request idempotency key to query the
    **approved provider's authenticated back office/API**. Do not collect credentials
    from the payer or rely on a return-page screenshot.
-3. If the provider identifies the mandate and a verified signed callback arrives
-   with its reference, the existing callback handler can apply the financial mandate
-   state. The setup row is automatically matched only when it already has the
-   provider reference. A timeout can leave that reference blank; **do not assume the
-   setup row will resolve itself**.
-4. If the provider reports registration exists but the local setup remains uncertain,
+3. The outbound create payload contains `merchantSetupId`. When an approved
+   provider echoes that exact ID in its **HMAC-authenticated** `mandate_status`
+   callback, the handler verifies tenant, schedule, mandate rail, provider and
+   provider-reference uniqueness. It can then attach the reference to the
+   uncertain setup and apply the signed status without creating another setup.
+   The payer's return URL is never authoritative financial evidence.
+4. If the provider cannot echo `merchantSetupId`, or reports registration exists
+   without a matching signed callback, the local setup remains uncertain.
    open a documented manual reconciliation task; do not create another registration
-   or manually label money as received. A governed, audited reference-resolution
+   or manually label money as received. A governed, independently approved manual resolution
    workflow is still required for production activation.
 5. If the provider proves the request never registered, require independent operator
    approval and an audited disposition before allowing a new registration attempt.
@@ -50,6 +52,7 @@ Until those pass, the live eNACH provider stays disabled.
 - Same idempotency key cannot register another mandate.
 - Another idempotency key for the same schedule is blocked while uncertain.
 - Unsigned, replayed or out-of-order callbacks cannot create false success.
-- A verified callback with a known provider reference updates only the same
-  provider, schedule and tenant.
-- Missing provider reference remains an explicit human reconciliation case.
+- A verified callback with a matching `merchantSetupId` binds the reference only
+  to the same tenant, provider, schedule and rail.
+- Callbacks with missing, mismatched or reused setup IDs cannot unlock an uncertain setup.
+- Without a correlated signed callback, the unresolved case requires human reconciliation.

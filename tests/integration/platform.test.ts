@@ -3138,6 +3138,147 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
   }
 });
 
+test('signed eNACH status correlates an uncertain registration without a second mandate', async () => {
+  const previous = {
+    mode: process.env.PAYMENT_PROVIDER_MODE,
+    name: process.env.PAYMENT_PROVIDER_NAME,
+    secret: process.env.PAYMENT_WEBHOOK_SECRET,
+  };
+  Object.assign(process.env, {
+    PAYMENT_PROVIDER_MODE: 'signed_hmac',
+    PAYMENT_PROVIDER_NAME: 'qa_enach_gateway',
+    PAYMENT_WEBHOOK_SECRET: 'enach-test-webhook-secret-'.repeat(3),
+  });
+  const sendSigned = async (body: Record<string, unknown>) => {
+    const raw = JSON.stringify(body);
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const signature = createHmac('sha256', process.env.PAYMENT_WEBHOOK_SECRET!)
+      .update(timestamp)
+      .update('.')
+      .update(raw)
+      .digest('hex');
+    return call('/v1/provider/payments/webhook', 'POST', body, {
+      'X-Payment-Timestamp': timestamp,
+      'X-Payment-Signature': signature,
+    });
+  };
+  try {
+    const ref = 'enach_unknown_' + randomUUID().slice(0, 8);
+    const payer = await call(
+      '/v1/admin/payers',
+      'POST',
+      {
+        accountReference: ref,
+        displayName: 'Synthetic eNACH Reconciliation Payer',
+        email: 'enach-reconcile@example.invalid',
+        preferredChannel: 'email',
+        locale: 'en-IN',
+      },
+      {},
+      true,
+    );
+    assert.equal(payer.r.status, 201, JSON.stringify(payer.data));
+    const schedule = await call(
+      '/v1/admin/fees/schedules',
+      'POST',
+      {
+        accountReference: ref,
+        payerId: payer.data.id,
+        scopeType: 'student',
+        scopeReference: ref,
+        currency: 'INR',
+        components: [{ code: 'tuition', label: 'Tuition', amountMinor: 50000 }],
+        installments: [
+          {
+            dueDate: new Date(Date.now() + 86_400_000).toISOString().slice(0, 10),
+            amountMinor: 50000,
+          },
+        ],
+        note: 'Unknown registration correlation regression',
+      },
+      {},
+      true,
+    );
+    assert.equal(schedule.r.status, 201, JSON.stringify(schedule.data));
+    const setupId = randomUUID();
+    await owner.query(
+      `INSERT INTO payment_mandate_setup_requests(
+        id,schedule_id,payer_id,idempotency_key,provider,rail,return_token_hash,
+        status,failure_code
+      ) VALUES($1,$2,$3,$4,'qa_enach_gateway','enach',$5,'uncertain','PROVIDER_CREATE_UNCERTAIN')`,
+      [setupId, schedule.data.id, payer.data.id, randomUUID(), randomUUID()],
+    );
+    const reference = 'enach_' + randomUUID().replaceAll('-', '');
+    const event = {
+      eventId: 'evt_' + randomUUID(),
+      type: 'mandate_status',
+      merchantSetupId: setupId,
+      scheduleId: schedule.data.id,
+      rail: 'enach',
+      providerReference: reference,
+      status: 'active',
+      occurredAt: new Date().toISOString(),
+    };
+
+    const invalid = await sendSigned({
+      ...event,
+      eventId: 'evt_' + randomUUID(),
+      merchantSetupId: randomUUID(),
+    });
+    assert.equal(invalid.r.status, 202, JSON.stringify(invalid.data));
+    assert.equal(invalid.data.code, 'MANDATE_SETUP_CORRELATION_MISMATCH');
+    const before = (
+      await owner.query(
+        'SELECT status,provider_reference FROM payment_mandate_setup_requests WHERE id=$1',
+        [setupId],
+      )
+    ).rows[0];
+    assert.equal(before.status, 'uncertain');
+    assert.equal(before.provider_reference, null);
+
+    const valid = await sendSigned(event);
+    assert.equal(valid.r.status, 202, JSON.stringify(valid.data));
+    assert.equal(valid.data.status, 'applied');
+    const setup = (
+      await owner.query(
+        'SELECT status,provider_reference FROM payment_mandate_setup_requests WHERE id=$1',
+        [setupId],
+      )
+    ).rows[0];
+    assert.equal(setup.status, 'active');
+    assert.equal(setup.provider_reference, reference);
+    const mandates = (
+      await owner.query(
+        'SELECT status,rail FROM payment_mandates WHERE schedule_id=$1 AND provider_reference=$2',
+        [schedule.data.id, reference],
+      )
+    ).rows;
+    assert.equal(mandates.length, 1);
+    assert.equal(mandates[0].status, 'active');
+    assert.equal(mandates[0].rail, 'enach');
+
+    const replay = await sendSigned(event);
+    assert.equal(replay.r.status, 202);
+    assert.equal(replay.data.duplicate, true);
+    const count = (
+      await owner.query(
+        'SELECT count(*)::int AS count FROM payment_mandates WHERE schedule_id=$1 AND provider_reference=$2',
+        [schedule.data.id, reference],
+      )
+    ).rows[0];
+    assert.equal(count.count, 1);
+  } finally {
+    for (const [key, value] of Object.entries({
+      PAYMENT_PROVIDER_MODE: previous.mode,
+      PAYMENT_PROVIDER_NAME: previous.name,
+      PAYMENT_WEBHOOK_SECRET: previous.secret,
+    })) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test('session revocation invalidates subsequent access', async () => {
   await call('/v1/auth/logout', 'POST', {}, {}, true);
   assert.equal((await call('/v1/admin/content', 'GET', undefined, {}, true)).r.status, 401);

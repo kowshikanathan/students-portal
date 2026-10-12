@@ -203,12 +203,20 @@ export class PayerMandateController {
            WHERE id=$1 AND status='requested'`,
           [setup.id],
         );
-        await this.db.audit(c, 'payer:' + access.payer_id, 'fees.mandate_setup.uncertain', setup.id, {
-          code: 'PROVIDER_CREATE_UNCERTAIN',
-          rail: v.rail,
-        });
+        await this.db.audit(
+          c,
+          'payer:' + access.payer_id,
+          'fees.mandate_setup.uncertain',
+          setup.id,
+          {
+            code: 'PROVIDER_CREATE_UNCERTAIN',
+            rail: v.rail,
+          },
+        );
       });
-      throw new BadGatewayException('Mandate creation outcome is uncertain. Do not submit another registration; contact support for provider reconciliation.');
+      throw new BadGatewayException(
+        'Mandate creation outcome is uncertain. Do not submit another registration; contact support for provider reconciliation.',
+      );
     }
 
     const created = await this.db.tx(async (c) => {

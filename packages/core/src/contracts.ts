@@ -294,6 +294,9 @@ export const paymentProviderEventSchema = z.discriminatedUnion('type', [
         .trim()
         .regex(/^[A-Za-z0-9._:-]{3,160}$/),
       type: z.literal('mandate_status'),
+      // Echo of merchantSetupId supplied to the approved provider at registration.
+      // Optional for legacy callbacks, required to correlate an unknown create response.
+      merchantSetupId: z.uuid().optional(),
       scheduleId: z.uuid(),
       rail: z.enum(['upi_autopay', 'enach']),
       providerReference: z

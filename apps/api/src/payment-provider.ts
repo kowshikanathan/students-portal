@@ -288,6 +288,73 @@ export class PaymentProviderController {
           };
         }
 
+        // A verified callback may be the first evidence of a mandate accepted after
+        // the create API timed out. Correlate only using the setup ID originally sent
+        // to the provider, with exact tenant, schedule, rail and provider matches.
+        // A browser return, a guessed reference or an uncorrelated callback never
+        // resolves an uncertain registration.
+        if (event.merchantSetupId) {
+          const setup = (
+            await c.query(
+              `SELECT id,status,provider_reference
+               FROM payment_mandate_setup_requests
+               WHERE id=$1 AND tenant_id=$2 AND schedule_id=$3
+                 AND rail=$4 AND provider=$5
+               FOR UPDATE`,
+              [event.merchantSetupId, tenantId, event.scheduleId, event.rail, provider],
+            )
+          ).rows[0];
+          const occupied = (
+            await c.query(
+              `SELECT id FROM payment_mandate_setup_requests
+               WHERE tenant_id=$1 AND provider=$2 AND provider_reference=$3
+                 AND id<>$4 LIMIT 1`,
+              [tenantId, provider, event.providerReference, event.merchantSetupId],
+            )
+          ).rows[0];
+          if (
+            !setup ||
+            !['requested', 'created', 'uncertain', 'active'].includes(setup.status) ||
+            (setup.provider_reference && setup.provider_reference !== event.providerReference) ||
+            occupied
+          ) {
+            await c.query(
+              `UPDATE payment_provider_events
+               SET status='failed',failure_code='MANDATE_SETUP_CORRELATION_MISMATCH'
+               WHERE id=$1`,
+              [inserted.id],
+            );
+            await this.db.audit(
+              c,
+              'provider:' + provider,
+              'fees.mandate.setup_correlation_rejected',
+              event.merchantSetupId,
+              { providerEventId: event.eventId, scheduleId: event.scheduleId },
+            );
+            return {
+              accepted: false,
+              duplicate: false,
+              status: 'failed',
+              code: 'MANDATE_SETUP_CORRELATION_MISMATCH',
+            };
+          }
+          if (!setup.provider_reference) {
+            await c.query(
+              `UPDATE payment_mandate_setup_requests
+               SET provider_reference=$2,updated_at=now()
+               WHERE id=$1 AND provider_reference IS NULL`,
+              [setup.id, event.providerReference],
+            );
+            await this.db.audit(
+              c,
+              'provider:' + provider,
+              'fees.mandate.setup_correlated',
+              setup.id,
+              { providerEventId: event.eventId, providerReference: event.providerReference },
+            );
+          }
+        }
+
         const mandate = existingMandate
           ? (
               await c.query(
