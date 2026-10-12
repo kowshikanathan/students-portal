@@ -296,8 +296,14 @@ test('a lost worker response cannot replay a bank debit after durable submission
       callback({
         query: async (sql: string) => {
           if (sql.includes('SELECT a.id'))
-            return { rowCount: state === 'queued' ? 1 : 0, rows: state === 'queued' ? [{ id: attempt.id }] : [] };
-          if (sql.includes("failure_code='PROVIDER_SUBMISSION_PENDING'") && sql.includes('RETURNING id')) {
+            return {
+              rowCount: state === 'queued' ? 1 : 0,
+              rows: state === 'queued' ? [{ id: attempt.id }] : [],
+            };
+          if (
+            sql.includes("failure_code='PROVIDER_SUBMISSION_PENDING'") &&
+            sql.includes('RETURNING id')
+          ) {
             assert.equal(state, 'queued');
             state = 'uncertain';
             failureCode = 'PROVIDER_SUBMISSION_PENDING';
