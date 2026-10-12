@@ -135,3 +135,52 @@ test('an ineligible queued debit is cancelled without charging the payer', async
     else process.env.AUTOPAY_PROVIDER_MODE = previousMode;
   }
 });
+
+test('an unknown provider debit response is held for reconciliation', async () => {
+  const old = {
+    mode: process.env.AUTOPAY_PROVIDER_MODE,
+    url: process.env.AUTOPAY_DEBIT_CREATE_URL,
+    hosts: process.env.AUTOPAY_ALLOWED_HOSTS,
+    key: process.env.AUTOPAY_API_KEY,
+  };
+  const originalFetch = globalThis.fetch;
+  process.env.AUTOPAY_PROVIDER_MODE = 'mandate_api';
+  process.env.AUTOPAY_DEBIT_CREATE_URL = 'https://payments.example.invalid/debits';
+  process.env.AUTOPAY_ALLOWED_HOSTS = 'payments.example.invalid';
+  process.env.AUTOPAY_API_KEY = 'synthetic-test-key';
+  globalThis.fetch = async () => {
+    throw new Error('Provider timeout: outcome unknown');
+  };
+  const updates: string[] = [];
+  const audits: string[] = [];
+  const db = {
+    query: async () => [{ ...attempt }],
+    tx: async (callback: (client: object) => Promise<void>) =>
+      callback({
+        query: async (sql: string) => {
+          updates.push(sql);
+          return { rowCount: 1 };
+        },
+      }),
+    audit: async (_client: unknown, _actor: string, action: string) => {
+      audits.push(action);
+    },
+  } as unknown as Db;
+  try {
+    assert.equal(await submitAutopayDebit(db, 'timed-out-event'), 'reconciliation_required');
+    assert.equal(updates.length, 1);
+    assert.ok(updates[0].includes("next_retry_at=NULL"));
+    assert.deepEqual(audits, ['fees.autopay.reconciliation_required']);
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const [key, value] of Object.entries({
+      AUTOPAY_PROVIDER_MODE: old.mode,
+      AUTOPAY_DEBIT_CREATE_URL: old.url,
+      AUTOPAY_ALLOWED_HOSTS: old.hosts,
+      AUTOPAY_API_KEY: old.key,
+    })) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
