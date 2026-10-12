@@ -57,7 +57,10 @@ test('cannot open an eNACH case for a missing or non-uncertain setup', async () 
     await assert.rejects(
       new AutopayAdminController(db).openReconciliationCase(request, setupId, input),
     );
-    assert.equal(queries.some(({ sql }) => sql.includes('INSERT INTO')), false);
+    assert.equal(
+      queries.some(({ sql }) => sql.includes('INSERT INTO')),
+      false,
+    );
     assert.deepEqual(audits, []);
   }
 });
@@ -88,7 +91,10 @@ test('one uncertain eNACH setup accepts only one investigation case', async () =
     new AutopayAdminController(duplicate.db).openReconciliationCase(request, setupId, input),
     /already exists/i,
   );
-  assert.equal(duplicate.queries.some(({ sql }) => sql.includes('INSERT INTO')), false);
+  assert.equal(
+    duplicate.queries.some(({ sql }) => sql.includes('INSERT INTO')),
+    false,
+  );
   assert.deepEqual(duplicate.audits, []);
 });
 
