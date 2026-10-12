@@ -107,3 +107,15 @@ verification, not a replacement for provider signature verification.
 Regression coverage attempts a forged resolution using a rejected provider event,
 then confirms that a valid signed callback closes the case exactly once and
 prevents subsequent editing or deletion.
+
+## Rejecting uncorrelated first-mandate callbacks
+
+An HMAC-valid `mandate_status` callback is not enough to identify a registration
+if a schedule has an `uncertain` setup without a provider reference. When the
+callback has no `merchantSetupId` and does not match an existing mandate, the
+handler rejects it with `MANDATE_SETUP_CORRELATION_REQUIRED` while *any* setup
+on that schedule is uncertain, including one on another mandate rail. The
+provider event remains auditable as rejected and no new mandate is inserted.
+A callback with a valid, correlated original setup ID still follows the
+existing signed-event path. This prevents duplicate mandates without adding a
+manual activation shortcut.
