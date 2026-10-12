@@ -113,7 +113,7 @@ prevents subsequent editing or deletion.
 An HMAC-valid `mandate_status` callback is not enough to identify a registration
 if a schedule has an `uncertain` setup without a provider reference. When the
 callback has no `merchantSetupId` and does not match an existing mandate, the
-handler rejects it with `MANDATE_SETUP_CORRELATION_REQUIRED` while *any* setup
+handler rejects it with `MANDATE_SETUP_CORRELATION_REQUIRED` while _any_ setup
 on that schedule is uncertain, including one on another mandate rail. The
 provider event remains auditable as rejected and no new mandate is inserted.
 A callback with a valid, correlated original setup ID still follows the
