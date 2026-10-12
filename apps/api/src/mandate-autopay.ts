@@ -364,12 +364,37 @@ export class AutopayAdminController {
       `SELECT c.id,c.setup_id,c.provider_case_reference,c.evidence_summary,
               c.status,c.created_at,c.updated_at,c.resolved_at,
               c.resolution_provider_event_id,r.schedule_id,r.rail,
-              r.status AS mandate_setup_status,s.account_reference
+              r.status AS mandate_setup_status,s.account_reference,
+              floor(extract(epoch from now()-c.created_at)/3600)::integer AS age_hours,
+              review_counts.evidence_count,review_counts.pending_review_count,
+              review_counts.verified_count,review_counts.insufficient_count,
+              review_counts.last_evidence_at,
+              CASE
+                WHEN c.status='resolved_signed' THEN 'resolved_signed'
+                WHEN review_counts.evidence_count=0 THEN 'awaiting_provider_evidence'
+                WHEN review_counts.pending_review_count>0 THEN 'awaiting_independent_review'
+                WHEN review_counts.verified_count>0 THEN 'awaiting_signed_callback'
+                ELSE 'additional_provider_evidence_needed'
+              END AS queue_state
        FROM mandate_reconciliation_cases c
        JOIN payment_mandate_setup_requests r
          ON r.id=c.setup_id AND r.tenant_id=c.tenant_id
        JOIN fee_schedules s ON s.id=r.schedule_id AND s.tenant_id=c.tenant_id
-       WHERE c.tenant_id=$1 ORDER BY c.created_at DESC LIMIT 300`,
+       CROSS JOIN LATERAL (
+         SELECT count(*)::integer AS evidence_count,
+                count(*) FILTER (WHERE v.id IS NULL)::integer AS pending_review_count,
+                count(*) FILTER (WHERE v.decision='verified')::integer AS verified_count,
+                count(*) FILTER (WHERE v.decision='insufficient_evidence')::integer
+                  AS insufficient_count,
+                max(e.submitted_at) AS last_evidence_at
+         FROM mandate_reconciliation_evidence e
+         LEFT JOIN mandate_reconciliation_reviews v
+           ON v.evidence_id=e.id AND v.tenant_id=e.tenant_id
+         WHERE e.case_id=c.id AND e.tenant_id=c.tenant_id
+       ) review_counts
+       WHERE c.tenant_id=$1
+       ORDER BY CASE WHEN c.status='open' THEN 0 ELSE 1 END,
+                c.created_at ASC LIMIT 300`,
       [req.actor.tenantId],
     );
   }
