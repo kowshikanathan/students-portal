@@ -1,16 +1,19 @@
 # eNACH/UPI AutoPay: uncertain mandate setup runbook
 
 ## Scope
+
 This supplements the existing `payment_mandate_setup_requests` flow and its signed
 `mandate_status` callbacks. It does not enable a bank, gateway or lending provider.
 
 ## Why this state exists
+
 A network timeout, invalid response or dropped connection after a create request is
 **not evidence that the provider rejected the registration**. It may have accepted the
 mandate while the platform lacked its provider reference. From migration 025 onward,
 such attempts move from `requested` to `uncertain`, not `failed`.
 
 ## Operator procedure
+
 1. Keep payment registration and retries disabled for this schedule while it has a
    `requested`, `created` or `uncertain` setup. An `uncertain` record deliberately
    has no automatic expiry. Never create a different idempotency key to bypass it.
@@ -35,12 +38,14 @@ such attempts move from `requested` to `uncertain`, not `failed`.
    belong in support notes.
 
 ## Launch requirements
+
 A real approved partner adapter must provide reconciliation by merchant setup ID or
 idempotency key, deterministic response mapping, signed callback authentication,
 operator-verified unknown-outcome resolution and end-to-end sandbox/UAT coverage.
 Until those pass, the live eNACH provider stays disabled.
 
 ## Regression checks
+
 - A timeout must leave `uncertain`, not `failed`.
 - Same idempotency key cannot register another mandate.
 - Another idempotency key for the same schedule is blocked while uncertain.
