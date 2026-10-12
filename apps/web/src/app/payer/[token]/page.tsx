@@ -154,8 +154,8 @@ export default async function PayerPortal({ params, searchParams }: Props) {
                   )}
                   {pendingCheckout && (
                     <p className="small" role="status">
-                      An existing hosted checkout is pending or awaiting bank reconciliation. Do
-                      not start another payment until the institute verifies its status.
+                      An existing hosted checkout is pending or awaiting bank reconciliation. Do not
+                      start another payment until the institute verifies its status.
                     </p>
                   )}
                   {payable && (
