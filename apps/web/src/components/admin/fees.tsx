@@ -966,11 +966,14 @@ export function FeeOperations() {
                 provider support case reference; never enter bank details, OTPs or credentials.
               </p>
               <p className="small">
-                {mandateCases.filter((entry) => entry.status === 'open').length} open investigation(s)
+                {mandateCases.filter((entry) => entry.status === 'open').length} open
+                investigation(s)
                 {' · '}
-                {mandateCases.filter(
-                  (entry) => entry.status === 'open' && Number(entry.age_hours) >= 24,
-                ).length}{' '}
+                {
+                  mandateCases.filter(
+                    (entry) => entry.status === 'open' && Number(entry.age_hours) >= 24,
+                  ).length
+                }{' '}
                 older than 24 hours. Case age is a triage indicator, not a bank status or retry
                 authorization.
               </p>
@@ -992,11 +995,11 @@ export function FeeOperations() {
                         {' · '}
                         {existingCase.evidence_count} evidence item(s)
                         {' · '}
-                        {existingCase.pending_review_count} awaiting independent review.
-                        No investigation outcome releases a mandate.
+                        {existingCase.pending_review_count} awaiting independent review. No
+                        investigation outcome releases a mandate.
                       </p>
                     )}
- 
+
                     {existingCase && (
                       <div>
                         <form
