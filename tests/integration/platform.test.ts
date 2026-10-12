@@ -3037,6 +3037,13 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
     assert.equal(setupRetry.data.setupId, setup.data.setupId);
     assert.equal(mandateCalls, 1);
 
+    const competingSetup = await call('/v1/payer/' + payerToken + '/mandates', 'POST', {
+      ...setupBody,
+      idempotencyKey: randomUUID(),
+    });
+    assert.equal(competingSetup.r.status, 409);
+    assert.equal(mandateCalls, 1);
+
     const mandateEvent = {
       eventId: 'evt_' + randomUUID(),
       type: 'mandate_status',
