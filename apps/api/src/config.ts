@@ -68,6 +68,31 @@ export function checkConfig() {
     if (!Number.isInteger(attempts) || attempts < 1 || attempts > 10)
       throw Error('Invalid AUTOPAY_MAX_ATTEMPTS');
   }
+  if (!['disabled', 'read_only'].includes(process.env.AUTOPAY_RECONCILE_MODE || 'disabled'))
+    throw Error('Unsupported autopay provider reconciliation mode');
+  if (process.env.AUTOPAY_RECONCILE_MODE === 'read_only') {
+    if (
+      process.env.AUTOPAY_PROVIDER_MODE !== 'mandate_api' ||
+      process.env.PAYMENT_PROVIDER_MODE !== 'signed_hmac'
+    )
+      throw Error('Provider reconciliation requires configured mandate API and signed callbacks');
+    let url: URL;
+    try {
+      url = new URL(process.env.AUTOPAY_RECONCILE_URL || '');
+    } catch {
+      throw Error('Invalid AUTOPAY_RECONCILE_URL');
+    }
+    const hosts = (process.env.AUTOPAY_ALLOWED_HOSTS || '')
+      .split(',')
+      .map((host) => host.trim().toLowerCase());
+    if (!hosts.includes(url.hostname.toLowerCase()) || url.username || url.password)
+      throw Error('Reconciliation provider URL must use an allowlisted host');
+    const local =
+      process.env.DEPLOYMENT_MODE !== 'production' &&
+      ['127.0.0.1', 'localhost', '::1'].includes(url.hostname);
+    if (url.protocol !== 'https:' && !(local && url.protocol === 'http:'))
+      throw Error('Reconciliation provider URL requires HTTPS');
+  }
   if (process.env.PAYMENT_CHECKOUT_MODE === 'redirect_api') {
     if (
       !process.env.PAYMENT_PROVIDER_NAME ||
