@@ -3385,9 +3385,12 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
     });
     assert.equal(badAmount.data.code, 'DEBIT_ATTEMPT_CORRELATION_MISMATCH');
     assert.equal(
-      (await db.query('SELECT count(*)::int AS count FROM payment_records WHERE installment_id=$1', [
-        interruptedInstallmentId,
-      ]))[0]!.count,
+      (
+        await db.query(
+          'SELECT count(*)::int AS count FROM payment_records WHERE installment_id=$1',
+          [interruptedInstallmentId],
+        )
+      )[0]!.count,
       0,
     );
     const recovered = await send(earlyEvent);
@@ -3403,9 +3406,12 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
     assert.equal(recoveredAttempt.status, 'confirmed');
     assert.equal(recoveredAttempt.provider_reference, earlyDebitReference);
     assert.equal(
-      (await db.query('SELECT count(*)::int AS count FROM payment_records WHERE installment_id=$1', [
-        interruptedInstallmentId,
-      ]))[0]!.count,
+      (
+        await db.query(
+          'SELECT count(*)::int AS count FROM payment_records WHERE installment_id=$1',
+          [interruptedInstallmentId],
+        )
+      )[0]!.count,
       1,
     );
     const staleFailure = await send({
@@ -3416,7 +3422,9 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
     });
     assert.equal(staleFailure.data.status, 'failed');
     assert.equal(
-      (await db.query('SELECT status FROM autopay_debit_attempts WHERE id=$1', [interrupted.id]))[0]!.status,
+      (
+        await db.query('SELECT status FROM autopay_debit_attempts WHERE id=$1', [interrupted.id])
+      )[0]!.status,
       'confirmed',
     );
     await tick(db);
