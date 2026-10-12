@@ -239,6 +239,12 @@ export async function tick(db: Db) {
            WHERE s.status='active'
              AND i.status NOT IN('paid','cancelled','adjusted')
              AND i.due_date<=current_date
+             AND NOT EXISTS (
+               SELECT 1 FROM payment_checkout_sessions pc
+               WHERE pc.tenant_id=i.tenant_id AND pc.installment_id=i.id
+                 AND pc.status IN('requested','created')
+                 AND (pc.expires_at IS NULL OR pc.expires_at>now())
+             )
              AND (
                last_attempt.attempt_no IS NULL
                OR (
