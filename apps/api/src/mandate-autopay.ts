@@ -358,6 +358,25 @@ export class AutopayAdminController {
     );
   }
 
+  @Get('checkout-sessions')
+  checkouts(@Req() req: AuthedRequest) {
+    // Read-only financial reconciliation queue. Never expose hosted checkout
+    // URLs, return tokens or sensitive provider credentials to staff.
+    return this.db.query(
+      `SELECT c.id,c.schedule_id,c.installment_id,c.provider,
+              c.provider_reference,c.amount_minor,c.currency,c.status,
+              c.failure_code,c.expires_at,c.created_at,
+              s.account_reference,i.sequence
+       FROM payment_checkout_sessions c
+       JOIN fee_schedules s ON s.id=c.schedule_id AND s.tenant_id=c.tenant_id
+       JOIN fee_installments i ON i.id=c.installment_id AND i.tenant_id=c.tenant_id
+       WHERE c.tenant_id=$1
+       ORDER BY CASE WHEN c.status='uncertain' THEN 0 ELSE 1 END,
+                c.created_at DESC LIMIT 300`,
+      [req.actor.tenantId],
+    );
+  }
+
   @Get('autopay-attempts')
   attempts(@Req() req: AuthedRequest) {
     return this.db.query(
