@@ -78,6 +78,7 @@ export function FeeOperations() {
   const [lateFees, setLateFees] = useState<any[]>([]);
   const [mandateSetups, setMandateSetups] = useState<any[]>([]);
   const [autopayAttempts, setAutopayAttempts] = useState<any[]>([]);
+  const [checkoutSessions, setCheckoutSessions] = useState<any[]>([]);
   const [message, setMessage] = useState('');
   const [installmentRows, setInstallmentRows] = useState([{ dueDate: '', amount: '' }]);
   const [componentRows, setComponentRows] = useState([
@@ -89,7 +90,7 @@ export function FeeOperations() {
 
   const load = async () => {
     try {
-      const [o, s, p, m, st, py, cm, pe, ps, an, lf, ms, aa] = await Promise.all([
+      const [o, s, p, m, st, py, cm, pe, ps, an, lf, ms, aa, cs] = await Promise.all([
         request('admin/fees/overview'),
         request<Schedule[]>('admin/fees/schedules'),
         request<any[]>('admin/fees/payments'),
@@ -103,6 +104,7 @@ export function FeeOperations() {
         request<any[]>('admin/fees/late-fees'),
         request<any[]>('admin/fees/mandate-setups'),
         request<any[]>('admin/fees/autopay-attempts'),
+        request<any[]>('admin/fees/checkout-sessions'),
       ]);
       setOverview(o);
       setSchedules(s);
@@ -117,6 +119,7 @@ export function FeeOperations() {
       setLateFees(lf);
       setMandateSetups(ms);
       setAutopayAttempts(aa);
+      setCheckoutSessions(cs);
       setMessage('');
     } catch (e) {
       setMessage((e as Error).message);
@@ -193,6 +196,7 @@ export function FeeOperations() {
   }
 
   const uncertainAttempts = autopayAttempts.filter((attempt) => attempt.status === 'uncertain');
+  const uncertainCheckouts = checkoutSessions.filter((session) => session.status === 'uncertain');
   const prioritizedAttempts = [...autopayAttempts]
     .sort((a, b) => Number(b.status === 'uncertain') - Number(a.status === 'uncertain'))
     .slice(0, 12);
@@ -878,7 +882,8 @@ export function FeeOperations() {
           <h2>Mandates, AutoPay & settlements</h2>
           <p>
             {mandates.length} mandate record(s) · {mandateSetups.length} setup attempt(s) ·{' '}
-            {autopayAttempts.length} automated debit attempt(s) · {settlements.length} settlement
+            {autopayAttempts.length} automated debit attempt(s) · {checkoutSessions.length} hosted
+            checkout(s) · {settlements.length} settlement
             record(s) · {communications.length} communication record(s).
           </p>
           <p className="small">
@@ -887,6 +892,23 @@ export function FeeOperations() {
             collected by this console. Verified callbacks remain the source of truth for final
             payment and mandate status.
           </p>
+          {uncertainCheckouts.length > 0 && (
+            <div className="admin-notice" role="status">
+              <strong>{uncertainCheckouts.length} hosted checkout(s) require reconciliation.</strong>
+              <p>
+                Unknown bank session creation is not a payment failure. Verify the provider outcome
+                before permitting another collection.
+              </p>
+              {uncertainCheckouts.slice(0, 8).map((session) => (
+                <div className="record-row" key={session.id}>
+                  <strong>{session.account_reference}</strong>
+                  <span>#{session.sequence} · {rupees(session.amount_minor)}</span>
+                  <span>{session.failure_code || 'BANK_OUTCOME_UNKNOWN'}</span>
+                  <span className="status-pill">{session.status}</span>
+                </div>
+              ))}
+            </div>
+          )}
           {uncertainAttempts.length > 0 && (
             <p className="admin-notice" role="status">
               <strong>{uncertainAttempts.length} debit(s) require reconciliation.</strong> Check the
