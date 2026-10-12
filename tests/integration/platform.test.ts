@@ -3107,6 +3107,39 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
     assert.equal(attempts.length, 1);
     assert.equal(attempts[0]!.status, 'queued');
 
+    // Prevent a duplicate collection on the hosted-checkout rail while the
+    // approved mandate worker has an unresolved debit for this installment.
+    const priorCheckout = {
+      mode: process.env.PAYMENT_CHECKOUT_MODE,
+      url: process.env.PAYMENT_CHECKOUT_CREATE_URL,
+      hosts: process.env.PAYMENT_CHECKOUT_ALLOWED_HOSTS,
+      key: process.env.PAYMENT_CHECKOUT_API_KEY,
+    };
+    Object.assign(process.env, {
+      PAYMENT_CHECKOUT_MODE: 'redirect_api',
+      PAYMENT_CHECKOUT_CREATE_URL: 'http://127.0.0.1:' + providerPort + '/checkout',
+      PAYMENT_CHECKOUT_ALLOWED_HOSTS: '127.0.0.1',
+      PAYMENT_CHECKOUT_API_KEY: 'synthetic-checkout-key',
+    });
+    try {
+      const blockedCheckout = await call('/v1/payer/' + payerToken + '/checkout', 'POST', {
+        installmentId,
+        amountMinor: 90000,
+        idempotencyKey: randomUUID(),
+      });
+      assert.equal(blockedCheckout.r.status, 409, JSON.stringify(blockedCheckout.data));
+    } finally {
+      for (const [key, value] of Object.entries({
+        PAYMENT_CHECKOUT_MODE: priorCheckout.mode,
+        PAYMENT_CHECKOUT_CREATE_URL: priorCheckout.url,
+        PAYMENT_CHECKOUT_ALLOWED_HOSTS: priorCheckout.hosts,
+        PAYMENT_CHECKOUT_API_KEY: priorCheckout.key,
+      })) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+
     await tick(db);
     attempts = await db.query(
       'SELECT * FROM autopay_debit_attempts WHERE installment_id=$1 ORDER BY attempt_no',
