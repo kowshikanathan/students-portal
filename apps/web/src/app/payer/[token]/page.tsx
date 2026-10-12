@@ -34,10 +34,8 @@ export default async function PayerPortal({ params, searchParams }: Props) {
   const query = await searchParams;
   const data = await load(token);
   if (!data) notFound();
-  const pendingMandateSetup = data.mandateSetups?.find(
-    (setup: any) =>
-      ['requested', 'created', 'uncertain'].includes(setup.status) &&
-      (!setup.expires_at || new Date(setup.expires_at).getTime() > Date.now()),
+  const pendingMandateSetup = data.mandateSetups?.find((setup: any) =>
+    ['requested', 'created', 'uncertain'].includes(setup.status),
   );
   const paid = data.installments.reduce(
     (sum: number, i: any) => sum + Number(i.paid_amount_minor || 0),
