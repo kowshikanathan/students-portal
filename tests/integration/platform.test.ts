@@ -3590,6 +3590,35 @@ test('signed eNACH status correlates an uncertain registration without a second 
     assert.equal(unresolvedCase.status, 'open');
     assert.equal(unresolvedCase.resolution_provider_event_id, null);
 
+    // A failed/mismatched provider event is not resolution evidence, even if
+    // somebody tries to write directly to the investigation table.
+    const rejectedEvent = (
+      await owner.query(
+        `SELECT id FROM payment_provider_events
+         WHERE provider_event_id=$1 AND event_type='mandate_status'`,
+        [invalid.data.providerEventId || ''],
+      )
+    ).rows[0];
+    const anyRejectedEvent = rejectedEvent ||
+      (
+        await owner.query(
+          `SELECT id FROM payment_provider_events
+           WHERE tenant_id=$1 AND provider=$2 AND status='failed'
+           ORDER BY received_at DESC LIMIT 1`,
+          [primaryTenantId, 'qa_enach_gateway'],
+        )
+      ).rows[0];
+    assert.ok(anyRejectedEvent);
+    await assert.rejects(
+      owner.query(
+        `UPDATE mandate_reconciliation_cases
+         SET status='resolved_signed',resolved_at=now(),resolution_provider_event_id=$2
+         WHERE id=$1`,
+        [caseId, anyRejectedEvent.id],
+      ),
+      /correlated applied terminal provider event/i,
+    );
+
     const valid = await sendSigned(event);
     assert.equal(valid.r.status, 202, JSON.stringify(valid.data));
     assert.equal(valid.data.status, 'applied');
@@ -3610,6 +3639,18 @@ test('signed eNACH status correlates an uncertain registration without a second 
     assert.equal(resolvedCase.status, 'resolved_signed');
     assert.ok(resolvedCase.resolved_at);
     assert.ok(resolvedCase.resolution_provider_event_id);
+    await assert.rejects(
+      owner.query(
+        `UPDATE mandate_reconciliation_cases
+         SET provider_case_reference='TAMPERED' WHERE id=$1`,
+        [caseId],
+      ),
+      /immutable except signed final resolution/i,
+    );
+    await assert.rejects(
+      owner.query('DELETE FROM mandate_reconciliation_cases WHERE id=$1', [caseId]),
+      /cannot be deleted/i,
+    );
     const mandates = (
       await owner.query(
         'SELECT status,rail FROM payment_mandates WHERE schedule_id=$1 AND provider_reference=$2',
