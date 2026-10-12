@@ -39,6 +39,41 @@ export class OperationsController {
   @Get('overview')
   @Roles('owner', 'editor', 'sales', 'analyst')
   async overview(@Req() req: AuthedRequest) {
+    const workspace = (
+      await this.db.query(
+        "SELECT slug FROM tenants WHERE id=$1 AND status<>'archived'",
+        [req.actor.tenantId],
+      )
+    )[0];
+    if (!workspace) throw new ForbiddenException('Workspace is unavailable');
+    if (workspace.slug !== 'default') {
+      // Never query the shared legacy lead/outbox/audit surfaces in an
+      // institution dashboard. These counts are scoped to the active tenant.
+      const stats = (
+        await this.db.query(
+          `SELECT
+             (SELECT count(*)::int FROM content
+              WHERE tenant_id=$1 AND published_revision IS NOT NULL AND deleted_at IS NULL)
+               AS published,
+             (SELECT count(*)::int FROM tenant_enquiries WHERE tenant_id=$1) AS leads,
+             (SELECT count(*)::int FROM tenant_enquiries
+              WHERE tenant_id=$1 AND stage='new') AS new_leads,
+             (SELECT count(*)::int FROM tasks
+              WHERE tenant_id=$1 AND status='open') AS open_tasks,
+             NULL::int AS attention`,
+          [req.actor.tenantId],
+        )
+      )[0];
+      return {
+        stats,
+        scope: 'institution',
+        mode: process.env.DEPLOYMENT_MODE,
+        updatedAt: new Date().toISOString(),
+        definition:
+          'Institution-only published pages, accepted enquiries and open tasks. Shared delivery records are deliberately excluded.',
+        productionAccepted: false,
+      };
+    }
     await this.requireLegacyWorkspace(req);
     const stats = (
       await this.db.query(
