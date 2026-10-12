@@ -40,10 +40,9 @@ export class OperationsController {
   @Roles('owner', 'editor', 'sales', 'analyst')
   async overview(@Req() req: AuthedRequest) {
     const workspace = (
-      await this.db.query(
-        "SELECT slug FROM tenants WHERE id=$1 AND status<>'archived'",
-        [req.actor.tenantId],
-      )
+      await this.db.query("SELECT slug FROM tenants WHERE id=$1 AND status<>'archived'", [
+        req.actor.tenantId,
+      ])
     )[0];
     if (!workspace) throw new ForbiddenException('Workspace is unavailable');
     if (workspace.slug !== 'default') {
