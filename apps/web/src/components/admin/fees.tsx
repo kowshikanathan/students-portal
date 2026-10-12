@@ -889,10 +889,9 @@ export function FeeOperations() {
           </p>
           {uncertainAttempts.length > 0 && (
             <p className="admin-notice" role="status">
-              {uncertainAttempts.length} recurring debit attempt(s) have an unknown provider
-              outcome. Reconcile with the approved
-              provider before any further collection; a browser return or manual retry does not
-              establish payment success.
+              <strong>{uncertainAttempts.length} debit(s) require reconciliation.</strong>{' '}
+              Check the signed provider outcome before collecting again. Never assume payment
+              success from a redirect or a timeout.
             </p>
           )}
           <div className="record-row">
