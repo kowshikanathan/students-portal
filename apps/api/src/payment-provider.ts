@@ -277,6 +277,44 @@ export class PaymentProviderController {
           };
         }
 
+        // A verified signature authenticates the sender, not permission to
+        // register an additional mandate. Never create a second mandate with
+        // another provider reference while this fee schedule is already active.
+        // Migration 032 independently enforces one active mandate per schedule
+        // if a future writer bypasses this callback-level rejection.
+        if (!existingMandate) {
+          const conflictingActiveMandate = (
+            await c.query(
+              `SELECT id FROM payment_mandates
+               WHERE tenant_id=$1 AND schedule_id=$2 AND status='active'
+                 AND (provider<>$3 OR provider_reference<>$4)
+               LIMIT 1 FOR UPDATE`,
+              [tenantId, event.scheduleId, provider, event.providerReference],
+            )
+          ).rows[0];
+          if (conflictingActiveMandate) {
+            await c.query(
+              `UPDATE payment_provider_events
+               SET status='failed',failure_code='ACTIVE_MANDATE_REFERENCE_CONFLICT'
+               WHERE id=$1`,
+              [inserted.id],
+            );
+            await this.db.audit(
+              c,
+              'provider:' + provider,
+              'fees.mandate.conflicting_active_reference_rejected',
+              conflictingActiveMandate.id,
+              { providerEventId: event.eventId, scheduleId: event.scheduleId },
+            );
+            return {
+              accepted: false,
+              duplicate: false,
+              status: 'failed',
+              code: 'ACTIVE_MANDATE_REFERENCE_CONFLICT',
+            };
+          }
+        }
+
         // For a first mandate, a signature alone does not establish that our
         // platform requested the registration. Legacy callbacks may omit
         // merchantSetupId only when the exact provider reference was already
@@ -322,44 +360,6 @@ export class PaymentProviderController {
               { providerEventId: event.eventId, scheduleId: event.scheduleId, code },
             );
             return { accepted: false, duplicate: false, status: 'failed', code };
-          }
-        }
-
-        // A verified signature authenticates the sender, not permission to
-        // register an additional mandate. Never create a second mandate with
-        // another provider reference while this fee schedule is already active.
-        // Migration 032 independently enforces one active mandate per schedule
-        // if a future writer bypasses this callback-level rejection.
-        if (!existingMandate) {
-          const conflictingActiveMandate = (
-            await c.query(
-              `SELECT id FROM payment_mandates
-               WHERE tenant_id=$1 AND schedule_id=$2 AND status='active'
-                 AND (provider<>$3 OR provider_reference<>$4)
-               LIMIT 1 FOR UPDATE`,
-              [tenantId, event.scheduleId, provider, event.providerReference],
-            )
-          ).rows[0];
-          if (conflictingActiveMandate) {
-            await c.query(
-              `UPDATE payment_provider_events
-               SET status='failed',failure_code='ACTIVE_MANDATE_REFERENCE_CONFLICT'
-               WHERE id=$1`,
-              [inserted.id],
-            );
-            await this.db.audit(
-              c,
-              'provider:' + provider,
-              'fees.mandate.conflicting_active_reference_rejected',
-              conflictingActiveMandate.id,
-              { providerEventId: event.eventId, scheduleId: event.scheduleId },
-            );
-            return {
-              accepted: false,
-              duplicate: false,
-              status: 'failed',
-              code: 'ACTIVE_MANDATE_REFERENCE_CONFLICT',
-            };
           }
         }
 
