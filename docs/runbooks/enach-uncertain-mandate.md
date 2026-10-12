@@ -164,3 +164,16 @@ recorded as `MANDATE_SETUP_NOT_FOUND`; when registration remains uncertain
 the more specific `MANDATE_SETUP_CORRELATION_REQUIRED` applies. Neither
 rejection inserts a mandate or confirms a payment. Lifecycle events for
 previously matched mandates continue to use the existing verified handler.
+
+## Signed webhook secret rollover
+
+The existing `v1/provider/payments/webhook` handler supports optional
+`PAYMENT_WEBHOOK_PREVIOUS_SECRET` while switching providers from an old
+signing key to `PAYMENT_WEBHOOK_SECRET`. Both keys must be independently
+generated, distinct, and at least 48 characters. Enable the old key only
+during a provider-approved cutover, deploy the new key as primary, and then
+remove the previous key after the provider confirms the switch. Callbacks
+must still satisfy the timestamp window, HMAC signature, strict payload
+schema, and replay/idempotency controls. A signature using an unconfigured
+or retired key is rejected before accessing the database. No key material
+is included in webhook responses or audit entries.
