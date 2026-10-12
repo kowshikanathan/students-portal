@@ -43,7 +43,10 @@ test('provider evidence records a tenant-scoped finding without changing mandate
     finding: 'provider_outcome_inconclusive',
   });
   assert.deepEqual(audits, ['fees.mandate_reconciliation.evidence_submitted']);
-  assert.equal(writes.some((sql) => sql.includes('UPDATE payment_mandate')), false);
+  assert.equal(
+    writes.some((sql) => sql.includes('UPDATE payment_mandate')),
+    false,
+  );
 });
 
 test('author cannot review their own eNACH evidence', async () => {
@@ -96,7 +99,10 @@ test('independent eNACH review is audited but cannot unblock mandate', async () 
     decision: 'verified',
   });
   assert.deepEqual(audits, ['fees.mandate_reconciliation.evidence_reviewed']);
-  assert.equal(writes.some((sql) => sql.includes('UPDATE payment_mandate')), false);
+  assert.equal(
+    writes.some((sql) => sql.includes('UPDATE payment_mandate')),
+    false,
+  );
 });
 
 test('unknown evidence review decision is rejected before database access', async () => {
