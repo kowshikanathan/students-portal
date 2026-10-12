@@ -939,10 +939,7 @@ export function FeeOperations() {
                       <span className="status-pill">{setup.status}</span>
                     </div>
                     {!existingCase && (
-                      <form
-                        className="admin-form"
-                        onSubmit={(e) => openMandateCase(e, setup.id)}
-                      >
+                      <form className="admin-form" onSubmit={(e) => openMandateCase(e, setup.id)}>
                         <label>
                           Provider case reference
                           <input
