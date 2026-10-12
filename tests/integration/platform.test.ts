@@ -336,6 +336,15 @@ test('workspace membership context is explicit and tenant switching is membershi
   assert.equal(institutionOverview.data.stats.new_leads, 0);
   assert.equal(institutionOverview.data.stats.open_tasks, 0);
   assert.equal(institutionOverview.data.stats.attention, 0);
+  const isolatedCheckoutQueue = await call(
+    '/v1/admin/fees/checkout-sessions',
+    'GET',
+    undefined,
+    {},
+    true,
+  );
+  assert.equal(isolatedCheckoutQueue.r.status, 200);
+  assert.deepEqual(isolatedCheckoutQueue.data, []);
 
   // Shared legacy administration remains inaccessible to institutions.
   for (const route of [
@@ -2938,6 +2947,12 @@ test('hosted checkout is idempotent, provider-gated and reconciles to the fee le
     );
     assert.equal(uncertainRecords[0]?.status, 'uncertain');
     assert.equal(uncertainRecords[0]?.failure_code, 'PROVIDER_CREATE_UNCERTAIN');
+    const ownerQueue = await call('/v1/admin/fees/checkout-sessions', 'GET', undefined, {}, true);
+    assert.equal(ownerQueue.r.status, 200);
+    const reviewItem = ownerQueue.data.find((row: any) => row.installment_id === unknownInstallment);
+    assert.equal(reviewItem?.status, 'uncertain');
+    assert.equal(reviewItem?.amount_minor, '25000');
+    assert.ok(!JSON.stringify(reviewItem).includes('checkoutUrl'));
     const unsafeRetry = await call('/v1/payer/' + unknownToken + '/checkout', 'POST', {
       ...unknownBody,
       idempotencyKey: randomUUID(),
