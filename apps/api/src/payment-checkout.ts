@@ -316,15 +316,15 @@ export class PayerCheckoutController {
       await this.db.tx(async (c) => {
         await c.query(
           `UPDATE payment_checkout_sessions
-           SET status='failed',failure_code='PROVIDER_CREATE_FAILED',updated_at=now()
+           SET status='uncertain',failure_code='PROVIDER_CREATE_UNCERTAIN',updated_at=now()
            WHERE id=$1 AND status='requested'`,
           [session.id],
         );
-        await this.db.audit(c, 'payer:' + access.payer_id, 'fees.checkout.failed', session.id, {
-          code: 'PROVIDER_CREATE_FAILED',
+        await this.db.audit(c, 'payer:' + access.payer_id, 'fees.checkout.reconciliation_required', session.id, {
+          code: 'PROVIDER_CREATE_UNCERTAIN',
         });
       });
-      throw new BadGatewayException('The payment provider could not create a checkout session');
+      throw new BadGatewayException('Checkout outcome is uncertain. Do not start another payment until provider reconciliation.');
     }
 
     const created = await this.db.tx(async (c) => {
