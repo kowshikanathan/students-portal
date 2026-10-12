@@ -192,6 +192,11 @@ export function FeeOperations() {
     }
   }
 
+  const uncertainAttempts = autopayAttempts.filter((attempt) => attempt.status === 'uncertain');
+  const prioritizedAttempts = [...autopayAttempts]
+    .sort((a, b) => Number(b.status === 'uncertain') - Number(a.status === 'uncertain'))
+    .slice(0, 12);
+
   return (
     <>
       {message && (
@@ -882,10 +887,10 @@ export function FeeOperations() {
             collected by this console. Verified callbacks remain the source of truth for final
             payment and mandate status.
           </p>
-          {autopayAttempts.some((attempt) => attempt.status === 'uncertain') && (
+          {uncertainAttempts.length > 0 && (
             <p className="admin-notice" role="status">
-              {autopayAttempts.filter((attempt) => attempt.status === 'uncertain').length} recurring
-              debit attempt(s) have an unknown provider outcome. Reconcile with the approved
+              {uncertainAttempts.length} recurring debit attempt(s) have an unknown provider
+              outcome. Reconcile with the approved
               provider before any further collection; a browser return or manual retry does not
               establish payment success.
             </p>
@@ -898,13 +903,7 @@ export function FeeOperations() {
               {autopayAttempts.filter((attempt) => attempt.status === 'confirmed').length} confirmed
             </span>
           </div>
-          {[...autopayAttempts]
-            .sort(
-              (a, b) =>
-                Number(b.status === 'uncertain') - Number(a.status === 'uncertain'),
-            )
-            .slice(0, 12)
-            .map((attempt) => (
+          {prioritizedAttempts.map((attempt) => (
             <div className="record-row" key={attempt.id}>
               <strong>{attempt.account_reference}</strong>
               <span>
@@ -916,7 +915,7 @@ export function FeeOperations() {
               </span>
               <span className="status-pill">{attempt.status}</span>
             </div>
-            ))}
+          ))}
         </div>
       </section>
     </>
