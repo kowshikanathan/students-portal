@@ -433,6 +433,22 @@ export class PaymentProviderController {
         )
       ).rows[0];
 
+      // A signed debit confirmation can arrive while the debit-create call is
+      // still in flight, before we have stored the provider's reference. The
+      // original attempt ID is supplied to the bank in the create payload.
+      // It must match the exact tenant, installment, provider and amount.
+      const debitAttempt = event.merchantAttemptId
+        ? (
+            await c.query(
+              `SELECT id,schedule_id,installment_id,provider,provider_reference,
+                      amount_minor,currency,status
+               FROM autopay_debit_attempts
+               WHERE id=$1 AND tenant_id=$2 FOR UPDATE`,
+              [event.merchantAttemptId, tenantId],
+            )
+          ).rows[0]
+        : null;
+
       const fail = async (code: string) => {
         await c.query(
           `UPDATE payment_provider_events
