@@ -109,6 +109,32 @@ test('provider reconciliation inquiry creates reviewed-later evidence, never cha
     assert.ok(queries.every((sql) => !sql.includes('UPDATE payment_mandate_setup_requests')));
     assert.deepEqual(audits, ['fees.mandate_reconciliation.provider_inquiry_recorded']);
 
+    const initialQueryCount = queries.length;
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ inquiryReference: 'X'.repeat(17_000) }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    await assert.rejects(
+      controller.inquireReconciliationProvider(req, caseId),
+      /Provider inquiry unavailable/,
+    );
+    assert.equal(queries.length, initialQueryCount + 1);
+    assert.equal(
+      audits.length,
+      1,
+      'oversized provider responses must never be recorded as financial evidence',
+    );
+
+    globalThis.fetch = async () =>
+      new Response('<html>Not a bank inquiry</html>', {
+        headers: { 'Content-Type': 'text/html' },
+      });
+    await assert.rejects(
+      controller.inquireReconciliationProvider(req, caseId),
+      /Provider inquiry unavailable/,
+    );
+    assert.equal(audits.length, 1);
+
     process.env.AUTOPAY_RECONCILE_MODE = 'disabled';
     await assert.rejects(
       controller.inquireReconciliationProvider(req, caseId),
