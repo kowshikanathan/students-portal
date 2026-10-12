@@ -23,11 +23,15 @@ test('eNACH webhook key rollover accepts only configured current or previous key
     name: process.env.PAYMENT_PROVIDER_NAME,
     active: process.env.PAYMENT_WEBHOOK_SECRET,
     old: process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET,
+    deadline: process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET_EXPIRES_AT,
   };
   process.env.PAYMENT_PROVIDER_MODE = 'signed_hmac';
   process.env.PAYMENT_PROVIDER_NAME = 'qa_enach_gateway';
   process.env.PAYMENT_WEBHOOK_SECRET = current;
   process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET = previous;
+  process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET_EXPIRES_AT = new Date(
+    Date.now() + 60 * 60 * 1000,
+  ).toISOString();
   const rawBody = Buffer.from(JSON.stringify(payload));
   const timestamp = String(Math.floor(Date.now() / 1000));
   const calls: string[] = [];
@@ -74,6 +78,27 @@ test('eNACH webhook key rollover accepts only configured current or previous key
     );
     assert.equal(calls.length, 0, 'invalid signature must be denied before database activity');
 
+    // Once the rotation deadline passes, an otherwise valid old signature
+    // must be rejected before the ledger is accessed, even when the old key
+    // remains present in the environment.
+    process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET_EXPIRES_AT = new Date(
+      Date.now() - 60 * 1000,
+    ).toISOString();
+    calls.length = 0;
+    await assert.rejects(
+      controller.webhook({ rawBody } as never, payload, sign(previous), timestamp),
+      /Webhook signature is invalid/,
+    );
+    assert.equal(calls.length, 0, 'expired previous key must never reach the database');
+    calls.length = 0;
+    const stillCurrent = await controller.webhook(
+      { rawBody } as never,
+      payload,
+      sign(current),
+      timestamp,
+    );
+    assert.equal(stillCurrent.code, 'UNMATCHED_PAYMENT_FAILURE');
+
     delete process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET;
     calls.length = 0;
     await assert.rejects(
@@ -87,6 +112,7 @@ test('eNACH webhook key rollover accepts only configured current or previous key
       ['PAYMENT_PROVIDER_NAME', previousEnvironment.name],
       ['PAYMENT_WEBHOOK_SECRET', previousEnvironment.active],
       ['PAYMENT_WEBHOOK_PREVIOUS_SECRET', previousEnvironment.old],
+      ['PAYMENT_WEBHOOK_PREVIOUS_SECRET_EXPIRES_AT', previousEnvironment.deadline],
     ] as const) {
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
