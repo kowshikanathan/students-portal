@@ -24,7 +24,7 @@ export function Dashboard() {
           <div className="dashboard-stats">
             {[
               ['Published pages', data.stats.published],
-              ['Accepted leads', data.stats.leads],
+              [data.scope === 'institution' ? 'Accepted enquiries' : 'Accepted leads', data.stats.leads],
               ['New enquiries', data.stats.new_leads],
               ['Open tasks', data.stats.open_tasks],
             ].map(([title, n]) => (
@@ -47,11 +47,23 @@ export function Dashboard() {
             </section>
             <section className="admin-panel">
               <p className="eyebrow">Needs attention</p>
-              <h2>{data.stats.attention} delivery records</h2>
-              <p>
-                Blocked external delivery is not a lost lead. Review the outbox before enabling any
-                notification or integration.
-              </p>
+              {data.scope === 'institution' ? (
+                <>
+                  <h2>Tenant delivery status is separate</h2>
+                  <p>
+                    Shared worker delivery records are not counted here. Use your institution
+                    notifications and enquiry inbox for tenant-owned updates.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h2>{data.stats.attention} delivery records</h2>
+                  <p>
+                    Blocked external delivery is not a lost lead. Review the outbox before enabling
+                    any notification or integration.
+                  </p>
+                </>
+              )}
               <span className="status-pill warn">Production approval pending</span>
               <p className="small" style={{ marginTop: 20 }}>
                 Content rights, privacy decisions, provider tests, recovery and owner acceptance
