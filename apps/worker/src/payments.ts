@@ -119,6 +119,7 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
   try {
     const response = await fetch(url, {
       method: 'POST',
+      redirect: 'error',
       headers: {
         Authorization: 'Bearer ' + secret,
         'Content-Type': 'application/json',
