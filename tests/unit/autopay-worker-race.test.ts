@@ -54,7 +54,7 @@ for (const providerStatus of ['accepted', 'rejected'] as const) {
             queries.push(sql);
             // Simulate a verified callback confirming the debit before the
             // worker receives the HTTP response.
-            return { rowCount: 0 };
+            return { rowCount: 0, rows: [] };
           },
         }),
       audit: async (_client: unknown, _actor: string, action: string) => {
@@ -184,3 +184,63 @@ test('an unknown provider debit response is held for reconciliation', async () =
     }
   }
 });
+
+for (const providerStatus of ['accepted', 'rejected'] as const) {
+  test(`an early signed confirmation wins over a later ${providerStatus} provider reply`, async () => {
+    const originalFetch = globalThis.fetch;
+    const saved = {
+      mode: process.env.AUTOPAY_PROVIDER_MODE,
+      url: process.env.AUTOPAY_DEBIT_CREATE_URL,
+      hosts: process.env.AUTOPAY_ALLOWED_HOSTS,
+      key: process.env.AUTOPAY_API_KEY,
+    };
+    const actions: string[] = [];
+    const updates: string[] = [];
+    process.env.AUTOPAY_PROVIDER_MODE = 'mandate_api';
+    process.env.AUTOPAY_DEBIT_CREATE_URL = 'https://payments.example.invalid/debits';
+    process.env.AUTOPAY_ALLOWED_HOSTS = 'payments.example.invalid';
+    process.env.AUTOPAY_API_KEY = 'synthetic-test-key';
+    globalThis.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          status: providerStatus,
+          providerReference: 'provider-debit-1',
+          ...(providerStatus === 'rejected' ? { reasonCode: 'BANK_REJECTED' } : {}),
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+
+    const db = {
+      query: async () => [{ ...attempt, tenant_id: 'tenant-1', provider: 'test_provider' }],
+      tx: async (callback: (client: object) => Promise<void>) =>
+        callback({
+          query: async (sql: string) => {
+            if (sql.includes('FROM payment_records'))
+              return { rows: [{ id: 'signed-payment-1' }], rowCount: 1 };
+            if (sql.includes('UPDATE autopay_debit_attempts')) updates.push(sql);
+            return { rows: [], rowCount: 1 };
+          },
+        }),
+      audit: async (_client: unknown, _actor: string, action: string) => {
+        actions.push(action);
+      },
+    } as unknown as Db;
+    try {
+      assert.equal(await submitAutopayDebit(db, 'early-confirmed'), 'provider_accepted');
+      assert.equal(updates.length, 1);
+      assert.ok(updates[0].includes("status='confirmed'"));
+      assert.deepEqual(actions, ['fees.autopay.early_confirmation_reconciled']);
+    } finally {
+      globalThis.fetch = originalFetch;
+      for (const [key, value] of Object.entries({
+        AUTOPAY_PROVIDER_MODE: saved.mode,
+        AUTOPAY_DEBIT_CREATE_URL: saved.url,
+        AUTOPAY_ALLOWED_HOSTS: saved.hosts,
+        AUTOPAY_API_KEY: saved.key,
+      })) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    }
+  });
+}
