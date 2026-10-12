@@ -883,8 +883,8 @@ export function FeeOperations() {
           <p>
             {mandates.length} mandate record(s) · {mandateSetups.length} setup attempt(s) ·{' '}
             {autopayAttempts.length} automated debit attempt(s) · {checkoutSessions.length} hosted
-            checkout(s) · {settlements.length} settlement
-            record(s) · {communications.length} communication record(s).
+            checkout(s) · {settlements.length} settlement record(s) · {communications.length}{' '}
+            communication record(s).
           </p>
           <p className="small">
             Hosted mandate setup and due-date debit submission activate only when an approved
@@ -894,7 +894,9 @@ export function FeeOperations() {
           </p>
           {uncertainCheckouts.length > 0 && (
             <div className="admin-notice" role="status">
-              <strong>{uncertainCheckouts.length} hosted checkout(s) require reconciliation.</strong>
+              <strong>
+                {uncertainCheckouts.length} hosted checkout(s) require reconciliation.
+              </strong>
               <p>
                 Unknown bank session creation is not a payment failure. Verify the provider outcome
                 before permitting another collection.
@@ -902,7 +904,9 @@ export function FeeOperations() {
               {uncertainCheckouts.slice(0, 8).map((session) => (
                 <div className="record-row" key={session.id}>
                   <strong>{session.account_reference}</strong>
-                  <span>#{session.sequence} · {rupees(session.amount_minor)}</span>
+                  <span>
+                    #{session.sequence} · {rupees(session.amount_minor)}
+                  </span>
                   <span>{session.failure_code || 'BANK_OUTCOME_UNKNOWN'}</span>
                   <span className="status-pill">{session.status}</span>
                 </div>
