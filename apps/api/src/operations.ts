@@ -59,8 +59,14 @@ export class OperationsController {
               WHERE tenant_id=$1 AND stage='new') AS new_leads,
              (SELECT count(*)::int FROM tasks
               WHERE tenant_id=$1 AND status='open') AS open_tasks,
-             NULL::int AS attention`,
-          [req.actor.tenantId],
+             (SELECT count(*)::int FROM tenant_inbox_notifications n
+              WHERE n.tenant_id=$1
+                AND NOT EXISTS (
+                  SELECT 1 FROM tenant_inbox_reads r
+                  WHERE r.tenant_id=n.tenant_id AND r.notification_id=n.id
+                    AND r.user_id=$2
+                )) AS attention`,
+          [req.actor.tenantId, req.actor.id],
         )
       )[0];
       return {
@@ -69,7 +75,7 @@ export class OperationsController {
         mode: process.env.DEPLOYMENT_MODE,
         updatedAt: new Date().toISOString(),
         definition:
-          'Institution-only published pages, accepted enquiries and open tasks. Shared delivery records are deliberately excluded.',
+          'Institution-only published pages, accepted enquiries, open tasks and staff-specific unread notifications. Shared delivery records are excluded.',
         productionAccepted: false,
       };
     }
