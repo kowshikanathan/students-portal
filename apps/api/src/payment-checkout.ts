@@ -138,6 +138,19 @@ export class PayerCheckoutController {
         throw new ConflictException('Installment does not belong to this fee account');
       if (installment.status === 'paid' || installment.status === 'cancelled')
         throw new ConflictException('This installment is not payable');
+      // An unresolved eNACH/UPI debit may already be moving money. A second
+      // checkout for the same installment risks collecting twice.
+      const automaticDebitInFlight = await c.query(
+        `SELECT id FROM autopay_debit_attempts
+         WHERE tenant_id=$1 AND installment_id=$2
+           AND status IN ('queued','submitted','uncertain')
+         LIMIT 1`,
+        [access.tenant_id, v.installmentId],
+      );
+      if (automaticDebitInFlight.rowCount)
+        throw new ConflictException(
+          'An automatic debit is pending. Wait for verified reconciliation before paying again',
+        );
       const remaining = Number(installment.amount_minor) - Number(installment.paid_amount_minor);
       if (v.amountMinor > remaining)
         throw new ConflictException('Checkout amount exceeds the outstanding installment balance');
