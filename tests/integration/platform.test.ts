@@ -3571,6 +3571,30 @@ test('signed eNACH status correlates an uncertain registration without a second 
     assert.equal(queuedCase.pending_review_count, 0);
     assert.ok(Number(queuedCase.age_hours) >= 0);
 
+    const evidenceSubmission = await call(
+      '/v1/admin/fees/mandate-reconciliation-cases/' + caseId + '/evidence',
+      'POST',
+      {
+        providerEvidenceReference: 'QA-TRACE-' + randomUUID().slice(0, 8),
+        finding: 'provider_inquiry_pending',
+      },
+      {},
+      true,
+    );
+    assert.equal(evidenceSubmission.r.status, 201, JSON.stringify(evidenceSubmission.data));
+    const reviewQueue = await call(
+      '/v1/admin/fees/mandate-reconciliation-cases',
+      'GET',
+      undefined,
+      {},
+      true,
+    );
+    assert.equal(reviewQueue.r.status, 200, JSON.stringify(reviewQueue.data));
+    const pendingReview = reviewQueue.data.find((entry: any) => entry.id === caseId);
+    assert.equal(pendingReview.queue_state, 'awaiting_independent_review');
+    assert.equal(pendingReview.evidence_count, 1);
+    assert.equal(pendingReview.pending_review_count, 1);
+
     const reference = 'enach_' + randomUUID().replaceAll('-', '');
     const event = {
       eventId: 'evt_' + randomUUID(),
