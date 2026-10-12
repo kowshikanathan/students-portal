@@ -38,7 +38,11 @@ test('provider reconciliation inquiry creates reviewed-later evidence, never cha
         },
       ];
     },
-    tx: async (fn: (c: { query: (sql: string, args: unknown[]) => Promise<{ rows: unknown[] }> }) => Promise<unknown>) =>
+    tx: async (
+      fn: (c: {
+        query: (sql: string, args: unknown[]) => Promise<{ rows: unknown[] }>;
+      }) => Promise<unknown>,
+    ) =>
       fn({
         query: async (sql: string, args: unknown[]) => {
           queries.push(sql);
@@ -81,10 +85,13 @@ test('provider reconciliation inquiry creates reviewed-later evidence, never cha
   });
   globalThis.fetch = async (url, init) => {
     httpRequests.push({ url: String(url), init: init || {} });
-    return new Response(JSON.stringify({
-      inquiryReference: 'BANK-TRACE-123',
-      outcome: 'registered',
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    return new Response(
+      JSON.stringify({
+        inquiryReference: 'BANK-TRACE-123',
+        outcome: 'registered',
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
   };
   try {
     const controller = new AutopayAdminController(db as never);
