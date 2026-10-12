@@ -214,7 +214,9 @@ export function FeeOperations() {
         },
       );
       await load();
-      setMessage('Investigation recorded. Mandate remains blocked pending verified provider evidence.');
+      setMessage(
+        'Investigation recorded. Mandate remains blocked pending verified provider evidence.',
+      );
     } catch (e) {
       setMessage((e as Error).message);
     }
@@ -919,7 +921,9 @@ export function FeeOperations() {
           </p>
           {uncertainMandateSetups.length > 0 && (
             <div className="admin-notice" role="status">
-              <strong>{uncertainMandateSetups.length} mandate setup(s) require investigation.</strong>
+              <strong>
+                {uncertainMandateSetups.length} mandate setup(s) require investigation.
+              </strong>
               <p>
                 Do not create another authorization for the same schedule. Record only the approved
                 provider support case reference; never enter bank details, OTPs or credentials.
@@ -935,7 +939,10 @@ export function FeeOperations() {
                       <span className="status-pill">{setup.status}</span>
                     </div>
                     {!existingCase && (
-                      <form className="admin-form" onSubmit={(e) => openMandateCase(e, setup.id)}>
+                      <form
+                        className="admin-form"
+                        onSubmit={(e) => openMandateCase(e, setup.id)}
+                      >
                         <label>
                           Provider case reference
                           <input
