@@ -92,3 +92,18 @@ A signed `pending` event does not close the case. Operator-entered evidence,
 even if independently reviewed as verified, does not close the case or change the
 bank's status. Resolved cases remain visible as read-only history in the existing
 fee-operations console. This closure is not a second authorization or payment.
+
+## Database proof and immutability (migration 031)
+
+The database now enforces the same resolution boundary as the signed callback:
+only a case still in `open` status can transition once to `resolved_signed`.
+The referenced provider event must already be `applied`, be a mandate-status
+event for the same tenant and provider, and match the original setup's schedule,
+rail, provider reference, and terminal outcome. Case identity, opening evidence,
+author, and timestamp cannot be changed during resolution. Closed cases cannot
+be modified or deleted. This is a defense-in-depth check in addition to HMAC
+verification, not a replacement for provider signature verification.
+
+Regression coverage attempts a forged resolution using a rejected provider event,
+then confirms that a valid signed callback closes the case exactly once and
+prevents subsequent editing or deletion.
