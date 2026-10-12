@@ -3566,6 +3566,27 @@ test('signed eNACH status correlates an uncertain registration without a second 
       occurredAt: new Date().toISOString(),
     };
 
+    // Even a valid HMAC does not establish which uncertain registration was
+    // accepted unless the original merchant setup ID can be correlated.
+    const uncorrelatedEvent = await sendSigned({
+      eventId: 'evt_' + randomUUID(),
+      type: 'mandate_status',
+      scheduleId: schedule.data.id,
+      rail: 'enach',
+      providerReference: reference,
+      status: 'active',
+      occurredAt: new Date().toISOString(),
+    });
+    assert.equal(uncorrelatedEvent.r.status, 202, JSON.stringify(uncorrelatedEvent.data));
+    assert.equal(uncorrelatedEvent.data.code, 'MANDATE_SETUP_CORRELATION_REQUIRED');
+    const uncorrelatedMandates = (
+      await owner.query(
+        'SELECT count(*)::int AS count FROM payment_mandates WHERE schedule_id=$1',
+        [schedule.data.id],
+      )
+    ).rows[0];
+    assert.equal(uncorrelatedMandates.count, 0);
+
     const mismatchedEventId = 'evt_' + randomUUID();
     const invalid = await sendSigned({
       ...event,
