@@ -155,10 +155,53 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
     return 'reconciliation_required';
   }
 
-  if (result.status === 'rejected') {
-    const retrySql =
-      attempt.attempt_no < maxAttempts ? nextRetry(Number(attempt.attempt_no)) : 'NULL';
-    await db.tx(async (c) => {
+  await db.tx(async (c) => {
+    // Payment confirmation callbacks lock the same installment. This lock
+    // serializes a fast signed webhook with the slower debit-create response.
+    await c.query(
+      'SELECT id FROM fee_installments WHERE id=$1 AND tenant_id=$2 FOR UPDATE',
+      [attempt.installment_id, attempt.tenant_id],
+    );
+    const confirmedPayment = (
+      await c.query(
+        `SELECT id FROM payment_records
+         WHERE tenant_id=$1 AND provider=$2 AND provider_reference=$3
+           AND installment_id=$4 AND amount_minor=$5 AND currency=$6
+           AND recorded_via='provider'
+         LIMIT 1`,
+        [
+          attempt.tenant_id,
+          attempt.provider,
+          result.providerReference,
+          attempt.installment_id,
+          attempt.amount_minor,
+          attempt.currency,
+        ],
+      )
+    ).rows[0];
+
+    if (confirmedPayment) {
+      // A signed callback can complete before the debit-create HTTP response.
+      // Link the original attempt to the proven payment, never downgrade it.
+      const reconciled = await c.query(
+        `UPDATE autopay_debit_attempts
+         SET provider_reference=$2,status='confirmed',completed_at=coalesce(completed_at,now()),
+             failure_code=NULL,next_retry_at=NULL,updated_at=now()
+         WHERE id=$1 AND status IN('queued','uncertain','submitted','failed')
+         RETURNING id`,
+        [attempt.id, result.providerReference],
+      );
+      if (reconciled.rowCount)
+        await db.audit(c, 'worker', 'fees.autopay.early_confirmation_reconciled', attempt.id, {
+          paymentId: confirmedPayment.id,
+          installmentId: attempt.installment_id,
+        });
+      return;
+    }
+
+    if (result.status === 'rejected') {
+      const retrySql =
+        attempt.attempt_no < maxAttempts ? nextRetry(Number(attempt.attempt_no)) : 'NULL';
       const updated = await c.query(
         `UPDATE autopay_debit_attempts
          SET provider_reference=$2,status='failed',failure_code=$3,
@@ -166,8 +209,6 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
          WHERE id=$1 AND status IN('queued','uncertain')`,
         [attempt.id, result.providerReference, result.reasonCode || 'PROVIDER_REJECTED'],
       );
-      // A signed provider callback may have confirmed this debit while the HTTP
-      // request was in flight. Never downgrade the confirmed financial state.
       if (!updated.rowCount) return;
       await db.audit(c, 'worker', 'fees.autopay.rejected', attempt.id, {
         installmentId: attempt.installment_id,
@@ -175,11 +216,9 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
         attemptNo: Number(attempt.attempt_no),
         reasonCode: result.reasonCode || 'PROVIDER_REJECTED',
       });
-    });
-    return 'provider_accepted';
-  }
+      return;
+    }
 
-  await db.tx(async (c) => {
     const updated = await c.query(
       `UPDATE autopay_debit_attempts
        SET provider_reference=$2,status='submitted',failure_code=NULL,next_retry_at=NULL,
@@ -187,8 +226,6 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
        WHERE id=$1 AND status IN('queued','uncertain')`,
       [attempt.id, result.providerReference],
     );
-    // The authoritative signed callback can arrive before the submission
-    // response. Preserve confirmed/cancelled outcomes and their audit trail.
     if (!updated.rowCount) return;
     await db.audit(c, 'worker', 'fees.autopay.submitted', attempt.id, {
       installmentId: attempt.installment_id,
