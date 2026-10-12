@@ -2649,6 +2649,10 @@ test('hosted checkout is idempotent, provider-gated and reconciles to the fee le
   const providerServer = createHttpServer(async (req, res) => {
     providerCalls++;
     assert.equal(req.method, 'POST');
+    if (req.url === '/unavailable') {
+      res.writeHead(503).end('Synthetic bank timeout/unknown create outcome');
+      return;
+    }
     assert.equal(req.headers.authorization, 'Bearer synthetic-checkout-api-key-123456789');
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(Buffer.from(chunk));
@@ -2871,6 +2875,75 @@ test('hosted checkout is idempotent, provider-gated and reconciles to the fee le
     assert.equal(returned.r.status, 200, JSON.stringify(returned.data));
     assert.equal(returned.data.status, 'completed');
     assert.ok(returned.data.receiptNumber);
+
+    // A failed create HTTP response is not evidence of bank-side cancellation.
+    // The existing checkout record must remain uncertain and block a second
+    // request even with an unrelated idempotency key.
+    const unknownSchedule = await call(
+      '/v1/admin/fees/schedules',
+      'POST',
+      {
+        accountReference: reference,
+        payerId: payer.data.id,
+        scopeType: 'student',
+        scopeReference: reference,
+        currency: 'INR',
+        components: [{ code: 'tuition', label: 'Tuition', amountMinor: 25000 }],
+        installments: [{ dueDate: '2027-09-10', amountMinor: 25000 }],
+        note: 'Synthetic uncertain hosted checkout',
+      },
+      {},
+      true,
+    );
+    assert.equal(unknownSchedule.r.status, 201, JSON.stringify(unknownSchedule.data));
+    const activatedUnknown = await call(
+      '/v1/admin/fees/schedules/' + unknownSchedule.data.id + '/activate',
+      'POST',
+      { expectedVersion: 1 },
+      {},
+      true,
+    );
+    assert.equal(activatedUnknown.r.status, 201);
+    const allSchedules = (await call('/v1/admin/fees/schedules', 'GET', undefined, {}, true)).data;
+    const unknownInstallment = allSchedules.find(
+      (row: any) => row.id === unknownSchedule.data.id,
+    ).installments[0].id;
+    const unknownLink = await call(
+      '/v1/admin/fees/schedules/' + unknownSchedule.data.id + '/payer-link',
+      'POST',
+      { expiresHours: 1 },
+      {},
+      true,
+    );
+    assert.equal(unknownLink.r.status, 201);
+    const unknownToken = String(unknownLink.data.path).split('/').filter(Boolean).pop()!;
+    const unknownKey = randomUUID();
+    process.env.PAYMENT_CHECKOUT_CREATE_URL = 'http://127.0.0.1:' + providerPort + '/unavailable';
+    const beforeUnknown = providerCalls;
+    const unknownBody = {
+      installmentId: unknownInstallment,
+      amountMinor: 25000,
+      idempotencyKey: unknownKey,
+      allocations: [],
+    };
+    const unknownResponse = await call('/v1/payer/' + unknownToken + '/checkout', 'POST', unknownBody);
+    assert.equal(unknownResponse.r.status, 502, JSON.stringify(unknownResponse.data));
+    assert.equal(providerCalls, beforeUnknown + 1);
+    const uncertainRecords = await db.query(
+      'SELECT status,failure_code FROM payment_checkout_sessions WHERE idempotency_key=$1',
+      [unknownKey],
+    );
+    assert.equal(uncertainRecords[0]?.status, 'uncertain');
+    assert.equal(uncertainRecords[0]?.failure_code, 'PROVIDER_CREATE_UNCERTAIN');
+    const unsafeRetry = await call('/v1/payer/' + unknownToken + '/checkout', 'POST', {
+      ...unknownBody,
+      idempotencyKey: randomUUID(),
+    });
+    assert.equal(unsafeRetry.r.status, 409, JSON.stringify(unsafeRetry.data));
+    assert.equal(providerCalls, beforeUnknown + 1);
+    const uncertainPortal = await call('/v1/payer/' + unknownToken);
+    assert.equal(uncertainPortal.r.status, 200);
+    assert.ok(uncertainPortal.data.checkoutSessions.some((row: any) => row.status === 'uncertain'));
   } finally {
     for (const [key, value] of Object.entries({
       PAYMENT_CHECKOUT_MODE: previous.checkoutMode,
