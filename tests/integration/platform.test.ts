@@ -3336,12 +3336,42 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
     const interruptedInstallmentId = allSchedules.find(
       (s: any) => s.id === interruptedSchedule.data.id,
     ).installments[0].id;
+    const earlyMandateReference = 'mandate_early_' + randomUUID().replaceAll('-', '');
+    // A provider may sign a callback for an unregistered reference. HMAC
+    // authentication alone must not create a new bank mandate in our ledger.
+    const unknownMandate = await send({
+      eventId: 'evt_' + randomUUID(),
+      type: 'mandate_status',
+      scheduleId: interruptedSchedule.data.id,
+      rail: 'enach',
+      providerReference: earlyMandateReference,
+      status: 'active',
+      occurredAt: new Date().toISOString(),
+    });
+    assert.equal(unknownMandate.r.status, 202, JSON.stringify(unknownMandate.data));
+    assert.equal(unknownMandate.data.code, 'MANDATE_SETUP_NOT_FOUND');
+
+    // A legacy provider callback without merchantSetupId is still supported
+    // after the exact prior setup reference is persisted.
+    await owner.query(
+      `INSERT INTO payment_mandate_setup_requests(
+         schedule_id,payer_id,idempotency_key,provider,rail,return_token_hash,
+         provider_reference,status
+       ) VALUES($1,$2,$3,'qa_autopay_gateway','enach',$4,$5,'created')`,
+      [
+        interruptedSchedule.data.id,
+        payer.data.id,
+        randomUUID(),
+        randomUUID(),
+        earlyMandateReference,
+      ],
+    );
     const newMandate = await send({
       eventId: 'evt_' + randomUUID(),
       type: 'mandate_status',
       scheduleId: interruptedSchedule.data.id,
       rail: 'enach',
-      providerReference: 'mandate_early_' + randomUUID().replaceAll('-', ''),
+      providerReference: earlyMandateReference,
       status: 'active',
       occurredAt: new Date().toISOString(),
     });
