@@ -182,3 +182,20 @@ must still satisfy the timestamp window, HMAC signature, strict payload
 schema, and replay/idempotency controls. A signature using an unconfigured
 or retired key is rejected before accessing the database. No key material
 is included in webhook responses or audit entries.
+
+## Optional read-only provider status inquiry
+
+The existing owner-only reconciliation workflow supports a disabled-by-default
+`AUTOPAY_RECONCILE_MODE=read_only` inquiry. An approved partner can configure
+`AUTOPAY_RECONCILE_URL` on an `AUTOPAY_ALLOWED_HOSTS` allowlisted HTTPS
+endpoint (loopback HTTP is permitted outside production). The integration
+reuses `AUTOPAY_API_KEY` and timeout limits and sends only merchant setup ID,
+schedule ID, and rail. The partner must return the strictly validated
+`inquiryReference` and `outcome` (`pending`, `registered`,
+`not_registered`, or `inconclusive`). The response is recorded as
+append-only case evidence, requiring an independent tenant-owner review.
+Repeated references cannot insert duplicate evidence. HTTP errors and invalid
+responses leave the case unresolved. Inquiries never update mandate status,
+unlock retries, or confirm payments; only signed provider callbacks do so.
+Actual response semantics must be adapted and accepted with the chosen bank
+partner before enabling the inquiry integration in production.
