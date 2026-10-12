@@ -138,3 +138,15 @@ AutoPay. Deployments with pre-existing duplicate active mandates fail this
 migration with an explicit error; the platform does not delete or silently
 change either mandate. Reconcile these cases with the provider before retrying
 the migration.
+
+## Operations triage for unresolved cases
+
+The existing tenant fee-operations console now derives a read-only queue state
+from each investigation's append-only provider evidence and independent reviews:
+`awaiting_provider_evidence`, `awaiting_independent_review`,
+`additional_provider_evidence_needed`, `awaiting_signed_callback`, or
+`resolved_signed`. It also displays evidence counts, pending reviewer counts,
+and the case's age in hours. Open cases are prioritized oldest first, and a
+24-hour age indicator helps owners identify items needing follow-up. Age is
+not evidence of failure, and no timer authorizes retries, mandate activation,
+or payment confirmation.
