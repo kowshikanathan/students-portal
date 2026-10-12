@@ -116,7 +116,7 @@ export function checkConfig() {
         throw Error('Previous and current webhook secrets must differ');
       const expiresAt = process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET_EXPIRES_AT || '';
       if (
-        !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$/.test(expiresAt) ||
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(expiresAt) ||
         !Number.isFinite(Date.parse(expiresAt))
       )
         throw Error('Previous webhook secret requires a valid UTC expiration deadline');
