@@ -225,6 +225,22 @@ export function FeeOperations() {
     }
   }
 
+  async function inquireMandateProvider(caseId: string) {
+    try {
+      await request(
+        'admin/fees/mandate-reconciliation-cases/' + encodeURIComponent(caseId) + '/provider-inquiry',
+        'POST',
+        {},
+      );
+      await load();
+      setMessage(
+        'Provider inquiry evidence recorded for independent review. No mandate state was changed.',
+      );
+    } catch (e) {
+      setMessage((e as Error).message);
+    }
+  }
+
   async function submitMandateEvidence(e: FormEvent<HTMLFormElement>, caseId: string) {
     e.preventDefault();
     const form = e.currentTarget;
@@ -1002,6 +1018,13 @@ export function FeeOperations() {
 
                     {existingCase && (
                       <div>
+                        <button
+                          type="button"
+                          className="button outline"
+                          onClick={() => void inquireMandateProvider(existingCase.id)}
+                        >
+                          Inquire with configured provider (read-only)
+                        </button>
                         <form
                           className="admin-form"
                           onSubmit={(e) => submitMandateEvidence(e, existingCase.id)}
