@@ -245,7 +245,7 @@ export function FeeOperations() {
     }
   }
 
-  async reviewMandateEvidence(evidenceId: string, decision: string) {
+  async function reviewMandateEvidence(evidenceId: string, decision: string) {
     try {
       await request(
         'admin/fees/mandate-reconciliation-evidence/' + encodeURIComponent(evidenceId) + '/review',
