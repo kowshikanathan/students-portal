@@ -1071,6 +1071,26 @@ export function FeeOperations() {
               })}
             </div>
           )}
+          {mandateCases.some((entry) => entry.status === 'resolved_signed') && (
+            <div className="admin-notice">
+              <strong>Provider-signed mandate investigation resolutions</strong>
+              <p>
+                Closed cases below reflect authenticated terminal provider callbacks, not manual
+                approval or a new payment instruction.
+              </p>
+              {mandateCases
+                .filter((entry) => entry.status === 'resolved_signed')
+                .slice(0, 12)
+                .map((entry) => (
+                  <div className="record-row" key={entry.id}>
+                    <strong>{entry.account_reference}</strong>
+                    <span>{entry.rail}</span>
+                    <span>{entry.mandate_setup_status}</span>
+                    <span className="status-pill">Signed resolution</span>
+                  </div>
+                ))}
+            </div>
+          )}
           {uncertainCheckouts.length > 0 && (
             <div className="admin-notice" role="status">
               <strong>
