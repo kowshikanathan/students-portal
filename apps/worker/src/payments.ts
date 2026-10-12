@@ -65,35 +65,38 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
   // payer twice if a partner does not preserve the idempotency contract.
   if (attempt.status === 'uncertain') return 'reconciliation_required';
 
-  // A payment, fee adjustment or mandate revocation may have happened since
-  // this outbox entry was queued. Re-check the authoritative state before
-  // contacting the bank. Never submit a stale or oversized debit.
-  const payable = (
-    await db.query(
-      `SELECT a.id
-       FROM autopay_debit_attempts a
-       JOIN fee_installments i ON i.id=a.installment_id
-         AND i.schedule_id=a.schedule_id AND i.tenant_id=a.tenant_id
-       JOIN fee_schedules s ON s.id=a.schedule_id AND s.tenant_id=a.tenant_id
-       JOIN payment_mandates m ON m.id=a.mandate_id
-         AND m.schedule_id=a.schedule_id AND m.tenant_id=a.tenant_id
-       WHERE a.id=$1 AND a.status='queued'
-         AND s.status='active' AND m.status='active'
-         AND i.status NOT IN ('paid','cancelled','adjusted')
-         AND i.due_date<=current_date
-         AND i.amount_minor-coalesce(i.adjustment_amount_minor,0)-i.paid_amount_minor>=a.amount_minor
-         AND NOT EXISTS (
-           SELECT 1 FROM payment_checkout_sessions pc
-           WHERE pc.tenant_id=a.tenant_id AND pc.installment_id=a.installment_id
-             AND pc.status IN('requested','created')
-             AND (pc.expires_at IS NULL OR pc.expires_at>now())
-         )
-       LIMIT 1`,
-      [attempt.id],
-    )
-  )[0];
-  if (!payable) {
-    await db.tx(async (c) => {
+  // A crash after sending to the bank must not leave a retryable queued
+  // attempt. Reserve the submission durably before the external request.
+  // The existing uncertain state is intentionally reused; the provider's
+  // final outcome is unknown until a verified callback or reconciliation.
+  const claim = await db.tx(async (c) => {
+    // Serialize with signed payment callbacks and manual checkout creation,
+    // which also lock the installment before changing its payable balance.
+    const payable = (
+      await c.query(
+        `SELECT a.id
+         FROM autopay_debit_attempts a
+         JOIN fee_installments i ON i.id=a.installment_id
+           AND i.schedule_id=a.schedule_id AND i.tenant_id=a.tenant_id
+         JOIN fee_schedules s ON s.id=a.schedule_id AND s.tenant_id=a.tenant_id
+         JOIN payment_mandates m ON m.id=a.mandate_id
+           AND m.schedule_id=a.schedule_id AND m.tenant_id=a.tenant_id
+         WHERE a.id=$1 AND a.status='queued'
+           AND s.status='active' AND m.status='active'
+           AND i.status NOT IN ('paid','cancelled','adjusted')
+           AND i.due_date<=current_date
+           AND i.amount_minor-coalesce(i.adjustment_amount_minor,0)-i.paid_amount_minor>=a.amount_minor
+           AND NOT EXISTS (
+             SELECT 1 FROM payment_checkout_sessions pc
+             WHERE pc.tenant_id=a.tenant_id AND pc.installment_id=a.installment_id
+               AND pc.status IN('requested','created')
+               AND (pc.expires_at IS NULL OR pc.expires_at>now())
+           )
+         LIMIT 1 FOR UPDATE OF i`,
+        [attempt.id],
+      )
+    ).rows[0];
+    if (!payable) {
       const cancelled = await c.query(
         `UPDATE autopay_debit_attempts
          SET status='cancelled',failure_code='DEBIT_NO_LONGER_ELIGIBLE',
@@ -106,9 +109,25 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
           scheduleId: attempt.schedule_id,
           installmentId: attempt.installment_id,
         });
+      return 'stale';
+    }
+
+    const reserved = await c.query(
+      `UPDATE autopay_debit_attempts
+       SET status='uncertain',failure_code='PROVIDER_SUBMISSION_PENDING',
+           next_retry_at=NULL,updated_at=now()
+       WHERE id=$1 AND status='queued' RETURNING id`,
+      [attempt.id],
+    );
+    if (!reserved.rowCount) return 'already_claimed';
+    await db.audit(c, 'worker', 'fees.autopay.submission_claimed', attempt.id, {
+      installmentId: attempt.installment_id,
+      attemptNo: Number(attempt.attempt_no),
     });
-    return 'provider_accepted';
-  }
+    return 'claimed';
+  });
+  if (claim === 'stale') return 'provider_accepted';
+  if (claim !== 'claimed') return 'reconciliation_required';
 
   const maxAttempts = Math.max(1, Math.min(10, Number(process.env.AUTOPAY_MAX_ATTEMPTS || 3)));
   const url = safeProviderUrl(process.env.AUTOPAY_DEBIT_CREATE_URL || '');
@@ -148,7 +167,8 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
         `UPDATE autopay_debit_attempts
          SET status='uncertain',failure_code='PROVIDER_SUBMIT_UNCERTAIN',
              next_retry_at=NULL,updated_at=now()
-         WHERE id=$1 AND status='queued'`,
+         WHERE id=$1 AND status='uncertain'
+           AND failure_code='PROVIDER_SUBMISSION_PENDING'`,
         [attempt.id],
       );
       if (changed.rowCount)
@@ -213,7 +233,8 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
         `UPDATE autopay_debit_attempts
          SET provider_reference=$2,status='failed',failure_code=$3,
              next_retry_at=${retrySql},updated_at=now()
-         WHERE id=$1 AND status IN('queued','uncertain')`,
+         WHERE id=$1 AND status='uncertain'
+           AND failure_code='PROVIDER_SUBMISSION_PENDING'`,
         [attempt.id, result.providerReference, result.reasonCode || 'PROVIDER_REJECTED'],
       );
       if (!updated.rowCount) return;
@@ -230,7 +251,8 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
       `UPDATE autopay_debit_attempts
        SET provider_reference=$2,status='submitted',failure_code=NULL,next_retry_at=NULL,
            submitted_at=now(),updated_at=now()
-       WHERE id=$1 AND status IN('queued','uncertain')`,
+       WHERE id=$1 AND status='uncertain'
+         AND failure_code='PROVIDER_SUBMISSION_PENDING'`,
       [attempt.id, result.providerReference],
     );
     if (!updated.rowCount) return;
