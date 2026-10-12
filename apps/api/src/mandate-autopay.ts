@@ -112,7 +112,11 @@ export class PayerMandateController {
         existing.rail !== v.rail
       )
         throw new ConflictException('Mandate idempotency key was reused with different details');
-      if (existing.status === 'created' && existing.authorization_url)
+      if (
+        existing.status === 'created' &&
+        existing.authorization_url &&
+        (!existing.expires_at || new Date(existing.expires_at).getTime() > Date.now())
+      )
         return {
           setupId: existing.id,
           status: existing.status,
