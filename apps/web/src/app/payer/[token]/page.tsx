@@ -253,8 +253,8 @@ export default async function PayerPortal({ params, searchParams }: Props) {
           <p role="status">
             A {pendingMandateSetup.rail === 'enach' ? 'eNACH' : 'UPI AutoPay'} registration is
             already in progress ({pendingMandateSetup.status}). Wait for the verified provider
-            result. If the bank outcome is unknown, contact the institute for reconciliation
-            instead of requesting a second mandate.
+            result. If the bank outcome is unknown, contact the institute for reconciliation instead
+            of requesting a second mandate.
           </p>
         ) : data.autopayProviderConnected ? (
           <>
