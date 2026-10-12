@@ -127,9 +127,7 @@ export class PayerMandateController {
       // Serialize registration for this fee schedule. Without a transaction
       // lock, two different idempotency keys can both pass the open-setup
       // check and create duplicate bank authorization requests.
-      await c.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [
-        access.schedule_id,
-      ]);
+      await c.query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [access.schedule_id]);
       const concurrentDuplicate = (
         await c.query(
           'SELECT id FROM payment_mandate_setup_requests WHERE tenant_id=$1 AND idempotency_key=$2',
