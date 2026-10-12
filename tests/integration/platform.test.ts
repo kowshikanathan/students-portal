@@ -3027,12 +3027,20 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
     const payerToken = String(link.data.path).split('/').filter(Boolean).pop()!;
 
     const setupBody = { rail: 'upi_autopay', idempotencyKey: randomUUID() };
-    const setup = await call('/v1/payer/' + payerToken + '/mandates', 'POST', setupBody);
-    assert.equal(setup.r.status, 201, JSON.stringify(setup.data));
+    const competingBody = { ...setupBody, idempotencyKey: randomUUID() };
+    const [first, second] = await Promise.all([
+      call('/v1/payer/' + payerToken + '/mandates', 'POST', setupBody),
+      call('/v1/payer/' + payerToken + '/mandates', 'POST', competingBody),
+    ]);
+    const winningBody = first.r.status === 201 ? setupBody : competingBody;
+    const created = [first, second].filter((result) => result.r.status === 201);
+    assert.equal(created.length, 1, JSON.stringify([first.data, second.data]));
+    assert.equal([first, second].filter((result) => result.r.status === 409).length, 1);
+    const setup = created[0]!;
     assert.equal(setup.data.status, 'created');
     assert.equal(mandateCalls, 1);
 
-    const setupRetry = await call('/v1/payer/' + payerToken + '/mandates', 'POST', setupBody);
+    const setupRetry = await call('/v1/payer/' + payerToken + '/mandates', 'POST', winningBody);
     assert.equal(setupRetry.r.status, 201, JSON.stringify(setupRetry.data));
     assert.equal(setupRetry.data.setupId, setup.data.setupId);
     assert.equal(mandateCalls, 1);
