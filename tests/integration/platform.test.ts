@@ -326,9 +326,19 @@ test('workspace membership context is explicit and tenant switching is membershi
     { version: 2, count: 1 },
   ]);
 
-  // Remaining legacy administration stays gated until tenant-scoped.
+  // Institution overview is available but never aggregates shared legacy
+  // lead, audit or outbox records from the primary workspace.
+  const institutionOverview = await call('/v1/admin/overview', 'GET', undefined, {}, true);
+  assert.equal(institutionOverview.r.status, 200, JSON.stringify(institutionOverview.data));
+  assert.equal(institutionOverview.data.scope, 'institution');
+  assert.equal(institutionOverview.data.stats.published, 0);
+  assert.equal(institutionOverview.data.stats.leads, 0);
+  assert.equal(institutionOverview.data.stats.new_leads, 0);
+  assert.equal(institutionOverview.data.stats.open_tasks, 0);
+  assert.equal(institutionOverview.data.stats.attention, null);
+
+  // Shared legacy administration remains inaccessible to institutions.
   for (const route of [
-    '/v1/admin/overview',
     '/v1/admin/audit',
     '/v1/admin/outbox',
     '/v1/admin/conversations',
