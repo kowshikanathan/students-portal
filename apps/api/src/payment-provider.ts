@@ -479,6 +479,29 @@ export class PaymentProviderController {
       )
         return fail('CHECKOUT_MISMATCH');
 
+      if (event.merchantAttemptId) {
+        const correlated =
+          debitAttempt &&
+          debitAttempt.schedule_id === installment.schedule_id &&
+          debitAttempt.installment_id === event.installmentId &&
+          debitAttempt.provider === provider &&
+          Number(debitAttempt.amount_minor) === event.amountMinor &&
+          debitAttempt.currency === event.currency &&
+          ['uncertain', 'submitted', 'failed', 'confirmed'].includes(debitAttempt.status) &&
+          (!debitAttempt.provider_reference ||
+            debitAttempt.provider_reference === event.providerReference);
+        if (!correlated || checkout) return fail('DEBIT_ATTEMPT_CORRELATION_MISMATCH');
+        const referenceUsed = (
+          await c.query(
+            `SELECT id FROM autopay_debit_attempts
+             WHERE tenant_id=$1 AND provider=$2 AND provider_reference=$3 AND id<>$4
+             LIMIT 1`,
+            [tenantId, provider, event.providerReference, event.merchantAttemptId],
+          )
+        ).rows[0];
+        if (referenceUsed) return fail('DEBIT_ATTEMPT_REFERENCE_CONFLICT');
+      }
+
       const existingPayment = (
         await c.query(
           `SELECT id FROM payment_records
