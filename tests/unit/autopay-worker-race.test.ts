@@ -33,8 +33,9 @@ for (const providerStatus of ['accepted', 'rejected'] as const) {
     process.env.AUTOPAY_ALLOWED_HOSTS = 'payments.example.invalid';
     process.env.AUTOPAY_API_KEY = 'synthetic-test-key';
     process.env.DEPLOYMENT_MODE = 'test';
-    globalThis.fetch = async () =>
-      new Response(
+    globalThis.fetch = async (_input, init) => {
+      assert.equal(init?.redirect, 'error');
+      return new Response(
         JSON.stringify({
           status: providerStatus,
           providerReference: 'provider-debit-1',
@@ -42,6 +43,7 @@ for (const providerStatus of ['accepted', 'rejected'] as const) {
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
+    };
 
     const db = {
       query: async (sql: string) => {
