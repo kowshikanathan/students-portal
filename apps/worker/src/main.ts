@@ -242,7 +242,7 @@ export async function tick(db: Db) {
              AND NOT EXISTS (
                SELECT 1 FROM payment_checkout_sessions pc
                WHERE pc.tenant_id=i.tenant_id AND pc.installment_id=i.id
-                 AND pc.status IN('requested','created')
+                 AND pc.status IN('requested','created','uncertain')
                  AND (pc.expires_at IS NULL OR pc.expires_at>now())
              )
              AND (
