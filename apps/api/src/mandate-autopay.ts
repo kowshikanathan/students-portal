@@ -492,20 +492,21 @@ export class AutopayAdminController {
            ) VALUES($1,$2,$3,$4,$5)
            ON CONFLICT(case_id,provider_evidence_reference) DO NOTHING
            RETURNING id,case_id,provider_evidence_reference,finding,submitted_at`,
-          [
-            req.actor.tenantId,
-            id,
-            input.providerEvidenceReference,
-            input.finding,
-            req.actor.id,
-          ],
+          [req.actor.tenantId, id, input.providerEvidenceReference, input.finding, req.actor.id],
         )
       ).rows[0];
-      if (!evidence) throw new ConflictException('Provider evidence reference was already recorded');
-      await this.db.audit(c, req.actor.id, 'fees.mandate_reconciliation.evidence_submitted', evidence.id, {
-        caseId: id,
-        finding: input.finding,
-      });
+      if (!evidence)
+        throw new ConflictException('Provider evidence reference was already recorded');
+      await this.db.audit(
+        c,
+        req.actor.id,
+        'fees.mandate_reconciliation.evidence_submitted',
+        evidence.id,
+        {
+          caseId: id,
+          finding: input.finding,
+        },
+      );
       return evidence;
     });
   }
@@ -517,9 +518,12 @@ export class AutopayAdminController {
     @Body() body: unknown,
   ) {
     const id = z.uuid().parse(evidenceId);
-    const input = z.object({
-      decision: z.enum(['verified', 'insufficient_evidence']),
-    }).strict().parse(body);
+    const input = z
+      .object({
+        decision: z.enum(['verified', 'insufficient_evidence']),
+      })
+      .strict()
+      .parse(body);
     return this.db.tx(async (c) => {
       const evidence = (
         await c.query(
@@ -547,10 +551,16 @@ export class AutopayAdminController {
         )
       ).rows[0];
       if (!reviewed) throw new ConflictException('Evidence has already been reviewed');
-      await this.db.audit(c, req.actor.id, 'fees.mandate_reconciliation.evidence_reviewed', reviewed.id, {
-        evidenceId: id,
-        decision: input.decision,
-      });
+      await this.db.audit(
+        c,
+        req.actor.id,
+        'fees.mandate_reconciliation.evidence_reviewed',
+        reviewed.id,
+        {
+          evidenceId: id,
+          decision: input.decision,
+        },
+      );
       // Reviews document investigation only; signed provider events remain authoritative.
       return reviewed;
     });
