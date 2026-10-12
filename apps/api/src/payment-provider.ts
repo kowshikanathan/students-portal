@@ -132,21 +132,21 @@ export class PaymentProviderController {
         const checkoutFailure = event.merchantAttemptId
           ? { rowCount: 0 }
           : await c.query(
-          `UPDATE payment_checkout_sessions
+              `UPDATE payment_checkout_sessions
            SET status='failed',failure_code=$4,updated_at=now()
            WHERE tenant_id=$1 AND provider=$2 AND provider_reference=$3
              AND installment_id=$5 AND amount_minor=$6 AND currency=$7
              AND status IN('requested','created','uncertain')`,
-          [
-            tenantId,
-            provider,
-            event.providerReference,
-            event.reasonCode,
-            event.installmentId,
-            event.amountMinor,
-            event.currency,
-          ],
-        );
+              [
+                tenantId,
+                provider,
+                event.providerReference,
+                event.reasonCode,
+                event.installmentId,
+                event.amountMinor,
+                event.currency,
+              ],
+            );
         const debitFailure = await c.query(
           `UPDATE autopay_debit_attempts a
            SET provider_reference=coalesce(a.provider_reference,$3),
