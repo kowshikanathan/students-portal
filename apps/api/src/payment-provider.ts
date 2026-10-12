@@ -74,9 +74,14 @@ export class PaymentProviderController {
     // During an approved secret rotation, accept either the primary key or
     // the explicitly configured previous key. Never accept arbitrary secrets
     // supplied by a webhook or include key material in logs/response bodies.
+    const expiresAt = process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET_EXPIRES_AT;
+    const previousValid =
+      Boolean(expiresAt) &&
+      Number.isFinite(Date.parse(expiresAt!)) &&
+      Date.now() < Date.parse(expiresAt!);
     const secrets = [
       process.env.PAYMENT_WEBHOOK_SECRET,
-      process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET,
+      previousValid ? process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET : undefined,
     ].filter((value): value is string => Boolean(value));
     const supplied = (signature || '').replace(/^sha256=/i, '');
     let verified = false;
