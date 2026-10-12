@@ -277,10 +277,11 @@ export class PaymentProviderController {
           };
         }
 
-        // A signed status without merchantSetupId cannot prove which registration
-        // a provider accepted after a create timeout. Never synthesize a new
-        // active mandate while any setup for this schedule remains uncertain.
-        // Existing mandates can still receive regular signed lifecycle updates.
+        // For a first mandate, a signature alone does not establish that our
+        // platform requested the registration. Legacy callbacks may omit
+        // merchantSetupId only when the exact provider reference was already
+        // persisted on a prior, tenant-scoped setup request. Unknown or
+        // uncertain registration outcomes must never authorize a new mandate.
         if (!existingMandate && !event.merchantSetupId) {
           const uncertain = (
             await c.query(
@@ -291,26 +292,36 @@ export class PaymentProviderController {
               [tenantId, event.scheduleId],
             )
           ).rows[0];
-          if (uncertain) {
+          const matchingSetup = uncertain
+            ? null
+            : (
+                await c.query(
+                  `SELECT id FROM payment_mandate_setup_requests
+                   WHERE tenant_id=$1 AND schedule_id=$2 AND rail=$3
+                     AND provider=$4 AND provider_reference=$5
+                     AND status IN('created','active')
+                   LIMIT 1`,
+                  [tenantId, event.scheduleId, event.rail, provider, event.providerReference],
+                )
+              ).rows[0];
+          if (!matchingSetup) {
+            const code = uncertain
+              ? 'MANDATE_SETUP_CORRELATION_REQUIRED'
+              : 'MANDATE_SETUP_NOT_FOUND';
             await c.query(
               `UPDATE payment_provider_events
-               SET status='failed',failure_code='MANDATE_SETUP_CORRELATION_REQUIRED'
+               SET status='failed',failure_code=$2
                WHERE id=$1`,
-              [inserted.id],
+              [inserted.id, code],
             );
             await this.db.audit(
               c,
               'provider:' + provider,
               'fees.mandate.uncorrelated_status_rejected',
-              uncertain.id,
-              { providerEventId: event.eventId, scheduleId: event.scheduleId },
+              uncertain?.id || inserted.id,
+              { providerEventId: event.eventId, scheduleId: event.scheduleId, code },
             );
-            return {
-              accepted: false,
-              duplicate: false,
-              status: 'failed',
-              code: 'MANDATE_SETUP_CORRELATION_REQUIRED',
-            };
+            return { accepted: false, duplicate: false, status: 'failed', code };
           }
         }
 
