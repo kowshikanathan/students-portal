@@ -436,6 +436,126 @@ export class AutopayAdminController {
     });
   }
 
+  @Get('mandate-reconciliation-evidence')
+  reconciliationEvidence(@Req() req: AuthedRequest) {
+    return this.db.query(
+      `SELECT e.id,e.case_id,e.provider_evidence_reference,e.finding,e.submitted_by,
+              e.submitted_at,v.decision,v.reviewed_by,v.reviewed_at
+       FROM mandate_reconciliation_evidence e
+       JOIN mandate_reconciliation_cases c
+         ON c.id=e.case_id AND c.tenant_id=e.tenant_id
+       LEFT JOIN mandate_reconciliation_reviews v
+         ON v.evidence_id=e.id AND v.tenant_id=e.tenant_id
+       WHERE e.tenant_id=$1 ORDER BY e.submitted_at DESC LIMIT 300`,
+      [req.actor.tenantId],
+    );
+  }
+
+  @Post('mandate-reconciliation-cases/:caseId/evidence')
+  async submitReconciliationEvidence(
+    @Req() req: AuthedRequest,
+    @Param('caseId') caseId: string,
+    @Body() body: unknown,
+  ) {
+    const id = z.uuid().parse(caseId);
+    const input = z
+      .object({
+        providerEvidenceReference: z
+          .string()
+          .trim()
+          .regex(/^[A-Za-z0-9._:-]{3,120}$/),
+        finding: z.enum([
+          'provider_inquiry_pending',
+          'provider_reports_registered',
+          'provider_reports_not_registered',
+          'provider_outcome_inconclusive',
+        ]),
+      })
+      .strict()
+      .parse(body);
+    return this.db.tx(async (c) => {
+      const parent = (
+        await c.query(
+          `SELECT c.id FROM mandate_reconciliation_cases c
+           JOIN payment_mandate_setup_requests r
+             ON r.id=c.setup_id AND r.tenant_id=c.tenant_id
+           WHERE c.id=$1 AND c.tenant_id=$2 AND r.status='uncertain'
+           FOR UPDATE OF c,r`,
+          [id, req.actor.tenantId],
+        )
+      ).rows[0];
+      if (!parent) throw new ConflictException('No uncertain mandate case in this workspace');
+      const evidence = (
+        await c.query(
+          `INSERT INTO mandate_reconciliation_evidence(
+             tenant_id,case_id,provider_evidence_reference,finding,submitted_by
+           ) VALUES($1,$2,$3,$4,$5)
+           ON CONFLICT(case_id,provider_evidence_reference) DO NOTHING
+           RETURNING id,case_id,provider_evidence_reference,finding,submitted_at`,
+          [
+            req.actor.tenantId,
+            id,
+            input.providerEvidenceReference,
+            input.finding,
+            req.actor.id,
+          ],
+        )
+      ).rows[0];
+      if (!evidence) throw new ConflictException('Provider evidence reference was already recorded');
+      await this.db.audit(c, req.actor.id, 'fees.mandate_reconciliation.evidence_submitted', evidence.id, {
+        caseId: id,
+        finding: input.finding,
+      });
+      return evidence;
+    });
+  }
+
+  @Post('mandate-reconciliation-evidence/:evidenceId/review')
+  async reviewReconciliationEvidence(
+    @Req() req: AuthedRequest,
+    @Param('evidenceId') evidenceId: string,
+    @Body() body: unknown,
+  ) {
+    const id = z.uuid().parse(evidenceId);
+    const input = z.object({
+      decision: z.enum(['verified', 'insufficient_evidence']),
+    }).strict().parse(body);
+    return this.db.tx(async (c) => {
+      const evidence = (
+        await c.query(
+          `SELECT e.id,e.case_id,e.submitted_by
+           FROM mandate_reconciliation_evidence e
+           JOIN mandate_reconciliation_cases c
+             ON c.id=e.case_id AND c.tenant_id=e.tenant_id
+           JOIN payment_mandate_setup_requests r
+             ON r.id=c.setup_id AND r.tenant_id=c.tenant_id
+           WHERE e.id=$1 AND e.tenant_id=$2 AND r.status='uncertain'
+           FOR UPDATE OF e,r`,
+          [id, req.actor.tenantId],
+        )
+      ).rows[0];
+      if (!evidence) throw new ConflictException('Evidence is not linked to an uncertain mandate');
+      if (evidence.submitted_by === req.actor.id)
+        throw new ConflictException('Evidence requires a different reviewer');
+      const reviewed = (
+        await c.query(
+          `INSERT INTO mandate_reconciliation_reviews(tenant_id,evidence_id,decision,reviewed_by)
+           VALUES($1,$2,$3,$4)
+           ON CONFLICT(evidence_id) DO NOTHING
+           RETURNING id,evidence_id,decision,reviewed_at`,
+          [req.actor.tenantId, id, input.decision, req.actor.id],
+        )
+      ).rows[0];
+      if (!reviewed) throw new ConflictException('Evidence has already been reviewed');
+      await this.db.audit(c, req.actor.id, 'fees.mandate_reconciliation.evidence_reviewed', reviewed.id, {
+        evidenceId: id,
+        decision: input.decision,
+      });
+      // Reviews document investigation only; signed provider events remain authoritative.
+      return reviewed;
+    });
+  }
+
   @Get('checkout-sessions')
   checkouts(@Req() req: AuthedRequest) {
     // Read-only financial reconciliation queue. Never expose hosted checkout
