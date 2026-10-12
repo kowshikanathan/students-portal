@@ -3708,6 +3708,17 @@ test('signed eNACH status correlates an uncertain registration without a second 
     ).rows[0];
     assert.equal(secondMandateCount.count, 1);
 
+    // A direct SQL writer cannot bypass the cross-rail active-mandate rule.
+    await assert.rejects(
+      owner.query(
+        `INSERT INTO payment_mandates(
+           schedule_id,rail,provider,provider_reference,status,recorded_by,recorded_via
+         ) VALUES($1,'upi_autopay','qa_enach_gateway',$2,'active',NULL,'provider')`,
+        [schedule.data.id, 'db-duplicate-' + randomUUID()],
+      ),
+      /duplicate key|unique constraint/i,
+    );
+
     const replay = await sendSigned(event);
     assert.equal(replay.r.status, 202);
     assert.equal(replay.data.duplicate, true);
