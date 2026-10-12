@@ -3303,6 +3303,124 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
     const adminAttempts = await call('/v1/admin/fees/autopay-attempts', 'GET', undefined, {}, true);
     assert.equal(adminAttempts.r.status, 200);
     assert.ok(adminAttempts.data.some((row: any) => row.id === attempts[0]!.id));
+
+    // A second installment exercises a different order of events: the bank
+    // accepts the debit, the worker loses its HTTP response, and only the
+    // signed payment callback arrives with the original merchantAttemptId.
+    const interruptedSchedule = await call(
+      '/v1/admin/fees/schedules',
+      'POST',
+      {
+        accountReference: reference,
+        payerId: payer.data.id,
+        scopeType: 'student',
+        scopeReference: reference,
+        currency: 'INR',
+        components: [{ code: 'tuition', label: 'Tuition', amountMinor: 18000 }],
+        installments: [{ dueDate, amountMinor: 18000 }],
+        note: 'Synthetic signed early debit confirmation',
+      },
+      {},
+      true,
+    );
+    assert.equal(interruptedSchedule.r.status, 201, JSON.stringify(interruptedSchedule.data));
+    const interruptedActivation = await call(
+      '/v1/admin/fees/schedules/' + interruptedSchedule.data.id + '/activate',
+      'POST',
+      { expectedVersion: 1 },
+      {},
+      true,
+    );
+    assert.equal(interruptedActivation.r.status, 201, JSON.stringify(interruptedActivation.data));
+    const allSchedules = (await call('/v1/admin/fees/schedules', 'GET', undefined, {}, true)).data;
+    const interruptedInstallmentId = allSchedules.find(
+      (s: any) => s.id === interruptedSchedule.data.id,
+    ).installments[0].id;
+    const newMandate = await send({
+      eventId: 'evt_' + randomUUID(),
+      type: 'mandate_status',
+      scheduleId: interruptedSchedule.data.id,
+      rail: 'enach',
+      providerReference: 'mandate_early_' + randomUUID().replaceAll('-', ''),
+      status: 'active',
+      occurredAt: new Date().toISOString(),
+    });
+    assert.equal(newMandate.data.status, 'applied');
+    await tick(db);
+    const interruptedAttempts = await db.query(
+      'SELECT * FROM autopay_debit_attempts WHERE installment_id=$1',
+      [interruptedInstallmentId],
+    );
+    assert.equal(interruptedAttempts.length, 1);
+    const interrupted = interruptedAttempts[0]!;
+    assert.equal(interrupted.status, 'queued');
+    await owner.query(
+      `UPDATE autopay_debit_attempts
+       SET status='uncertain',failure_code='PROVIDER_SUBMIT_UNCERTAIN'
+       WHERE id=$1`,
+      [interrupted.id],
+    );
+    const earlyDebitReference = 'debit_early_' + randomUUID().replaceAll('-', '');
+    const earlyEvent = {
+      eventId: 'evt_' + randomUUID(),
+      type: 'payment_confirmed',
+      merchantAttemptId: interrupted.id,
+      installmentId: interruptedInstallmentId,
+      providerReference: earlyDebitReference,
+      amountMinor: 18000,
+      currency: 'INR',
+      occurredAt: new Date().toISOString(),
+    };
+    const badCorrelation = await send({
+      ...earlyEvent,
+      eventId: 'evt_' + randomUUID(),
+      merchantAttemptId: randomUUID(),
+    });
+    assert.equal(badCorrelation.data.status, 'failed');
+    assert.equal(badCorrelation.data.code, 'DEBIT_ATTEMPT_CORRELATION_MISMATCH');
+    const badAmount = await send({
+      ...earlyEvent,
+      eventId: 'evt_' + randomUUID(),
+      amountMinor: 17999,
+    });
+    assert.equal(badAmount.data.code, 'DEBIT_ATTEMPT_CORRELATION_MISMATCH');
+    assert.equal(
+      (await db.query('SELECT count(*)::int AS count FROM payment_records WHERE installment_id=$1', [
+        interruptedInstallmentId,
+      ]))[0]!.count,
+      0,
+    );
+    const recovered = await send(earlyEvent);
+    assert.equal(recovered.r.status, 202, JSON.stringify(recovered.data));
+    assert.equal(recovered.data.status, 'applied');
+    const replayedEarly = await send(earlyEvent);
+    assert.equal(replayedEarly.data.duplicate, true);
+    const recoveredAttempt = (
+      await db.query('SELECT status,provider_reference FROM autopay_debit_attempts WHERE id=$1', [
+        interrupted.id,
+      ])
+    )[0]!;
+    assert.equal(recoveredAttempt.status, 'confirmed');
+    assert.equal(recoveredAttempt.provider_reference, earlyDebitReference);
+    assert.equal(
+      (await db.query('SELECT count(*)::int AS count FROM payment_records WHERE installment_id=$1', [
+        interruptedInstallmentId,
+      ]))[0]!.count,
+      1,
+    );
+    const staleFailure = await send({
+      ...earlyEvent,
+      eventId: 'evt_' + randomUUID(),
+      type: 'payment_failed',
+      reasonCode: 'BANK_REJECTED',
+    });
+    assert.equal(staleFailure.data.status, 'failed');
+    assert.equal(
+      (await db.query('SELECT status FROM autopay_debit_attempts WHERE id=$1', [interrupted.id]))[0]!.status,
+      'confirmed',
+    );
+    await tick(db);
+    assert.equal(debitCalls, 1, 'signed recovery must not send a second bank debit');
   } finally {
     for (const [key, value] of Object.entries({
       AUTOPAY_PROVIDER_MODE: previous.autopayMode,
