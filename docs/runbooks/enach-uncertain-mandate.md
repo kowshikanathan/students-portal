@@ -128,3 +128,13 @@ provider event is rejected with `ACTIVE_MANDATE_REFERENCE_CONFLICT`, is
 auditable, and cannot create an additional active mandate. A legitimate status
 change for the existing provider reference continues through the established
 ordering checks. This guard applies across eNACH and UPI AutoPay rails.
+
+## Database-level duplicate active mandate protection (migration 032)
+
+The partial unique index `payment_mandates_one_active_per_schedule_idx`
+prevents a second `active` mandate on a fee schedule, even if a database
+writer bypasses the signed webhook route. It applies to both eNACH and UPI
+AutoPay. Deployments with pre-existing duplicate active mandates fail this
+migration with an explicit error; the platform does not delete or silently
+change either mandate. Reconcile these cases with the provider before retrying
+the migration.
