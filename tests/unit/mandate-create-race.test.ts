@@ -100,7 +100,10 @@ for (const earlyStatus of ['active', 'created'] as const) {
       });
       assert.equal(result.status, earlyStatus);
       if (earlyStatus === 'active') {
-        assert.match(result.authorizationUrl, /^https:\/\/client\.example\.test\/mandate\/return\//);
+        assert.match(
+          result.authorizationUrl,
+          /^https:\/\/client\.example\.test\/mandate\/return\//,
+        );
       } else {
         assert.equal(result.authorizationUrl, 'https://bank.example.invalid/authorize');
         assert.ok(updates.some((sql) => sql.includes('authorization_url IS NULL')));
