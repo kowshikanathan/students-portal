@@ -477,6 +477,118 @@ export class AutopayAdminController {
     );
   }
 
+  @Post('mandate-reconciliation-cases/:caseId/provider-inquiry')
+  async inquireReconciliationProvider(
+    @Req() req: AuthedRequest,
+    @Param('caseId') caseId: string,
+  ) {
+    const id = z.uuid().parse(caseId);
+    if (process.env.AUTOPAY_RECONCILE_MODE !== 'read_only')
+      throw new ServiceUnavailableException('Provider reconciliation inquiries are disabled');
+    const url = safeProviderUrl(
+      process.env.AUTOPAY_RECONCILE_URL || '',
+      'AUTOPAY_RECONCILE_URL',
+    );
+    const secret = process.env.AUTOPAY_API_KEY!;
+    const timeoutMs = Number(process.env.AUTOPAY_TIMEOUT_MS || 5000);
+    const caseRow = (
+      await this.db.query(
+        `SELECT c.id,c.setup_id,r.schedule_id,r.provider,r.rail
+         FROM mandate_reconciliation_cases c
+         JOIN payment_mandate_setup_requests r
+           ON r.id=c.setup_id AND r.tenant_id=c.tenant_id
+         WHERE c.id=$1 AND c.tenant_id=$2 AND c.status='open'
+           AND r.status='uncertain'`,
+        [id, req.actor.tenantId],
+      )
+    )[0];
+    if (!caseRow) throw new ConflictException('No open uncertain mandate case in this workspace');
+    if (caseRow.provider !== process.env.PAYMENT_PROVIDER_NAME)
+      throw new ConflictException('Case provider does not match the configured partner');
+
+    let responseData: {
+      inquiryReference: string;
+      outcome: 'pending' | 'registered' | 'not_registered' | 'inconclusive';
+    };
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        redirect: 'error',
+        headers: {
+          Authorization: 'Bearer ' + secret,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          merchantSetupId: caseRow.setup_id,
+          scheduleId: caseRow.schedule_id,
+          rail: caseRow.rail,
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!response.ok) throw new Error('Provider inquiry HTTP status');
+      responseData = z
+        .object({
+          inquiryReference: z.string().regex(/^[A-Za-z0-9._:-]{3,120}$/),
+          outcome: z.enum(['pending', 'registered', 'not_registered', 'inconclusive']),
+        })
+        .strict()
+        .parse(await response.json());
+    } catch {
+      // An unavailable inquiry endpoint is not proof that a bank mandate failed.
+      throw new BadGatewayException('Provider inquiry unavailable; mandate remains uncertain');
+    }
+
+    const findings = {
+      pending: 'provider_inquiry_pending',
+      registered: 'provider_reports_registered',
+      not_registered: 'provider_reports_not_registered',
+      inconclusive: 'provider_outcome_inconclusive',
+    } as const;
+    return this.db.tx(async (c) => {
+      const activeCase = (
+        await c.query(
+          `SELECT c.id FROM mandate_reconciliation_cases c
+           JOIN payment_mandate_setup_requests r
+             ON r.id=c.setup_id AND r.tenant_id=c.tenant_id
+           WHERE c.id=$1 AND c.tenant_id=$2 AND c.status='open'
+             AND r.status='uncertain' AND r.provider=$3
+           FOR UPDATE OF c,r`,
+          [id, req.actor.tenantId, caseRow.provider],
+        )
+      ).rows[0];
+      if (!activeCase)
+        throw new ConflictException('Mandate status changed during provider inquiry');
+      const evidence = (
+        await c.query(
+          `INSERT INTO mandate_reconciliation_evidence(
+             tenant_id,case_id,provider_evidence_reference,finding,submitted_by
+           ) VALUES($1,$2,$3,$4,$5)
+           ON CONFLICT(case_id,provider_evidence_reference) DO NOTHING
+           RETURNING id,case_id,provider_evidence_reference,finding,submitted_at`,
+          [
+            req.actor.tenantId,
+            id,
+            responseData.inquiryReference,
+            findings[responseData.outcome],
+            req.actor.id,
+          ],
+        )
+      ).rows[0];
+      if (!evidence)
+        throw new ConflictException('Provider inquiry reference was already recorded');
+      await this.db.audit(
+        c,
+        req.actor.id,
+        'fees.mandate_reconciliation.provider_inquiry_recorded',
+        evidence.id,
+        { caseId: id, finding: evidence.finding },
+      );
+      // Inquiry evidence requires independent review. Only authenticated
+      // provider-status webhooks may resolve a case or affect a mandate.
+      return evidence;
+    });
+  }
+
   @Post('mandate-reconciliation-cases/:caseId/evidence')
   async submitReconciliationEvidence(
     @Req() req: AuthedRequest,
