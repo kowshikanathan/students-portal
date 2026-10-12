@@ -34,6 +34,11 @@ export default async function PayerPortal({ params, searchParams }: Props) {
   const query = await searchParams;
   const data = await load(token);
   if (!data) notFound();
+  const pendingMandateSetup = data.mandateSetups?.find(
+    (setup: any) =>
+      ['requested', 'created', 'uncertain'].includes(setup.status) &&
+      (!setup.expires_at || new Date(setup.expires_at).getTime() > Date.now()),
+  );
   const paid = data.installments.reduce(
     (sum: number, i: any) => sum + Number(i.paid_amount_minor || 0),
     0,
@@ -243,6 +248,13 @@ export default async function PayerPortal({ params, searchParams }: Props) {
             </strong>
             . Due installments can be submitted automatically to the configured provider. Final
             payment status is recorded only after verified provider confirmation.
+          </p>
+        ) : pendingMandateSetup ? (
+          <p role="status">
+            A {pendingMandateSetup.rail === 'enach' ? 'eNACH' : 'UPI AutoPay'} registration is
+            already in progress ({pendingMandateSetup.status}). Wait for the verified provider
+            result. If the bank outcome is unknown, contact the institute for reconciliation
+            instead of requesting a second mandate.
           </p>
         ) : data.autopayProviderConnected ? (
           <>
