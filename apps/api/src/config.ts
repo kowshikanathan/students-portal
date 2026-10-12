@@ -114,7 +114,20 @@ export function checkConfig() {
         throw Error('PAYMENT_WEBHOOK_PREVIOUS_SECRET is unsafe');
       if (process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET === process.env.PAYMENT_WEBHOOK_SECRET)
         throw Error('Previous and current webhook secrets must differ');
+      const expiresAt = process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET_EXPIRES_AT || '';
+      if (
+        !/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,3})?Z$/.test(expiresAt) ||
+        !Number.isFinite(Date.parse(expiresAt))
+      )
+        throw Error('Previous webhook secret requires a valid UTC expiration deadline');
+      if (Date.parse(expiresAt) - Date.now() > 7 * 24 * 60 * 60 * 1000)
+        throw Error('Previous webhook secret rotation window cannot exceed seven days');
     }
+    if (
+      !process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET &&
+      process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET_EXPIRES_AT
+    )
+      throw Error('Previous webhook secret expiry cannot be set without a previous key');
     const tolerance = Number(process.env.PAYMENT_WEBHOOK_TOLERANCE_SECONDS || 300);
     if (!Number.isInteger(tolerance) || tolerance < 30 || tolerance > 900)
       throw Error('Invalid PAYMENT_WEBHOOK_TOLERANCE_SECONDS');
