@@ -55,24 +55,46 @@ test('eNACH timeout remains uncertain and blocks a duplicate authorization', asy
     const db = {
       query: async (sql: string, params?: unknown[]) => {
         if (sql.includes('FROM payer_access_tokens')) return [access];
-        if (sql.includes('FROM payment_mandate_setup_requests') && params?.[1] === firstKey && setupStatus)
-          return [{ id: setupId, schedule_id: scheduleId, payer_id: payerId, rail: 'enach', status: setupStatus }];
+        if (
+          sql.includes('FROM payment_mandate_setup_requests') &&
+          params?.[1] === firstKey &&
+          setupStatus
+        )
+          return [
+            { id: setupId, schedule_id: scheduleId, payer_id: payerId, rail: 'enach', status: setupStatus },
+          ];
         return [];
       },
-      tx: async (callback: (c: { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount: number }> }) => Promise<unknown>) =>
+      tx: async (
+        callback: (c: {
+          query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount: number }>;
+        }) => Promise<unknown>,
+      ) =>
         callback({
           query: async (sql: string, params?: unknown[]) => {
-            if (sql.includes('FROM payment_mandate_setup_requests') && sql.includes('idempotency_key'))
+            if (
+              sql.includes('FROM payment_mandate_setup_requests') &&
+              sql.includes('idempotency_key')
+            )
               return { rows: [], rowCount: 0 };
             if (sql.includes('FROM payment_mandates')) return { rows: [], rowCount: 0 };
-            if (sql.includes('FROM payment_mandate_setup_requests') && sql.includes("status IN('requested','created','uncertain')"))
-              return { rows: setupStatus ? [{ id: setupId, status: setupStatus }] : [], rowCount: setupStatus ? 1 : 0 };
+            if (
+              sql.includes('FROM payment_mandate_setup_requests') &&
+              sql.includes("status IN('requested','created','uncertain')")
+            )
+              return {
+                rows: setupStatus ? [{ id: setupId, status: setupStatus }] : [],
+                rowCount: setupStatus ? 1 : 0,
+              };
             if (sql.includes('INSERT INTO payment_mandate_setup_requests')) {
               insertions += 1;
               setupStatus = 'requested';
               return { rows: [{ id: setupId }], rowCount: 1 };
             }
-            if (sql.includes('UPDATE payment_mandate_setup_requests') && sql.includes("status='uncertain'")) {
+            if (
+              sql.includes('UPDATE payment_mandate_setup_requests') &&
+              sql.includes("status='uncertain'")
+            ) {
               assert.equal(params?.[0], setupId);
               setupStatus = 'uncertain';
               return { rows: [], rowCount: 1 };
