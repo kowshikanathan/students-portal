@@ -82,6 +82,12 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
          AND i.status NOT IN ('paid','cancelled','adjusted')
          AND i.due_date<=current_date
          AND i.amount_minor-coalesce(i.adjustment_amount_minor,0)-i.paid_amount_minor>=a.amount_minor
+         AND NOT EXISTS (
+           SELECT 1 FROM payment_checkout_sessions pc
+           WHERE pc.tenant_id=a.tenant_id AND pc.installment_id=a.installment_id
+             AND pc.status IN('requested','created')
+             AND (pc.expires_at IS NULL OR pc.expires_at>now())
+         )
        LIMIT 1`,
       [attempt.id],
     )
