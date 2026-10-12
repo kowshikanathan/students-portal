@@ -943,7 +943,7 @@ export function FeeOperations() {
                             required
                             minLength={3}
                             maxLength={120}
-                            pattern="[A-Za-z0-9._:/-]+"
+                            pattern="[A-Za-z0-9._:-]+"
                             autoComplete="off"
                           />
                         </label>
