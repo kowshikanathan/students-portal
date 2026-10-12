@@ -335,7 +335,7 @@ test('workspace membership context is explicit and tenant switching is membershi
   assert.equal(institutionOverview.data.stats.leads, 0);
   assert.equal(institutionOverview.data.stats.new_leads, 0);
   assert.equal(institutionOverview.data.stats.open_tasks, 0);
-  assert.equal(institutionOverview.data.stats.attention, null);
+  assert.equal(institutionOverview.data.stats.attention, 0);
 
   // Shared legacy administration remains inaccessible to institutions.
   for (const route of [
@@ -770,6 +770,9 @@ test('workspace membership context is explicit and tenant switching is membershi
   assert.equal(notification.enquiryId, recordId);
   assert.match(notification.title, /New institution enquiry ENQ-/);
   assert.ok(!JSON.stringify(notification).includes(activePayload.email));
+  const unreadOverview = await call('/v1/admin/overview', 'GET', undefined, {}, true);
+  assert.equal(unreadOverview.data.scope, 'institution');
+  assert.equal(unreadOverview.data.stats.attention, 1);
   const notificationRead = await call(
     '/v1/admin/tenant/notifications/' + notification.id + '/read',
     'POST',
@@ -795,6 +798,8 @@ test('workspace membership context is explicit and tenant switching is membershi
     true,
   );
   assert.equal(afterNotification.data[0].read, true);
+  const readOverview = await call('/v1/admin/overview', 'GET', undefined, {}, true);
+  assert.equal(readOverview.data.stats.attention, 0);
   await tick(db);
   const eventNotifications = await db.query(
     'SELECT id FROM tenant_inbox_notifications WHERE source_event_id=$1',
