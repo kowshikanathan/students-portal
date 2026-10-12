@@ -2905,9 +2905,8 @@ test('hosted checkout is idempotent, provider-gated and reconciles to the fee le
     );
     assert.equal(activatedUnknown.r.status, 201);
     const allSchedules = (await call('/v1/admin/fees/schedules', 'GET', undefined, {}, true)).data;
-    const unknownInstallment = allSchedules.find(
-      (row: any) => row.id === unknownSchedule.data.id,
-    ).installments[0].id;
+    const unknownInstallment = allSchedules.find((row: any) => row.id === unknownSchedule.data.id)
+      .installments[0].id;
     const unknownLink = await call(
       '/v1/admin/fees/schedules/' + unknownSchedule.data.id + '/payer-link',
       'POST',
@@ -2926,7 +2925,11 @@ test('hosted checkout is idempotent, provider-gated and reconciles to the fee le
       idempotencyKey: unknownKey,
       allocations: [],
     };
-    const unknownResponse = await call('/v1/payer/' + unknownToken + '/checkout', 'POST', unknownBody);
+    const unknownResponse = await call(
+      '/v1/payer/' + unknownToken + '/checkout',
+      'POST',
+      unknownBody,
+    );
     assert.equal(unknownResponse.r.status, 502, JSON.stringify(unknownResponse.data));
     assert.equal(providerCalls, beforeUnknown + 1);
     const uncertainRecords = await db.query(
