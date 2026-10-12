@@ -55,6 +55,33 @@ function safeProviderUrl(raw: string, label: string) {
   return url;
 }
 
+// Keep external bank inquiry replies bounded; they are evidence references,
+// never file uploads, and must not consume unbounded memory.
+async function boundedInquiryJson(response: Response) {
+  if (!response.headers.get('content-type')?.toLowerCase().includes('application/json'))
+    throw new Error('Provider inquiry content type is invalid');
+  const declared = response.headers.get('content-length');
+  if (declared && Number(declared) > 16_384)
+    throw new Error('Provider inquiry response is too large');
+  if (!response.body) throw new Error('Provider inquiry response is empty');
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > 16_384) throw new Error('Provider inquiry response is too large');
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const text = Buffer.concat(chunks).toString('utf8');
+  return JSON.parse(text) as unknown;
+}
+
 export function autopayProviderEnabled() {
   return process.env.AUTOPAY_PROVIDER_MODE === 'mandate_api';
 }
@@ -213,7 +240,7 @@ export class PayerMandateController {
         signal: AbortSignal.timeout(timeoutMs),
       });
       if (!response.ok) throw new Error('PROVIDER_HTTP_' + response.status);
-      providerResult = providerMandateResponseSchema.parse(await response.json());
+      providerResult = providerMandateResponseSchema.parse(await boundedInquiryJson(response));
       safeProviderUrl(providerResult.authorizationUrl, 'Provider authorization URL');
     } catch {
       await this.db.tx(async (c) => {
