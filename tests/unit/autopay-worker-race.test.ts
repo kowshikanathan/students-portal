@@ -169,7 +169,7 @@ test('an unknown provider debit response is held for reconciliation', async () =
   try {
     assert.equal(await submitAutopayDebit(db, 'timed-out-event'), 'reconciliation_required');
     assert.equal(updates.length, 1);
-    assert.ok(updates[0].includes("next_retry_at=NULL"));
+    assert.ok(updates.join('\n').includes('next_retry_at=NULL'));
     assert.deepEqual(audits, ['fees.autopay.reconciliation_required']);
   } finally {
     globalThis.fetch = originalFetch;
