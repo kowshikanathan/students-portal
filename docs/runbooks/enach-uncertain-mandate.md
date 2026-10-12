@@ -61,3 +61,20 @@ Until those pass, the live eNACH provider stays disabled.
   to the same tenant, provider, schedule and rail.
 - Callbacks with missing, mismatched or reused setup IDs cannot unlock an uncertain setup.
 - Without a correlated signed callback, the unresolved case requires human reconciliation.
+
+## Provider evidence and independent review (migration 029)
+
+From the tenant fee-operations dashboard, open an investigation for an uncertain
+mandate. Record provider evidence references (not bank-account numbers, OTPs,
+passwords, credentials or copies of personal documents). Choose the provider's
+finding; no free-form financial details are accepted. Entries are append-only and
+uniquely keyed by case and provider evidence reference. A second active tenant
+owner, different from the evidence submitter, may select **Verify evidence** or
+**Insufficient evidence**. A review can be recorded only once per evidence item.
+
+Evidence and review records do **not** change the mandate status, unlock a new
+setup or confirm payment. Even a provider statement that no registration exists
+must not enable retries until the separate, independently approved disposition
+workflow and real partner reconciliation integration are developed, tested and
+activated. Signed callbacks remain authoritative for bank outcomes. Single-owner
+installations must retain an unresolved case rather than self-approve.
