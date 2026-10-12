@@ -106,6 +106,15 @@ export function checkConfig() {
       throw Error('Missing safe PAYMENT_PROVIDER_NAME');
     if (!process.env.PAYMENT_WEBHOOK_SECRET || process.env.PAYMENT_WEBHOOK_SECRET.length < 48)
       throw Error('PAYMENT_WEBHOOK_SECRET is too short');
+    if (process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET) {
+      if (
+        process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET.length < 48 ||
+        process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET.includes('CHANGE_ME')
+      )
+        throw Error('PAYMENT_WEBHOOK_PREVIOUS_SECRET is unsafe');
+      if (process.env.PAYMENT_WEBHOOK_PREVIOUS_SECRET === process.env.PAYMENT_WEBHOOK_SECRET)
+        throw Error('Previous and current webhook secrets must differ');
+    }
     const tolerance = Number(process.env.PAYMENT_WEBHOOK_TOLERANCE_SECONDS || 300);
     if (!Number.isInteger(tolerance) || tolerance < 30 || tolerance > 900)
       throw Error('Invalid PAYMENT_WEBHOOK_TOLERANCE_SECONDS');
