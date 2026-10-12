@@ -306,7 +306,8 @@ export class AutopayAdminController {
        FROM payment_mandate_setup_requests r
        JOIN fee_schedules s ON s.id=r.schedule_id
        WHERE r.tenant_id=$1
-       ORDER BY r.created_at DESC LIMIT 300`,
+       ORDER BY CASE WHEN r.status='uncertain' THEN 0 ELSE 1 END,
+                r.created_at DESC LIMIT 300`,
       [req.actor.tenantId],
     );
   }
@@ -322,7 +323,8 @@ export class AutopayAdminController {
        JOIN fee_schedules s ON s.id=a.schedule_id
        JOIN fee_installments i ON i.id=a.installment_id
        WHERE a.tenant_id=$1
-       ORDER BY a.created_at DESC LIMIT 500`,
+       ORDER BY CASE WHEN a.status='uncertain' THEN 0 ELSE 1 END,
+                a.created_at DESC LIMIT 500`,
       [req.actor.tenantId],
     );
   }
