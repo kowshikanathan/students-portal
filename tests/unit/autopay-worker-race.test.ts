@@ -48,7 +48,9 @@ for (const providerStatus of ['accepted', 'rejected'] as const) {
         queries.push(sql);
         return [{ ...attempt }];
       },
-      tx: async (callback: (client: { query: (sql: string) => Promise<{ rowCount: number }> }) => Promise<void>) =>
+      tx: async (
+        callback: (client: { query: (sql: string) => Promise<{ rowCount: number }> }) => Promise<void>,
+      ) =>
         callback({
           query: async (sql: string) => {
             queries.push(sql);
@@ -63,7 +65,10 @@ for (const providerStatus of ['accepted', 'rejected'] as const) {
     } as unknown as Db;
 
     try {
-      assert.equal(await submitAutopayDebit(db, 'synthetic-outbox-event'), 'provider_accepted');
+      assert.equal(
+        await submitAutopayDebit(db, 'synthetic-outbox-event'),
+        'provider_accepted',
+      );
       const update = queries.find((query) => query.includes('UPDATE autopay_debit_attempts'));
       assert.ok(update);
       assert.match(update, /status IN\\('queued','uncertain'\\)/);
