@@ -71,12 +71,17 @@ test('one uncertain eNACH setup accepts only one investigation case', async () =
   );
   assert.equal(result.status, 'open');
   assert.deepEqual(audits, ['fees.mandate_reconciliation.opened']);
-  const insert = queries.find(({ sql }) => sql.includes('INSERT INTO mandate_reconciliation_cases'));
+  const insert = queries.find(({ sql }) =>
+    sql.includes('INSERT INTO mandate_reconciliation_cases'),
+  );
   assert.ok(insert);
   assert.equal(insert.args[0], tenantId);
   assert.equal(insert.args[1], setupId);
   assert.equal(insert.args[4], actorId);
-  assert.equal(queries.some(({ sql }) => sql.includes('UPDATE payment_mandate_setup_requests')), false);
+  assert.equal(
+    queries.some(({ sql }) => sql.includes('UPDATE payment_mandate_setup_requests')),
+    false,
+  );
 
   const duplicate = mockDb('uncertain', true);
   await assert.rejects(
