@@ -111,7 +111,7 @@ export class PayerCheckoutController {
         Number(existing.amount_minor) !== v.amountMinor
       )
         throw new ConflictException('Checkout idempotency key was reused with different details');
-      if (existing.status === 'created' && existing.checkout_url)
+      if (existing.status === 'created' && existing.checkout_url && (!existing.expires_at || new Date(existing.expires_at).getTime() > Date.now()))
         return {
           sessionId: existing.id,
           status: existing.status,
