@@ -137,7 +137,7 @@ export class PayerMandateController {
       const open = (
         await c.query(
           `SELECT id,status FROM payment_mandate_setup_requests
-           WHERE schedule_id=$1 AND status IN('requested','created')
+           WHERE schedule_id=$1 AND status IN('requested','created','uncertain')
              AND (expires_at IS NULL OR expires_at>now())
            ORDER BY created_at DESC LIMIT 1`,
           [access.schedule_id],
@@ -199,16 +199,16 @@ export class PayerMandateController {
       await this.db.tx(async (c) => {
         await c.query(
           `UPDATE payment_mandate_setup_requests
-           SET status='failed',failure_code='PROVIDER_CREATE_FAILED',updated_at=now()
+           SET status='uncertain',failure_code='PROVIDER_CREATE_UNCERTAIN',updated_at=now()
            WHERE id=$1 AND status='requested'`,
           [setup.id],
         );
-        await this.db.audit(c, 'payer:' + access.payer_id, 'fees.mandate_setup.failed', setup.id, {
-          code: 'PROVIDER_CREATE_FAILED',
+        await this.db.audit(c, 'payer:' + access.payer_id, 'fees.mandate_setup.uncertain', setup.id, {
+          code: 'PROVIDER_CREATE_UNCERTAIN',
           rail: v.rail,
         });
       });
-      throw new BadGatewayException('The payment provider could not create a mandate setup');
+      throw new BadGatewayException('Mandate creation outcome is uncertain. Do not submit another registration; contact support for provider reconciliation.');
     }
 
     const created = await this.db.tx(async (c) => {
