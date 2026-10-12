@@ -186,8 +186,11 @@ is included in webhook responses or audit entries.
 ## Optional read-only provider status inquiry
 
 The existing owner-only reconciliation workflow supports a disabled-by-default
-`AUTOPAY_RECONCILE_MODE=read_only` inquiry. An approved partner can configure
-`AUTOPAY_RECONCILE_URL` on an `AUTOPAY_ALLOWED_HOSTS` allowlisted HTTPS
+`AUTOPAY_RECONCILE_MODE=read_only` inquiry. This mode can run while
+`AUTOPAY_PROVIDER_MODE=disabled`; enabling status inquiry does not enable
+mandate registration or debit submission. Signed callbacks and an approved
+partner API credential must be configured separately. An approved partner can
+configure `AUTOPAY_RECONCILE_URL` on an `AUTOPAY_ALLOWED_HOSTS` allowlisted HTTPS
 endpoint (loopback HTTP is permitted outside production). The integration
 reuses `AUTOPAY_API_KEY` and timeout limits and sends only merchant setup ID,
 schedule ID, and rail. The partner must return the strictly validated
