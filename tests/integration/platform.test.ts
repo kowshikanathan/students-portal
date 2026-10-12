@@ -3688,6 +3688,26 @@ test('signed eNACH status correlates an uncertain registration without a second 
     assert.equal(mandates[0].status, 'active');
     assert.equal(mandates[0].rail, 'enach');
 
+    // A different, HMAC-valid provider reference must not create another
+    // active mandate for this fee schedule after the first registration.
+    const conflictingReference = 'enach_conflict_' + randomUUID().replaceAll('-', '');
+    const conflicting = await sendSigned({
+      ...event,
+      eventId: 'evt_' + randomUUID(),
+      providerReference: conflictingReference,
+      merchantSetupId: undefined,
+      occurredAt: new Date(Date.now() + 1000).toISOString(),
+    });
+    assert.equal(conflicting.r.status, 202, JSON.stringify(conflicting.data));
+    assert.equal(conflicting.data.code, 'ACTIVE_MANDATE_REFERENCE_CONFLICT');
+    const secondMandateCount = (
+      await owner.query(
+        'SELECT count(*)::int AS count FROM payment_mandates WHERE schedule_id=$1',
+        [schedule.data.id],
+      )
+    ).rows[0];
+    assert.equal(secondMandateCount.count, 1);
+
     const replay = await sendSigned(event);
     assert.equal(replay.r.status, 202);
     assert.equal(replay.data.duplicate, true);
