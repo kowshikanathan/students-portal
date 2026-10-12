@@ -76,7 +76,9 @@ export default async function PayerPortal({ params, searchParams }: Props) {
           <p className="admin-message" role="status">
             {query.checkout === 'invalid'
               ? 'The payment request was invalid and no checkout was created.'
-              : 'The payment provider is temporarily unavailable. No successful collection has been recorded.'}
+              : query.checkout === 'uncertain'
+                ? 'The payment outcome is not confirmed. Do not try again until your institution verifies the bank result.'
+                : 'The payment provider is temporarily unavailable. No successful collection has been recorded.'}
           </p>
         )}
         {query.mandate && (
@@ -124,11 +126,17 @@ export default async function PayerPortal({ params, searchParams }: Props) {
               Number(i.amount_minor || 0) - Number(i.paid_amount_minor || 0),
             );
             const pendingAutomaticDebit = data.pendingAutopayInstallments?.includes(i.id) === true;
+            const pendingCheckout = data.checkoutSessions?.some(
+              (session: any) =>
+                session.installment_id === i.id &&
+                ['requested', 'created', 'uncertain'].includes(session.status),
+            );
             const payable =
               data.providerConnected &&
               data.schedule.status === 'active' &&
               remaining > 0 &&
               !pendingAutomaticDebit &&
+              !pendingCheckout &&
               !['paid', 'cancelled'].includes(i.status);
             return (
               <div className="payer-row" role="row" key={i.id}>
@@ -142,6 +150,12 @@ export default async function PayerPortal({ params, searchParams }: Props) {
                     <p className="small" role="status">
                       Automatic debit pending bank confirmation. Do not pay again until the
                       institute reconciles this attempt.
+                    </p>
+                  )}
+                  {pendingCheckout && (
+                    <p className="small" role="status">
+                      An existing hosted checkout is pending or awaiting bank reconciliation. Do
+                      not start another payment until the institute verifies its status.
                     </p>
                   )}
                   {payable && (
