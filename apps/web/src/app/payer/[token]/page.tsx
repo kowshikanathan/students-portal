@@ -125,10 +125,12 @@ export default async function PayerPortal({ params, searchParams }: Props) {
               0,
               Number(i.amount_minor || 0) - Number(i.paid_amount_minor || 0),
             );
+            const pendingAutomaticDebit = data.pendingAutopayInstallments?.includes(i.id) === true;
             const payable =
               data.providerConnected &&
               data.schedule.status === 'active' &&
               remaining > 0 &&
+              !pendingAutomaticDebit &&
               !['paid', 'cancelled'].includes(i.status);
             return (
               <div className="payer-row" role="row" key={i.id}>
@@ -138,6 +140,12 @@ export default async function PayerPortal({ params, searchParams }: Props) {
                 <span>{money(i.paid_amount_minor)}</span>
                 <div className="payer-installment-action">
                   <span className="status-pill">{i.status}</span>
+                  {pendingAutomaticDebit && (
+                    <p className="small" role="status">
+                      Automatic debit pending bank confirmation. Do not pay again until the institute
+                      reconciles this attempt.
+                    </p>
+                  )}
                   {payable && (
                     <div className="payer-payment-options">
                       <form action={'/payer/' + encodeURIComponent(token) + '/pay/'} method="post">
