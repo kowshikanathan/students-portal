@@ -565,13 +565,41 @@ export class PaymentProviderController {
         );
       }
 
-      await c.query(
-        `UPDATE autopay_debit_attempts
-         SET status='confirmed',completed_at=now(),failure_code=NULL,next_retry_at=NULL,updated_at=now()
-         WHERE tenant_id=$1 AND provider=$2 AND provider_reference=$3
-           AND status IN('submitted','queued','uncertain','failed')`,
-        [tenantId, provider, event.providerReference],
-      );
+      if (event.merchantAttemptId) {
+        await c.query(
+          `UPDATE autopay_debit_attempts
+           SET provider_reference=$2,status='confirmed',completed_at=now(),
+               failure_code=NULL,next_retry_at=NULL,updated_at=now()
+           WHERE id=$1 AND tenant_id=$3 AND provider=$4
+             AND installment_id=$5 AND amount_minor=$6 AND currency=$7
+             AND status IN('submitted','uncertain','failed')
+             AND (provider_reference IS NULL OR provider_reference=$2)`,
+          [
+            event.merchantAttemptId,
+            event.providerReference,
+            tenantId,
+            provider,
+            event.installmentId,
+            event.amountMinor,
+            event.currency,
+          ],
+        );
+        await this.db.audit(
+          c,
+          'provider:' + provider,
+          'fees.autopay.signed_attempt_correlated',
+          event.merchantAttemptId,
+          { providerEventId: event.eventId, providerReference: event.providerReference },
+        );
+      } else {
+        await c.query(
+          `UPDATE autopay_debit_attempts
+           SET status='confirmed',completed_at=now(),failure_code=NULL,next_retry_at=NULL,updated_at=now()
+           WHERE tenant_id=$1 AND provider=$2 AND provider_reference=$3
+             AND status IN('submitted','queued','uncertain','failed')`,
+          [tenantId, provider, event.providerReference],
+        );
+      }
 
       const nextPaid = Number(installment.paid_amount_minor) + event.amountMinor;
       const nextStatus = nextPaid === Number(installment.amount_minor) ? 'paid' : 'part_paid';
