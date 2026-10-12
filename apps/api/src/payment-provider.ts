@@ -317,6 +317,8 @@ export class PaymentProviderController {
         // A verified signature authenticates the sender, not permission to
         // register an additional mandate. Never create a second mandate with
         // another provider reference while this fee schedule is already active.
+        // Migration 032 independently enforces one active mandate per schedule
+        // if a future writer bypasses this callback-level rejection.
         if (!existingMandate) {
           const conflictingActiveMandate = (
             await c.query(
