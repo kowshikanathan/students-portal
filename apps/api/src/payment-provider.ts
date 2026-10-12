@@ -324,7 +324,7 @@ export class PaymentProviderController {
                failure_code=CASE WHEN $4 IN('failed','revoked') THEN upper($4) ELSE NULL END,
                updated_at=now()
            WHERE tenant_id=$1 AND provider=$2 AND provider_reference=$3
-             AND status IN('requested','created')`,
+             AND status IN('requested','created','uncertain')`,
           [tenantId, provider, event.providerReference, event.status],
         );
         await c.query(
