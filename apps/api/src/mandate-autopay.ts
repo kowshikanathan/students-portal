@@ -358,6 +358,81 @@ export class AutopayAdminController {
     );
   }
 
+  @Get('mandate-reconciliation-cases')
+  reconciliationCases(@Req() req: AuthedRequest) {
+    return this.db.query(
+      `SELECT c.id,c.setup_id,c.provider_case_reference,c.evidence_summary,
+              c.status,c.created_at,c.updated_at,r.schedule_id,r.rail,
+              r.status AS mandate_setup_status,s.account_reference
+       FROM mandate_reconciliation_cases c
+       JOIN payment_mandate_setup_requests r
+         ON r.id=c.setup_id AND r.tenant_id=c.tenant_id
+       JOIN fee_schedules s ON s.id=r.schedule_id AND s.tenant_id=c.tenant_id
+       WHERE c.tenant_id=$1 ORDER BY c.created_at DESC LIMIT 300`,
+      [req.actor.tenantId],
+    );
+  }
+
+  @Post('mandate-setups/:setupId/reconciliation')
+  async openReconciliationCase(
+    @Req() req: AuthedRequest,
+    @Param('setupId') setupId: string,
+    @Body() body: unknown,
+  ) {
+    const uuid = z.uuid().parse(setupId);
+    const input = z
+      .object({
+        providerCaseReference: z.string().trim().regex(/^[A-Za-z0-9._:\\/-]{3,120}$/),
+        evidenceSummary: z.enum([
+          'provider_inquiry_opened',
+          'provider_reference_not_returned',
+          'provider_status_not_confirmed',
+        ]),
+      })
+      .strict()
+      .parse(body);
+    return this.db.tx(async (c) => {
+      const setup = (
+        await c.query(
+          `SELECT id,status FROM payment_mandate_setup_requests
+           WHERE id=$1 AND tenant_id=$2 FOR UPDATE`,
+          [uuid, req.actor.tenantId],
+        )
+      ).rows[0];
+      if (!setup) throw new ConflictException('Mandate setup is not in this workspace');
+      if (setup.status !== 'uncertain')
+        throw new ConflictException('Only uncertain mandate setups need this investigation');
+      const existing = (
+        await c.query(
+          'SELECT id FROM mandate_reconciliation_cases WHERE setup_id=$1 AND tenant_id=$2',
+          [uuid, req.actor.tenantId],
+        )
+      ).rows[0];
+      if (existing) throw new ConflictException('A reconciliation case already exists');
+      const row = (
+        await c.query(
+          `INSERT INTO mandate_reconciliation_cases(
+             tenant_id,setup_id,provider_case_reference,evidence_summary,created_by
+           ) VALUES($1,$2,$3,$4,$5)
+           RETURNING id,setup_id,provider_case_reference,evidence_summary,status,created_at`,
+          [
+            req.actor.tenantId,
+            uuid,
+            input.providerCaseReference,
+            input.evidenceSummary,
+            req.actor.id,
+          ],
+        )
+      ).rows[0];
+      await this.db.audit(c, req.actor.id, 'fees.mandate_reconciliation.opened', row.id, {
+        setupId: uuid,
+        evidenceSummary: input.evidenceSummary,
+      });
+      // Deliberately do not change the mandate status or permit another create call.
+      return row;
+    });
+  }
+
   @Get('checkout-sessions')
   checkouts(@Req() req: AuthedRequest) {
     // Read-only financial reconciliation queue. Never expose hosted checkout
