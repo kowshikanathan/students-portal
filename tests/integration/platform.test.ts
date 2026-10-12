@@ -3384,6 +3384,20 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
       amountMinor: 17999,
     });
     assert.equal(badAmount.data.code, 'DEBIT_ATTEMPT_CORRELATION_MISMATCH');
+    const wrongInstallment = await send({
+      ...earlyEvent,
+      eventId: 'evt_' + randomUUID(),
+      merchantAttemptId: attempts[0]!.id,
+    });
+    assert.equal(wrongInstallment.data.code, 'DEBIT_ATTEMPT_CORRELATION_MISMATCH');
+    const wrongFailure = await send({
+      ...earlyEvent,
+      eventId: 'evt_' + randomUUID(),
+      type: 'payment_failed',
+      merchantAttemptId: attempts[0]!.id,
+      reasonCode: 'BANK_REJECTED',
+    });
+    assert.equal(wrongFailure.data.code, 'UNMATCHED_PAYMENT_FAILURE');
     assert.equal(
       (
         await db.query(
