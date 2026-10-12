@@ -68,16 +68,20 @@ export async function POST(
 
   if (!response)
     return NextResponse.redirect(
-      siteBase() + '/payer/' + encodeURIComponent(token) + '/?checkout=unavailable',
+      siteBase() + '/payer/' + encodeURIComponent(token) + '/?checkout=uncertain',
       303,
     );
 
   const data = await response.json().catch(() => null);
-  if (!response.ok || !data?.checkoutUrl)
+  if (!response.ok || !data?.checkoutUrl) {
+    // An API timeout or rejected second attempt cannot prove that the bank
+    // did not create a session. Keep the payer out of duplicate collection.
+    const outcome = response.status === 409 || response.status >= 500 ? 'uncertain' : 'unavailable';
     return NextResponse.redirect(
-      siteBase() + '/payer/' + encodeURIComponent(token) + '/?checkout=unavailable',
+      siteBase() + '/payer/' + encodeURIComponent(token) + '/?checkout=' + outcome,
       303,
     );
+  }
 
   let checkout: URL;
   try {
