@@ -256,6 +256,9 @@ export const paymentProviderEventSchema = z.discriminatedUnion('type', [
         .trim()
         .regex(/^[A-Za-z0-9._:-]{3,160}$/),
       type: z.literal('payment_confirmed'),
+      // Echo of the debit request's merchantAttemptId; legacy checkout
+      // notifications remain valid without it.
+      merchantAttemptId: z.uuid().optional(),
       installmentId: z.uuid(),
       providerReference: z
         .string()
@@ -273,6 +276,7 @@ export const paymentProviderEventSchema = z.discriminatedUnion('type', [
         .trim()
         .regex(/^[A-Za-z0-9._:-]{3,160}$/),
       type: z.literal('payment_failed'),
+      merchantAttemptId: z.uuid().optional(),
       installmentId: z.uuid(),
       providerReference: z
         .string()
