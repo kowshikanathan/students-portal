@@ -111,7 +111,11 @@ export class PayerCheckoutController {
         Number(existing.amount_minor) !== v.amountMinor
       )
         throw new ConflictException('Checkout idempotency key was reused with different details');
-      if (existing.status === 'created' && existing.checkout_url && (!existing.expires_at || new Date(existing.expires_at).getTime() > Date.now()))
+      if (
+        existing.status === 'created' &&
+        existing.checkout_url &&
+        (!existing.expires_at || new Date(existing.expires_at).getTime() > Date.now())
+      )
         return {
           sessionId: existing.id,
           status: existing.status,
@@ -320,11 +324,19 @@ export class PayerCheckoutController {
            WHERE id=$1 AND status='requested'`,
           [session.id],
         );
-        await this.db.audit(c, 'payer:' + access.payer_id, 'fees.checkout.reconciliation_required', session.id, {
-          code: 'PROVIDER_CREATE_UNCERTAIN',
-        });
+        await this.db.audit(
+          c,
+          'payer:' + access.payer_id,
+          'fees.checkout.reconciliation_required',
+          session.id,
+          {
+            code: 'PROVIDER_CREATE_UNCERTAIN',
+          },
+        );
       });
-      throw new BadGatewayException('Checkout outcome is uncertain. Do not start another payment until provider reconciliation.');
+      throw new BadGatewayException(
+        'Checkout outcome is uncertain. Do not start another payment until provider reconciliation.',
+      );
     }
 
     const created = await this.db.tx(async (c) => {
