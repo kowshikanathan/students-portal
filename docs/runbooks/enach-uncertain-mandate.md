@@ -29,12 +29,17 @@ such attempts move from `requested` to `uncertain`, not `failed`.
    The payer's return URL is never authoritative financial evidence.
 4. If the provider cannot echo `merchantSetupId`, or reports registration exists
    without a matching signed callback, the local setup remains uncertain.
-   open a documented manual reconciliation task; do not create another registration
-   or manually label money as received. A governed, independently approved manual resolution
+   In the tenant fee-operations console, use **Record investigation** on the uncertain
+   mandate row. Supply only the provider's support case reference and select one
+   of the predefined investigation reasons. This inserts one audited, tenant-scoped
+   `mandate_reconciliation_cases` record. Repeated attempts for the same setup are
+   rejected. Creating an investigation case **does not** change the mandate status,
+   authorize a retry, or record a payment.
+   Do not create another registration or manually label money as received. A governed, independently approved manual resolution
    workflow is still required for production activation.
 5. If the provider proves the request never registered, require independent operator
    approval and an audited disposition before allowing a new registration attempt.
-   This repository currently has no automated operator-disposition endpoint.
+   This repository currently has no approved operator-disposition endpoint; the investigation case is read-only after creation.
 6. Record tenant, schedule, setup ID, provider case/reference, timeline and the
    independent evidence. No bank account number, UPI credential or other secrets
    belong in support notes.
