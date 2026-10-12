@@ -119,3 +119,12 @@ provider event remains auditable as rejected and no new mandate is inserted.
 A callback with a valid, correlated original setup ID still follows the
 existing signed-event path. This prevents duplicate mandates without adding a
 manual activation shortcut.
+
+## Rejecting conflicting active provider references
+
+The signed mandate callback also checks whether a fee schedule already has an
+active mandate under a different provider reference. In that case the new
+provider event is rejected with `ACTIVE_MANDATE_REFERENCE_CONFLICT`, is
+auditable, and cannot create an additional active mandate. A legitimate status
+change for the existing provider reference continues through the established
+ordering checks. This guard applies across eNACH and UPI AutoPay rails.
