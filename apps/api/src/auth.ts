@@ -283,10 +283,7 @@ export class AuthController {
   @Post('logout-all')
   @UseGuards(AuthGuard)
   @Roles('owner', 'editor', 'sales', 'analyst')
-  async logoutAll(
-    @Req() req: AuthedRequest,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async logoutAll(@Req() req: AuthedRequest, @Res({ passthrough: true }) res: Response) {
     const count = await this.db.tx(async (c) => {
       // Account-wide sign-out is self-service and must not depend on which
       // institution is currently selected. All session tokens remain hashed.
