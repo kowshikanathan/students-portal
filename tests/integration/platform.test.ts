@@ -3566,9 +3566,10 @@ test('signed eNACH status correlates an uncertain registration without a second 
       occurredAt: new Date().toISOString(),
     };
 
+    const mismatchedEventId = 'evt_' + randomUUID();
     const invalid = await sendSigned({
       ...event,
-      eventId: 'evt_' + randomUUID(),
+      eventId: mismatchedEventId,
       merchantSetupId: randomUUID(),
     });
     assert.equal(invalid.r.status, 202, JSON.stringify(invalid.data));
@@ -3595,26 +3596,17 @@ test('signed eNACH status correlates an uncertain registration without a second 
     const rejectedEvent = (
       await owner.query(
         `SELECT id FROM payment_provider_events
-         WHERE provider_event_id=$1 AND event_type='mandate_status'`,
-        [invalid.data.providerEventId || ''],
+         WHERE tenant_id=$1 AND provider_event_id=$2 AND status='failed'`,
+        [primaryTenantId, mismatchedEventId],
       )
     ).rows[0];
-    const anyRejectedEvent = rejectedEvent ||
-      (
-        await owner.query(
-          `SELECT id FROM payment_provider_events
-           WHERE tenant_id=$1 AND provider=$2 AND status='failed'
-           ORDER BY received_at DESC LIMIT 1`,
-          [primaryTenantId, 'qa_enach_gateway'],
-        )
-      ).rows[0];
-    assert.ok(anyRejectedEvent);
+    assert.ok(rejectedEvent);
     await assert.rejects(
       owner.query(
         `UPDATE mandate_reconciliation_cases
          SET status='resolved_signed',resolved_at=now(),resolution_provider_event_id=$2
          WHERE id=$1`,
-        [caseId, anyRejectedEvent.id],
+        [caseId, rejectedEvent.id],
       ),
       /correlated applied terminal provider event/i,
     );
