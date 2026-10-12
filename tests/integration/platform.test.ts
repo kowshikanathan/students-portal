@@ -3107,6 +3107,10 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
     assert.equal(attempts.length, 1);
     assert.equal(attempts[0]!.status, 'queued');
 
+    const awaitingBank = await call('/v1/payer/' + payerToken);
+    assert.equal(awaitingBank.r.status, 200, JSON.stringify(awaitingBank.data));
+    assert.ok(awaitingBank.data.pendingAutopayInstallments.includes(installmentId));
+
     // Prevent a duplicate collection on the hosted-checkout rail while the
     // approved mandate worker has an unresolved debit for this installment.
     const priorCheckout = {
@@ -3175,6 +3179,9 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
     )[0]!;
     assert.equal(installment.status, 'paid');
     assert.equal(Number(installment.paid_amount_minor), 90000);
+    const settledPortal = await call('/v1/payer/' + payerToken);
+    assert.equal(settledPortal.r.status, 200);
+    assert.ok(!settledPortal.data.pendingAutopayInstallments.includes(installmentId));
 
     await tick(db);
     assert.equal(
