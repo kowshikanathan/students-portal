@@ -3554,6 +3554,23 @@ test('signed eNACH status correlates an uncertain registration without a second 
         investigator.user_id,
       ],
     );
+    // Existing admin endpoint derives review readiness and age from the same
+    // immutable case/evidence ledger, never from a manually edited status.
+    const awaitingEvidence = await call(
+      '/v1/admin/fees/mandate-reconciliation-cases',
+      'GET',
+      undefined,
+      {},
+      true,
+    );
+    assert.equal(awaitingEvidence.r.status, 200, JSON.stringify(awaitingEvidence.data));
+    const queuedCase = awaitingEvidence.data.find((entry: any) => entry.id === caseId);
+    assert.ok(queuedCase);
+    assert.equal(queuedCase.queue_state, 'awaiting_provider_evidence');
+    assert.equal(queuedCase.evidence_count, 0);
+    assert.equal(queuedCase.pending_review_count, 0);
+    assert.ok(Number(queuedCase.age_hours) >= 0);
+
     const reference = 'enach_' + randomUUID().replaceAll('-', '');
     const event = {
       eventId: 'evt_' + randomUUID(),
@@ -3666,6 +3683,18 @@ test('signed eNACH status correlates an uncertain registration without a second 
     assert.equal(resolvedCase.status, 'resolved_signed');
     assert.ok(resolvedCase.resolved_at);
     assert.ok(resolvedCase.resolution_provider_event_id);
+    const completedQueue = await call(
+      '/v1/admin/fees/mandate-reconciliation-cases',
+      'GET',
+      undefined,
+      {},
+      true,
+    );
+    assert.equal(completedQueue.r.status, 200, JSON.stringify(completedQueue.data));
+    assert.equal(
+      completedQueue.data.find((entry: any) => entry.id === caseId)?.queue_state,
+      'resolved_signed',
+    );
     await assert.rejects(
       owner.query(
         `UPDATE mandate_reconciliation_cases
