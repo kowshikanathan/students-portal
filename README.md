@@ -6,8 +6,12 @@ A working, independently implemented education-payments website platform inspire
 
 **Product identity:** Dodo. The GitHub repository, existing database roles,
 migrations, signing-key configuration and legacy storage identifiers retain
-their current technical names for compatibility. The owner console has an
-**eNACH & AutoPay** sidebar dashboard that reuses the current fee operation APIs.
+their current technical names for compatibility. Dodo now has two separate authenticated dashboard experiences:
+**Studio** at `/admin/` for general institution management, and **Dodo eNACH**
+at `/enach/` with its own sidebar for mandate registration, recurring debit,
+settlement and checkout records. The eNACH app reuses the existing fee operation
+APIs, payer portal, tenant permissions and audited financial records; it does
+not create a second payment ledger.
 Historical source citations to Jodo remain attributed to Jodo and must not be
 presented as Dodo customer or compliance claims. Existing published CMS copy
 may still require an owner-reviewed rebrand.
