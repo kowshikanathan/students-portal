@@ -388,7 +388,12 @@ export function FeeOperations() {
         <button
           type="button"
           className="button outline"
-          onClick={() => document.getElementById('mandate-workspace')?.scrollIntoView()}
+          aria-controls="mandate-workspace"
+          onClick={() => {
+            const target = document.getElementById('mandate-workspace');
+            target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            target?.focus({ preventScroll: true });
+          }}
         >
           Go to Mandates & AutoPay
         </button>
@@ -416,7 +421,7 @@ export function FeeOperations() {
       </section>
 
       {/* Keep the existing mandate and reconciliation controls immediately visible. */}
-      <div className="admin-panel" id="mandate-workspace">
+      <div className="admin-panel" id="mandate-workspace" tabIndex={-1}>
         <h2>Mandates, AutoPay & settlements</h2>
         <MandateWorkspace
           data={{
