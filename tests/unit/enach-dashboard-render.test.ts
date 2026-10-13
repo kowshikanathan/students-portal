@@ -16,8 +16,9 @@ test('Dodo eNACH dashboard uses existing mandate controls and never suggests a l
   assert.match(html, /Automatic debits \(0\)/);
   assert.match(html, /Settlements \(0\)/);
   assert.match(html, /Checkouts \(0\)/);
-  assert.match(html, /Create payer \/ fee schedule/);
-  assert.match(html, /Open reconciliation and evidence review/);
+  assert.match(html, /Create payer profile/);
+  assert.match(html, /Create fee schedule/);
+  assert.match(html, /Reconciliation and evidence review/);
   assert.match(html, /Live eNACH authorization is unavailable/);
 });
 
