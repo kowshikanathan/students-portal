@@ -207,6 +207,7 @@ export function AdminShell({
           <EnachDashboard
             key={session.tenant.id}
             initialView={enachView}
+            onViewChange={setEnachView}
             openFeeOperations={(target) => {
               if (standaloneEnach) {
                 window.location.assign('/admin/fees/' + target + '/');
@@ -259,6 +260,8 @@ export function AdminShell({
                   {item.label}
                 </button>
               ))}
+              <a href="#enach-custom-fields">Custom fields</a>
+              <a href="#enach-reports">Reports</a>
               <Link href="/admin/fees/">Payers & fee schedules ↗</Link>
               <Link href="/admin/fees/reconciliation/">Reconciliation & evidence ↗</Link>
               <Link href="/admin/">← Dodo Studio</Link>
