@@ -1,5 +1,31 @@
 # Mandates, AutoPay & settlements — dashboard controls
 
+## Dedicated Dodo eNACH dashboard
+
+The owner sidebar now includes **eNACH & AutoPay**, independent of the longer
+**Fee operations** page. It reuses the existing mandate, setup, debit,
+settlement, checkout, schedules, provider-readiness and investigation APIs
+and the same interactive mandate workspace. Its cards show actual
+workspace-scoped counts rather than fabricated transactions, and partial
+API failures are shown without hiding successfully loaded records.
+
+**Create payer profile** and **Create fee schedule** take the user to the
+corresponding existing forms in Fee operations. **Reconciliation and evidence
+review** takes the user to the existing investigation controls. **Generate
+payer link** invokes the existing secured 72-hour payer-link API and opens the
+same payer portal. The separate dashboard creates no additional database
+tables, mandate endpoints, approval rights or direct debit permissions.
+The bank integration still has to be configured and verified independently.
+
+The product-facing console and default public site identity are **Dodo**.
+Existing database usernames, repository paths, signed callback contracts,
+consent storage keys and historical citations to Jodo as a third-party
+reference are intentionally not renamed: that would risk migration
+breakage or incorrectly claim Jodo's partner relationships as Dodo's.
+Previously published CMS titles/text are owner-controlled and may need
+separate review in the CMS to replace historical reference wording.
+
+
 In the institution owner console, open **Fee operations**. The existing
 **Mandates, AutoPay & settlements** workspace now appears immediately after the
 fee dashboard summary and before payer and fee-schedule forms, at full content
