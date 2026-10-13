@@ -41,6 +41,33 @@ test('mandate operations has navigable working record views', async ({ page }, i
   await expect(dedicated.getByLabel('Search setup attempts')).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'eNACH & AutoPay dashboard' })).toBeVisible();
+  // Responsive audit: the dedicated dashboard and its controls must fit
+  // desktop, tablet and mobile viewports without clipping or overlap.
+  for (const width of [1440, 1024, 768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const measured = await page.locator('.admin-main').evaluate((main) => {
+      const rect = main.getBoundingClientRect();
+      const body = main.ownerDocument.body;
+      return {
+        mainWidth: rect.width,
+        viewportWidth: main.ownerDocument.documentElement.clientWidth,
+        bodyWidth: body.scrollWidth,
+        mainContentWidth: main.scrollWidth,
+      };
+    });
+    expect(measured.bodyWidth, 'page must not overflow at ' + width).toBeLessThanOrEqual(
+      measured.viewportWidth + 2,
+    );
+    expect(
+      measured.mainContentWidth,
+      'eNACH fields and cards must fit the admin content at ' + width,
+    ).toBeLessThanOrEqual(measured.mainWidth + 2);
+    await expect(dedicated.getByRole('button', { name: /^Mandates \\(/ })).toBeVisible();
+    await dedicated.getByRole('button', { name: /^Automatic debits \\(/ }).click();
+    await expect(dedicated.getByLabel('Search automatic debits')).toBeVisible();
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+
   await page.getByRole('button', { name: 'Create fee schedule' }).click();
   await expect(page.getByRole('heading', { name: 'Create fee schedule' })).toBeVisible();
 
