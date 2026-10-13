@@ -37,7 +37,7 @@ test('mandate operations has navigable working record views', async ({ page }, i
   await expect(dedicated.getByLabel('Search settlements')).toBeVisible();
   await dedicated.getByRole('button', { name: /^Setup attempts \\(/ }).click();
   await expect(dedicated.getByLabel('Search setup attempts')).toBeVisible();
-  await page.getByRole('button', { name: 'Create payer / fee schedule' }).click();
+  await page.getByRole('button', { name: 'Create fee schedule' }).click();
   await expect(page.getByRole('heading', { name: 'Create fee schedule' })).toBeVisible();
 
   // The mandate workspace must remain functional if an unrelated dashboard
