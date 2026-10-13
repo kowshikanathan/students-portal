@@ -91,66 +91,55 @@ export function FeeOperations() {
     Array<{ code: string; label: string; amount: string; reason: string }>
   >([]);
 
+  // Fetch each panel independently: a failure in communications or analytics
+  // must not make mandate, settlement and reconciliation controls appear empty.
   const load = async () => {
-    try {
-      const [o, s, p, m, st, py, cm, pe, ps, an, lf, ms, aa, cs, mc, me] = await Promise.all([
-        request('admin/fees/overview'),
-        request<Schedule[]>('admin/fees/schedules'),
-        request<any[]>('admin/fees/payments'),
-        request<any[]>('admin/fees/mandates'),
-        request<any[]>('admin/fees/settlements'),
-        request<Payer[]>('admin/payers'),
-        request<any[]>('admin/fees/communications'),
-        request<any[]>('admin/fees/provider-events'),
-        request<any>('provider/payments/status'),
-        request<any>('admin/fees/analytics'),
-        request<any[]>('admin/fees/late-fees'),
-        request<any[]>('admin/fees/mandate-setups'),
-        request<any[]>('admin/fees/autopay-attempts'),
-        request<any[]>('admin/fees/checkout-sessions'),
-        request<any[]>('admin/fees/mandate-reconciliation-cases'),
-        request<any[]>('admin/fees/mandate-reconciliation-evidence'),
-      ]);
-      setOverview(o);
-      setSchedules(s);
-      setPayments(p);
-      setMandates(m);
-      setSettlements(st);
-      setPayers(py);
-      setCommunications(cm);
-      setProviderEvents(pe);
-      setProviderStatus(ps);
-      setAnalytics(an);
-      setLateFees(lf);
-      setMandateSetups(ms);
-      setMandateCases(mc);
-      setMandateEvidence(me);
-      setAutopayAttempts(aa);
-      setCheckoutSessions(cs);
-      setMessage('');
-    } catch (e) {
-      setMessage((e as Error).message);
+    const resources: Array<{ label: string; run: () => Promise<void> }> = [
+      { label: 'fee overview', run: async () => setOverview(await request('admin/fees/overview')) },
+      { label: 'fee schedules', run: async () => setSchedules(await request<Schedule[]>('admin/fees/schedules')) },
+      { label: 'payments', run: async () => setPayments(await request<any[]>('admin/fees/payments')) },
+      { label: 'mandates', run: async () => setMandates(await request<any[]>('admin/fees/mandates')) },
+      { label: 'settlements', run: async () => setSettlements(await request<any[]>('admin/fees/settlements')) },
+      { label: 'payers', run: async () => setPayers(await request<Payer[]>('admin/payers')) },
+      { label: 'communications', run: async () => setCommunications(await request<any[]>('admin/fees/communications')) },
+      { label: 'provider events', run: async () => setProviderEvents(await request<any[]>('admin/fees/provider-events')) },
+      { label: 'provider status', run: async () => setProviderStatus(await request<any>('provider/payments/status')) },
+      { label: 'analytics', run: async () => setAnalytics(await request<any>('admin/fees/analytics')) },
+      { label: 'late fees', run: async () => setLateFees(await request<any[]>('admin/fees/late-fees')) },
+      { label: 'mandate setups', run: async () => setMandateSetups(await request<any[]>('admin/fees/mandate-setups')) },
+      { label: 'automatic debits', run: async () => setAutopayAttempts(await request<any[]>('admin/fees/autopay-attempts')) },
+      { label: 'checkouts', run: async () => setCheckoutSessions(await request<any[]>('admin/fees/checkout-sessions')) },
+      { label: 'reconciliation cases', run: async () => setMandateCases(await request<any[]>('admin/fees/mandate-reconciliation-cases')) },
+      { label: 'reconciliation evidence', run: async () => setMandateEvidence(await request<any[]>('admin/fees/mandate-reconciliation-evidence')) },
+    ];
+    const results = await Promise.allSettled(resources.map((item) => item.run()));
+    const failed = results.flatMap((result, i) =>
+      result.status === 'rejected' ? [resources[i]!.label] : [],
+    );
+    if (failed.length) {
+      setMessage('Some fee data could not load: ' + failed.join(', ') + '. Other sections remain available; refresh to retry.');
     }
   };
   useEffect(() => {
     void load();
-  }, []);
+  }, [session.tenant.id]);
 
   const refreshMandateWorkspace = async () => {
-    const [m, st, ps, ms, aa, cs] = await Promise.all([
-      request<any[]>('admin/fees/mandates'),
-      request<any[]>('admin/fees/settlements'),
-      request<any>('provider/payments/status'),
-      request<any[]>('admin/fees/mandate-setups'),
-      request<any[]>('admin/fees/autopay-attempts'),
-      request<any[]>('admin/fees/checkout-sessions'),
-    ]);
-    setMandates(m);
-    setSettlements(st);
-    setProviderStatus(ps);
-    setMandateSetups(ms);
-    setAutopayAttempts(aa);
-    setCheckoutSessions(cs);
+    const resources: Array<{ label: string; run: () => Promise<void> }> = [
+      { label: 'mandates', run: async () => setMandates(await request<any[]>('admin/fees/mandates')) },
+      { label: 'settlements', run: async () => setSettlements(await request<any[]>('admin/fees/settlements')) },
+      { label: 'provider status', run: async () => setProviderStatus(await request<any>('provider/payments/status')) },
+      { label: 'mandate setups', run: async () => setMandateSetups(await request<any[]>('admin/fees/mandate-setups')) },
+      { label: 'automatic debits', run: async () => setAutopayAttempts(await request<any[]>('admin/fees/autopay-attempts')) },
+      { label: 'checkouts', run: async () => setCheckoutSessions(await request<any[]>('admin/fees/checkout-sessions')) },
+      { label: 'reconciliation cases', run: async () => setMandateCases(await request<any[]>('admin/fees/mandate-reconciliation-cases')) },
+      { label: 'reconciliation evidence', run: async () => setMandateEvidence(await request<any[]>('admin/fees/mandate-reconciliation-evidence')) },
+    ];
+    const results = await Promise.allSettled(resources.map((item) => item.run()));
+    const failed = results.flatMap((result, i) =>
+      result.status === 'rejected' ? [resources[i]!.label] : [],
+    );
+    if (failed.length) throw new Error('Could not refresh: ' + failed.join(', ') + '. Successfully loaded records are still displayed.');
   };
 
   const activeInstallments = useMemo(
