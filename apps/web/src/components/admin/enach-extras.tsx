@@ -255,7 +255,7 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
 
   return (
     <>
-      <section className="admin-panel enach-extras" aria-label="eNACH custom fields">
+      <section id="enach-custom-fields" className="admin-panel enach-extras" aria-label="eNACH custom fields">
         <div className="enach-section-heading">
           <h2>Custom fields</h2>
           <EnachInfo topic="fields" label="Explain custom eNACH fields" />
@@ -359,7 +359,7 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
         {valueError && <p className="error-card" role="alert">{valueError}</p>}
       </section>
 
-      <section className="admin-panel enach-extras" aria-label="eNACH report builder">
+      <section id="enach-reports" className="admin-panel enach-extras" aria-label="eNACH report builder">
         <div className="enach-section-heading">
           <h2>Report builder</h2>
           <EnachInfo topic="report" label="Explain eNACH report builder" />
