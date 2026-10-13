@@ -11,6 +11,7 @@ export const allowedAdminAreas: Record<string, readonly string[]> = {
     'notifications',
     'collections',
     'fees',
+    'enach',
     'fee-plans',
     'academic',
     'tenant',
