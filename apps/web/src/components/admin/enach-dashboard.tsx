@@ -133,10 +133,13 @@ export function EnachDashboard({ openFeeOperations }: Props) {
         )}
         <div className="admin-toolbar">
           <button type="button" className="button outline" onClick={() => openFeeOperations('payer')}>
-            Create payer / fee schedule
+            Create payer profile
           </button>
-          <button type="button" className="button outline" onClick={openFeeOperations}>
-            Open reconciliation and evidence review
+          <button type="button" className="button outline" onClick={() => openFeeOperations('schedule')}>
+            Create fee schedule
+          </button>
+          <button type="button" className="button outline" onClick={() => openFeeOperations('reconciliation')}>
+            Reconciliation and evidence review
           </button>
         </div>
         {unresolved > 0 && (
