@@ -76,6 +76,7 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
   const [chosenRecord, setChosenRecord] = useState('');
   const [entry, setEntry] = useState('');
   const [reportType, setReportType] = useState<MandateView>(view);
+  const [reportRevision, setReportRevision] = useState(0);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [from, setFrom] = useState('');
@@ -183,6 +184,7 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
         value: entry.trim(),
       });
       await loadValues(view);
+      if (reportType === view) setReportRevision((previous) => previous + 1);
       setValueMessage('Operational field saved. No financial status or bank instruction changed.');
     } catch (e) {
       setValueError((e as Error).message);
@@ -260,7 +262,7 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
       .then((result) => { if (!cancelled) { setReportValues(result); setReportValuesLoaded(true); } })
       .catch((error) => { if (!cancelled) setReportError((error as Error).message); });
     return () => { cancelled = true; };
-  }, [session.tenant.id, reportType]);
+  }, [session.tenant.id, reportType, reportRevision]);
   const valuesForType = reportValues;
 
   return (
