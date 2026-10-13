@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useAdminApi } from './context';
 import { MandateWorkspace } from './mandate-workspace';
-import type { MandateDashboardData } from './mandate-view-model';
+import type { MandateDashboardData, MandateView } from './mandate-view-model';
 
 type Props = {
   openFeeOperations: (target: 'payer' | 'schedule' | 'reconciliation') => void;
+  initialView?: MandateView;
 };
 type Schedule = {
   id: string;
@@ -27,7 +28,7 @@ const emptyData: MandateDashboardData = {
   checkouts: [],
 };
 
-export function EnachDashboard({ openFeeOperations }: Props) {
+export function EnachDashboard({ openFeeOperations, initialView = 'mandates' }: Props) {
   const { request, session } = useAdminApi();
   const [data, setData] = useState<MandateDashboardData>(emptyData);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
@@ -191,6 +192,8 @@ export function EnachDashboard({ openFeeOperations }: Props) {
       </div>
       <div className="admin-panel">
         <MandateWorkspace
+          key={initialView}
+          initialView={initialView}
           data={data}
           schedules={schedules}
           providerName={provider?.provider}
