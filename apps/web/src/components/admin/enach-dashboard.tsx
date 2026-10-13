@@ -9,6 +9,7 @@ import type { MandateDashboardData, MandateView } from './mandate-view-model';
 type Props = {
   openFeeOperations: (target: 'payer' | 'schedule' | 'reconciliation') => void;
   initialView?: MandateView;
+  onViewChange?: (view: MandateView) => void;
 };
 type Schedule = {
   id: string;
@@ -29,7 +30,11 @@ const emptyData: MandateDashboardData = {
   checkouts: [],
 };
 
-export function EnachDashboard({ openFeeOperations, initialView = 'mandates' }: Props) {
+export function EnachDashboard({
+  openFeeOperations,
+  initialView = 'mandates',
+  onViewChange,
+}: Props) {
   const { request, session } = useAdminApi();
   const [data, setData] = useState<MandateDashboardData>(emptyData);
   const [displayView, setDisplayView] = useState<MandateView>(initialView);
@@ -215,7 +220,10 @@ export function EnachDashboard({ openFeeOperations, initialView = 'mandates' }: 
       <EnachExtras
         data={data}
         view={displayView}
-        onViewChange={setDisplayView}
+        onViewChange={(next) => {
+          setDisplayView(next);
+          onViewChange?.(next);
+        }}
         loaded={!loading}
         failedResources={failedResources}
       />
