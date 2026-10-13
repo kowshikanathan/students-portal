@@ -61,9 +61,16 @@ export function Header({
               </SmartLink>
             ),
           )}
-          <SmartLink href="/login/" className="button outline login-link">
-            Login
-          </SmartLink>
+          <details className="nav-dropdown login-dropdown">
+            <summary className="button outline login-link">
+              Login <span aria-hidden="true">⌄</span>
+            </summary>
+            <div>
+              <SmartLink href="/admin/">Dodo Studio — Owner Dashboard</SmartLink>
+              <SmartLink href="/enach/">Dodo eNACH Dashboard</SmartLink>
+              <SmartLink href="/login/">All login options</SmartLink>
+            </div>
+          </details>
           <SmartLink href="/contact-us/" className="button primary">
             Book a demo
           </SmartLink>
