@@ -41,7 +41,7 @@ export function EnachInfo({ topic, label = 'Show help' }: { topic: string; label
     <span className="enach-help">
       <button type="button" title={label} aria-label={label} aria-expanded={open}
         onClick={() => setOpen((previous) => !previous)}>
-        ⓘ <span className="enach-help-eye" aria-hidden="true">◉</span>
+        ⓘ <span className="enach-help-eye" aria-hidden="true">👁</span>
       </button>
       {open && <span className="enach-help-note" role="note">{help[topic] || topic}</span>}
     </span>
@@ -129,6 +129,12 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
   useEffect(() => {
     setReportType(view);
   }, [view]);
+  useEffect(() => {
+    setSearch('');
+    setStatus('');
+    setFrom('');
+    setTo('');
+  }, [reportType]);
   useEffect(() => {
     setEntry(currentValue?.value || '');
   }, [chosenField, chosenRecord, currentValue?.value]);
