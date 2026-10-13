@@ -27,6 +27,7 @@ import {
 import { PrivacyController } from './privacy';
 import { TenantNotificationsController } from './tenant-notifications';
 import { TenantCollectionsController } from './tenant-collections';
+import { EnachCustomFieldsController } from './enach-custom-fields';
 import { OperationsController } from './operations';
 import { ChatController } from './chat';
 import { MediaController } from './media';
@@ -93,6 +94,7 @@ class Health {
     TenantEnquiriesAdminController,
     TenantNotificationsController,
     TenantCollectionsController,
+    EnachCustomFieldsController,
     LeadsController,
     PrivacyController,
     OperationsController,
