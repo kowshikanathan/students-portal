@@ -430,6 +430,12 @@ export function FeeOperations() {
             providerName={providerStatus?.provider}
             providerMode={providerStatus?.autopayMode}
             readOnly={session.tenant.readOnly === true}
+            onPreparePayer={() =>
+              document.getElementById('fee-payer-create')?.scrollIntoView({ behavior: 'smooth' })
+            }
+            onPrepareSchedule={() =>
+              document.getElementById('fee-schedule-create')?.scrollIntoView({ behavior: 'smooth' })
+            }
             onRefresh={refreshMandateWorkspace}
             onPayerLink={async (scheduleId) => {
               const result = await request<{ path: string; expiresHours: number }>(
@@ -689,6 +695,7 @@ export function FeeOperations() {
         </div>
 
       <form
+        id="fee-payer-create"
         className="admin-panel admin-form"
         onSubmit={async (e) => {
           e.preventDefault();
@@ -747,7 +754,7 @@ export function FeeOperations() {
         <button className="button primary">Save payer profile</button>
       </form>
 
-      <form className="admin-panel admin-form" onSubmit={createSchedule}>
+      <form id="fee-schedule-create" className="admin-panel admin-form" onSubmit={createSchedule}>
         <h2>Create fee schedule</h2>
         <p>
           Use an internal, non-sensitive account reference. Store student names and banking
