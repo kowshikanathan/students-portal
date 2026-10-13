@@ -28,8 +28,10 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   ].includes(path);
   const isPrivateUtility =
     path === '/search/' || path === '/cookie-preferences/' || path === '/login/';
+  const legacyHomepage =
+    path === '/' && !config.tenantSite && found?.body.title?.startsWith('Jodo |');
   const title =
-    found?.body.title ||
+    (legacyHomepage ? found.body.title.replace(/^Jodo \|/, 'Dodo |') : found?.body.title) ||
     (
       {
         '/blog/': 'Perspectives | Dodo',
@@ -42,7 +44,9 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
     'Dodo';
   return {
     title,
-    description: found?.body.description || 'Browse the education payments platform.',
+    description: legacyHomepage
+      ? 'Dodo education payments, fee schedules and recurring collection workflows.'
+      : found?.body.description || 'Browse the education payments platform.',
     alternates: { canonical: new URL(path, origin).toString() },
     robots: {
       index: !!config.indexing && !isPrivateUtility && (!!found?.body.indexable || isListing),
@@ -50,7 +54,9 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
     },
     openGraph: {
       title,
-      description: found?.body.description || process.env.NEXT_PUBLIC_BRAND_NAME || 'Dodo',
+      description: legacyHomepage
+        ? 'Dodo education payments, fee schedules and recurring collection workflows.'
+        : found?.body.description || process.env.NEXT_PUBLIC_BRAND_NAME || 'Dodo',
       url: new URL(path, origin).toString(),
       ...(found?.body.cover ? { images: [new URL(found.body.cover, origin).toString()] } : {}),
     },
