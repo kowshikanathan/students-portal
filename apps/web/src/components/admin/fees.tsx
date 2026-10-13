@@ -83,6 +83,8 @@ export function FeeOperations() {
   const [autopayAttempts, setAutopayAttempts] = useState<any[]>([]);
   const [checkoutSessions, setCheckoutSessions] = useState<any[]>([]);
   const [message, setMessage] = useState('');
+  const [scheduleFeedback, setScheduleFeedback] = useState('');
+  const [scheduleSubmitting, setScheduleSubmitting] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [installmentRows, setInstallmentRows] = useState([{ dueDate: '', amount: '' }]);
   const [componentRows, setComponentRows] = useState([
@@ -232,9 +234,27 @@ export function FeeOperations() {
 
   async function createSchedule(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (scheduleSubmitting) return;
     const form = e.currentTarget;
     const f = new FormData(form);
+    setScheduleFeedback('');
     try {
+      const feeTotal = componentRows.reduce((sum, row) => sum + toMinor(row.amount), 0);
+      const concessionTotal = concessionRows.reduce(
+        (sum, row) => sum + toMinor(row.amount),
+        0,
+      );
+      const installmentTotal = installmentRows.reduce(
+        (sum, row) => sum + toMinor(row.amount),
+        0,
+      );
+      if (installmentTotal !== feeTotal - concessionTotal) {
+        throw new Error(
+          'Installment amounts must add up to the fee components minus concessions. ' +
+            'Review the amounts above before creating the draft.',
+        );
+      }
+      setScheduleSubmitting(true);
       await request('admin/fees/schedules', 'POST', {
         accountReference: String(f.get('accountReference') || ''),
         ...(String(f.get('payerId') || '') ? { payerId: String(f.get('payerId')) } : {}),
@@ -275,12 +295,14 @@ export function FeeOperations() {
       setInstallmentRows([{ dueDate: '', amount: '' }]);
       setComponentRows([{ code: 'tuition', label: 'Tuition fee', amount: '', bankRouteKey: '' }]);
       setConcessionRows([]);
-      setMessage(
-        'Draft fee schedule created. Review components, concessions and installments before activation.',
+      setScheduleFeedback(
+        'Draft fee schedule created. Find it under Fee schedules below and select Activate schedule.',
       );
       await load();
     } catch (e) {
-      setMessage((e as Error).message);
+      setScheduleFeedback((e as Error).message);
+    } finally {
+      setScheduleSubmitting(false);
     }
   }
 
@@ -759,7 +781,18 @@ export function FeeOperations() {
         <button className="button primary">Save payer profile</button>
       </form>
 
-      <form id="fee-schedule-create" className="admin-panel admin-form" onSubmit={createSchedule}>
+      <form
+        id="fee-schedule-create"
+        className="admin-panel admin-form"
+        onSubmit={createSchedule}
+        onInvalidCapture={(event) => {
+          const field = event.target as HTMLInputElement;
+          const label = field.closest('label')?.textContent?.trim() || 'Required field';
+          setScheduleFeedback(
+            'Please complete ' + label + ' before creating the draft schedule.',
+          );
+        }}
+      >
         <h2>Create fee schedule</h2>
         <p>
           Use an internal, non-sensitive account reference. Store student names and banking
@@ -1046,8 +1079,15 @@ export function FeeOperations() {
           >
             Add installment
           </button>
-          <button className="button primary">Create draft schedule</button>
+          <button type="submit" className="button primary" disabled={scheduleSubmitting}>
+            {scheduleSubmitting ? 'Creating draft…' : 'Create draft schedule'}
+          </button>
         </div>
+        {scheduleFeedback && (
+          <p role="status" className="admin-feedback">
+            {scheduleFeedback}
+          </p>
+        )}
       </form>
 
       <section className="admin-panel">
