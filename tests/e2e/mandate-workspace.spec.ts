@@ -24,6 +24,22 @@ test('mandate operations has navigable working record views', async ({ page }, i
     .fill(authenticator.generate(process.env.OWNER_TOTP_SECRET!));
   await page.getByRole('button', { name: 'Sign in securely' }).click();
 
+  // The dedicated Dodo eNACH area must be independently navigable without
+  // creating a second financial service or provider authorization path.
+  await page.getByRole('button', { name: 'eNACH & AutoPay', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'eNACH & AutoPay dashboard' }),
+  ).toBeVisible();
+  const dedicated = page.getByRole('region', {
+    name: 'Mandate and recurring collections workspace',
+  });
+  await dedicated.getByRole('button', { name: /^Settlements \\(/ }).click();
+  await expect(dedicated.getByLabel('Search settlements')).toBeVisible();
+  await dedicated.getByRole('button', { name: /^Setup attempts \\(/ }).click();
+  await expect(dedicated.getByLabel('Search setup attempts')).toBeVisible();
+  await page.getByRole('button', { name: 'Create payer / fee schedule' }).click();
+  await expect(page.getByRole('heading', { name: 'Create fee schedule' })).toBeVisible();
+
   // The mandate workspace must remain functional if an unrelated dashboard
   // endpoint is temporarily unavailable.
   let failCommunicationsOnce = true;
