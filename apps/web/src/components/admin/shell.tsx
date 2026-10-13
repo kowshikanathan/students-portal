@@ -13,6 +13,7 @@ import { Workflows } from './workflows';
 import { Dashboard, Campaigns, Media, Settings, Records } from './panels';
 import { FeeOperations } from './fees';
 import { EnachDashboard } from './enach-dashboard';
+import { mandateViews, type MandateView } from './mandate-view-model';
 import { TenancyStudio } from './tenancy';
 import { AcademicOperations } from './academic';
 import { FeePlanStudio } from './fee-plans';
@@ -24,7 +25,6 @@ const sections = [
   ['notifications', 'Notifications'],
   ['collections', 'Custom collections'],
   ['fees', 'Fee operations'],
-  ['enach', 'eNACH & AutoPay'],
   ['fee-plans', 'Fee plans & receivables'],
   ['academic', 'Students & academic'],
   ['tenant', 'Organisation & access'],
@@ -40,12 +40,19 @@ const sections = [
   ['users', 'Staff sessions'],
   ['integrations', 'Integration status'],
 ];
-export function AdminShell({ initialArea = 'overview' }: { initialArea?: string } = {}) {
+export function AdminShell({
+  initialArea = 'overview',
+  standaloneEnach = false,
+}: {
+  initialArea?: string;
+  standaloneEnach?: boolean;
+} = {}) {
   const [session, setSession] = useState<Session | null>(null),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [area, setArea] = useState(initialArea);
+  const [enachView, setEnachView] = useState<MandateView>('mandates');
   const [feeTarget, setFeeTarget] = useState<'payer' | 'schedule' | 'reconciliation' | null>(null);
   async function sync() {
     try {
@@ -170,7 +177,9 @@ export function AdminShell({ initialArea = 'overview' }: { initialArea?: string 
         </form>
       </main>
     );
-  const activeArea = safeAdminArea(session.tenant.role, area);
+  const activeArea = standaloneEnach
+    ? canViewAdminArea(session.tenant.role, 'enach') ? 'enach' : 'overview'
+    : safeAdminArea(session.tenant.role, area);
   const render = () => {
     switch (activeArea) {
       case 'overview':
@@ -195,10 +204,15 @@ export function AdminShell({ initialArea = 'overview' }: { initialArea?: string 
         return (
           <EnachDashboard
             key={session.tenant.id}
+            initialView={enachView}
             openFeeOperations={(target) => {
-              setFeeTarget(target);
-              setArea('fees');
-              window.history.replaceState(null, '', '/admin/');
+              if (standaloneEnach) {
+                window.location.assign('/admin/fees/' + target + '/');
+              } else {
+                setFeeTarget(target);
+                setArea('fees');
+                window.history.replaceState(null, '', '/admin/');
+              }
             }}
           />
         );
@@ -220,10 +234,34 @@ export function AdminShell({ initialArea = 'overview' }: { initialArea?: string 
     <AdminContext.Provider value={session}>
       <div className="admin-root admin-shell">
         <aside className="admin-sidebar">
-          <Link href="/" className="admin-logo">
-            Dodo<span className="yellow-dot">.</span> studio
+          <Link href={standaloneEnach ? '/enach/' : '/'} className="admin-logo">
+            Dodo<span className="yellow-dot">.</span>{standaloneEnach ? ' eNACH' : ' studio'}
           </Link>
-          <p>DODO · INSTITUTION CONSOLE</p>
+          <p>{standaloneEnach ? 'DODO · ENACH CONSOLE' : 'DODO · INSTITUTION CONSOLE'}</p>
+          {standaloneEnach ? (
+            <nav className="admin-nav" aria-label="eNACH navigation">
+              <button
+                type="button"
+                className={enachView === 'mandates' ? 'selected' : ''}
+                onClick={() => setEnachView('mandates')}
+              >
+                Mandate overview
+              </button>
+              {mandateViews.filter((item) => item.id !== 'mandates').map((item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  className={enachView === item.id ? 'selected' : ''}
+                  onClick={() => setEnachView(item.id)}
+                >
+                  {item.label}
+                </button>
+              ))}
+              <Link href="/admin/fees/">Payers & fee schedules ↗</Link>
+              <Link href="/admin/fees/reconciliation/">Reconciliation & evidence ↗</Link>
+              <Link href="/admin/">← Dodo Studio</Link>
+            </nav>
+          ) : (
           <nav className="admin-nav" aria-label="Owner navigation">
             {sections
               .filter(([key]) => canViewAdminArea(session.tenant.role, key!))
@@ -250,11 +288,12 @@ export function AdminShell({ initialArea = 'overview' }: { initialArea?: string 
               Open public website ↗
             </Link>
           </nav>
+          )}
         </aside>
         <main id="main" className="admin-main">
           <div className="admin-topbar">
             <div>
-              <h1>{sections.find((s) => s[0] === activeArea)?.[1]}</h1>
+              <h1>{standaloneEnach ? 'eNACH operations' : sections.find((s) => s[0] === activeArea)?.[1]}</h1>
               <p>
                 {session.user.email} · {session.tenant.name} · {session.tenant.role}
               </p>
@@ -321,7 +360,13 @@ export function AdminShell({ initialArea = 'overview' }: { initialArea?: string 
               {error}
             </p>
           )}
-          {render()}
+          {standaloneEnach && !canViewAdminArea(session.tenant.role, 'enach') ? (
+            <div className="admin-panel" role="alert">
+              <h2>Owner access required</h2>
+              <p>This financial workspace is restricted to authorized institution owners.</p>
+              <Link href="/admin/">Return to Dodo Studio</Link>
+            </div>
+          ) : render()}
         </main>
       </div>
     </AdminContext.Provider>
