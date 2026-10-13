@@ -31,6 +31,7 @@ type Props = {
   onPrepareSchedule?: () => void;
   initialView?: MandateView;
   showFieldHelp?: boolean;
+  onViewChange?: (view: MandateView) => void;
 };
 
 export function MandateWorkspace({
@@ -45,6 +46,7 @@ export function MandateWorkspace({
   onPrepareSchedule,
   initialView = 'mandates',
   showFieldHelp = false,
+  onViewChange,
 }: Props) {
   const [view, setView] = useState<MandateView>(initialView);
   const [busy, setBusy] = useState(false);
@@ -128,6 +130,7 @@ export function MandateWorkspace({
               aria-pressed={view === item.id}
               onClick={() => {
                 setView(item.id);
+                onViewChange?.(item.id);
                 setQuery('');
               }}
             >
