@@ -31,7 +31,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const legacyHomepage =
     path === '/' && !config.tenantSite && found?.body.title?.startsWith('Jodo |');
   const title =
-    (legacyHomepage ? found.body.title.replace(/^Jodo \|/, 'Dodo |') : found?.body.title) ||
+    (legacyHomepage ? found?.body.title?.replace(/^Jodo \|/, 'Dodo |') : found?.body.title) ||
     (
       {
         '/blog/': 'Perspectives | Dodo',
