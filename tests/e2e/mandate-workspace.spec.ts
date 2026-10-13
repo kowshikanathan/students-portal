@@ -27,6 +27,8 @@ test('mandate operations has navigable working record views', async ({ page }, i
   // The dedicated Dodo eNACH area must be independently navigable without
   // creating a second financial service or provider authorization path.
   await page.getByRole('button', { name: 'eNACH & AutoPay', exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/enach\/?$/);
+  await expect(page.locator('.admin-logo')).toContainText('Dodo');
   await expect(
     page.getByRole('heading', { name: 'eNACH & AutoPay dashboard' }),
   ).toBeVisible();
@@ -37,6 +39,8 @@ test('mandate operations has navigable working record views', async ({ page }, i
   await expect(dedicated.getByLabel('Search settlements')).toBeVisible();
   await dedicated.getByRole('button', { name: /^Setup attempts \\(/ }).click();
   await expect(dedicated.getByLabel('Search setup attempts')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'eNACH & AutoPay dashboard' })).toBeVisible();
   await page.getByRole('button', { name: 'Create fee schedule' }).click();
   await expect(page.getByRole('heading', { name: 'Create fee schedule' })).toBeVisible();
 
