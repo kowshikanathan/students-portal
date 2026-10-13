@@ -26,7 +26,13 @@ test('mandate operations has navigable working record views', async ({ page }, i
 
   // The mandate workspace must remain functional if an unrelated dashboard
   // endpoint is temporarily unavailable.
+  let failCommunicationsOnce = true;
   await page.route('**/api/v1/admin/fees/communications', async (route) => {
+    if (!failCommunicationsOnce) {
+      await route.continue();
+      return;
+    }
+    failCommunicationsOnce = false;
     await route.fulfill({
       status: 503,
       contentType: 'application/json',
@@ -46,6 +52,9 @@ test('mandate operations has navigable working record views', async ({ page }, i
   await expect(workspace.getByRole('button', { name: /^Automatic debits \(/ })).toBeVisible();
   await expect(workspace.getByRole('button', { name: /^Settlements \(/ })).toBeVisible();
   await expect(workspace.getByRole('button', { name: /^Checkouts \(/ })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Retry loading fee data' }).click();
+  await expect(page.getByText(/Some fee data could not load: communications/)).toBeHidden();
 
   await workspace.getByRole('button', { name: /^Settlements \(/ }).click();
   await expect(workspace.getByLabel('Search settlements')).toBeVisible();
