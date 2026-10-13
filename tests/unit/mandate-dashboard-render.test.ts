@@ -64,6 +64,37 @@ test('active payer schedule renders a controlled authorization link action', () 
   assert.ok(html.includes('enabled by configuration'));
 });
 
+test('missing payer schedule exposes working setup navigation only to writable owners', () => {
+  const html = renderToStaticMarkup(
+    createElement(MandateWorkspace, {
+      data: emptyData,
+      schedules: [],
+      readOnly: false,
+      onRefresh: async () => {},
+      onPayerLink: async () => '/payer/safe/',
+      onPreparePayer: () => {},
+      onPrepareSchedule: () => {},
+    }),
+  );
+  assert.ok(html.includes('Create payer profile'));
+  assert.ok(html.includes('Create fee schedule'));
+  assert.ok(html.includes('No active fee schedule with an assigned payer'));
+
+  const restricted = renderToStaticMarkup(
+    createElement(MandateWorkspace, {
+      data: emptyData,
+      schedules: [],
+      readOnly: true,
+      onRefresh: async () => {},
+      onPayerLink: async () => '/payer/safe/',
+      onPreparePayer: () => {},
+      onPrepareSchedule: () => {},
+    }),
+  );
+  assert.ok(!restricted.includes('Create payer profile'));
+  assert.ok(!restricted.includes('Create fee schedule'));
+});
+
 test('read-only institution cannot create payer portal links', () => {
   const html = renderToStaticMarkup(
     createElement(MandateWorkspace, {
