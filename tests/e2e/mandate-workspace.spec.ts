@@ -33,6 +33,18 @@ test('mandate operations has navigable working record views', async ({ page }, i
   await expect(page).toHaveURL(/\/enach\/?$/);
   await expect(page.locator('.admin-logo')).toContainText('Dodo eNACH');
   await expect(page.getByRole('navigation', { name: 'eNACH navigation' })).toBeVisible();
+  const enachNav = page.getByRole('navigation', { name: 'eNACH navigation' });
+  await enachNav.getByRole('button', { name: 'Automatic debits' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Mandate and recurring collections workspace' })
+      .getByLabel('Search automatic debits'),
+  ).toBeVisible();
+  await enachNav.getByRole('button', { name: 'Settlements' }).click();
+  await expect(
+    page.getByRole('region', { name: 'Mandate and recurring collections workspace' })
+      .getByLabel('Search settlements'),
+  ).toBeVisible();
+  await enachNav.getByRole('button', { name: 'Mandate overview' }).click();
   await expect(
     page.getByRole('heading', { name: 'eNACH & AutoPay dashboard' }),
   ).toBeVisible();
