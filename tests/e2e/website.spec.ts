@@ -101,9 +101,11 @@ test('customer portals do not capture credentials before provider configuration'
 }) => {
   await page.goto('/login/');
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Continue' })).toHaveCount(4);
+  await expect(page.getByRole('link', { name: 'Continue' })).toHaveCount(5);
   await expect(page.locator('.portal-grid a[href^="/contact-us"]')).toHaveCount(3);
   await expect(page.locator('.portal-grid a[href^="/admin"]')).toHaveCount(1);
+  await expect(page.locator('.portal-grid a[href="/enach/"]')).toHaveCount(1);
+  await expect(page.getByRole('heading', { name: 'Dodo eNACH Dashboard' })).toBeVisible();
   await expect(page.locator('a[href*="jodo.in"]')).toHaveCount(0);
 });
 test('owner login page has MFA and no default credentials', async ({ page }) => {
@@ -114,4 +116,21 @@ test('owner login page has MFA and no default credentials', async ({ page }) => 
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
     .analyze();
   expect(a.violations.map((v) => v.id)).toEqual([]);
+});
+
+test('public Login menu exposes the separate Dodo eNACH application', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.login-dropdown summary').click();
+  const menu = page.locator('.login-dropdown');
+  await expect(menu.getByRole('link', { name: 'Dodo Studio — Owner Dashboard' })).toHaveAttribute(
+    'href',
+    '/admin/',
+  );
+  await expect(menu.getByRole('link', { name: 'Dodo eNACH Dashboard' })).toHaveAttribute(
+    'href',
+    '/enach/',
+  );
+  await menu.getByRole('link', { name: 'Dodo eNACH Dashboard' }).click();
+  await expect(page).toHaveURL(/\/enach\/?$/);
+  await expect(page.getByLabel('Authenticator code')).toBeVisible();
 });
