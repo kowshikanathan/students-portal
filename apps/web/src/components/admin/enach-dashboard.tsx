@@ -42,11 +42,23 @@ export function EnachDashboard({ openFeeOperations }: Props) {
       ['mandates', () => request<MandateDashboardData['mandates']>('admin/fees/mandates')],
       ['setups', () => request<MandateDashboardData['setups']>('admin/fees/mandate-setups')],
       ['debits', () => request<MandateDashboardData['debits']>('admin/fees/autopay-attempts')],
-      ['settlements', () => request<MandateDashboardData['settlements']>('admin/fees/settlements')],
-      ['checkouts', () => request<MandateDashboardData['checkouts']>('admin/fees/checkout-sessions')],
+      [
+        'settlements',
+        () => request<MandateDashboardData['settlements']>('admin/fees/settlements'),
+      ],
+      [
+        'checkouts',
+        () => request<MandateDashboardData['checkouts']>('admin/fees/checkout-sessions'),
+      ],
       ['schedules', () => request<Schedule[]>('admin/fees/schedules')],
       ['provider', () => request<ProviderState>('provider/payments/status')],
-      ['cases', () => request<Array<{ id: string; status: string }>>('admin/fees/mandate-reconciliation-cases')],
+      [
+        'cases',
+        () =>
+          request<Array<{ id: string; status: string }>>(
+            'admin/fees/mandate-reconciliation-cases',
+          ),
+      ],
     ] as const;
     const results = await Promise.allSettled(resources.map(([, run]) => run()));
     const failures: string[] = [];
@@ -57,7 +69,13 @@ export function EnachDashboard({ openFeeOperations }: Props) {
         return;
       }
       const value = result.value;
-      if (key === 'mandates' || key === 'setups' || key === 'debits' || key === 'settlements' || key === 'checkouts') {
+      if (
+        key === 'mandates' ||
+        key === 'setups' ||
+        key === 'debits' ||
+        key === 'settlements' ||
+        key === 'checkouts'
+      ) {
         setData((previous) => ({ ...previous, [key]: value as Record<string, any>[] }));
       } else if (key === 'schedules') {
         setSchedules(value as Schedule[]);
@@ -69,7 +87,8 @@ export function EnachDashboard({ openFeeOperations }: Props) {
     });
     setFailedResources(failures);
     setLoading(false);
-    if (failures.length) throw new Error('Some eNACH records could not load: ' + failures.join(', '));
+    if (failures.length)
+      throw new Error('Some eNACH records could not load: ' + failures.join(', '));
   }
 
   useEffect(() => {
@@ -88,7 +107,8 @@ export function EnachDashboard({ openFeeOperations }: Props) {
         allowComponentSelection: false,
       },
     );
-    if (!result.path.startsWith('/payer/')) throw new Error('Unexpected secure payer link response');
+    if (!result.path.startsWith('/payer/'))
+      throw new Error('Unexpected secure payer link response');
     return window.location.origin + result.path;
   }
 
@@ -108,7 +128,10 @@ export function EnachDashboard({ openFeeOperations }: Props) {
         <div className="dashboard-stats">
           {[
             ['Active mandates', active],
-            ['Pending setups', data.setups.filter((item) => ['requested', 'created'].includes(item.status)).length],
+            [
+              'Pending setups',
+              data.setups.filter((item) => ['requested', 'created'].includes(item.status)).length,
+            ],
             ['Uncertain setups', uncertain],
             ['Open investigations', unresolved],
           ].map(([label, value]) => (
@@ -126,19 +149,36 @@ export function EnachDashboard({ openFeeOperations }: Props) {
         {failedResources.length > 0 && (
           <div className="admin-notice" role="alert">
             <p>Could not load: {failedResources.join(', ')}. Other sections remain available.</p>
-            <button type="button" className="button outline" disabled={loading} onClick={() => void load().catch(() => undefined)}>
+            <button
+              type="button"
+              className="button outline"
+              disabled={loading}
+              onClick={() => void load().catch(() => undefined)}
+            >
               Retry failed data
             </button>
           </div>
         )}
         <div className="admin-toolbar">
-          <button type="button" className="button outline" onClick={() => openFeeOperations('payer')}>
+          <button
+            type="button"
+            className="button outline"
+            onClick={() => openFeeOperations('payer')}
+          >
             Create payer profile
           </button>
-          <button type="button" className="button outline" onClick={() => openFeeOperations('schedule')}>
+          <button
+            type="button"
+            className="button outline"
+            onClick={() => openFeeOperations('schedule')}
+          >
             Create fee schedule
           </button>
-          <button type="button" className="button outline" onClick={() => openFeeOperations('reconciliation')}>
+          <button
+            type="button"
+            className="button outline"
+            onClick={() => openFeeOperations('reconciliation')}
+          >
             Reconciliation and evidence review
           </button>
         </div>
