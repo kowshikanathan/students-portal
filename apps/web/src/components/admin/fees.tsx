@@ -1,6 +1,7 @@
 'use client';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAdminApi } from './context';
+import { MandateWorkspace } from './mandate-workspace';
 
 type Installment = {
   id: string;
@@ -134,6 +135,23 @@ export function FeeOperations() {
   useEffect(() => {
     void load();
   }, []);
+
+  const refreshMandateWorkspace = async () => {
+    const [m, st, ps, ms, aa, cs] = await Promise.all([
+      request<any[]>('admin/fees/mandates'),
+      request<any[]>('admin/fees/settlements'),
+      request<any>('provider/payments/status'),
+      request<any[]>('admin/fees/mandate-setups'),
+      request<any[]>('admin/fees/autopay-attempts'),
+      request<any[]>('admin/fees/checkout-sessions'),
+    ]);
+    setMandates(m);
+    setSettlements(st);
+    setProviderStatus(ps);
+    setMandateSetups(ms);
+    setAutopayAttempts(aa);
+    setCheckoutSessions(cs);
+  };
 
   const activeInstallments = useMemo(
     () =>
@@ -294,6 +312,13 @@ export function FeeOperations() {
       <section className="admin-panel">
         <p className="eyebrow">Fee lifecycle</p>
         <h2>Collection operations dashboard</h2>
+        <button
+          type="button"
+          className="button outline"
+          onClick={() => document.getElementById('mandate-workspace')?.scrollIntoView()}
+        >
+          Go to Mandates & AutoPay
+        </button>
         <p>
           Schedules, installments, externally confirmed payment evidence, refunds, mandates,
           settlements and reconciliation share one audited ledger. This workspace does not move
@@ -960,8 +985,38 @@ export function FeeOperations() {
             ))
           )}
         </div>
-        <div className="admin-panel">
+        <div className="admin-panel" id="mandate-workspace">
           <h2>Mandates, AutoPay & settlements</h2>
+          <MandateWorkspace
+            data={{
+              mandates,
+              setups: mandateSetups,
+              debits: autopayAttempts,
+              settlements,
+              checkouts: checkoutSessions,
+            }}
+            schedules={schedules}
+            providerName={providerStatus?.provider}
+            providerMode={providerStatus?.autopayMode}
+            readOnly={session.tenant.readOnly === true}
+            onRefresh={refreshMandateWorkspace}
+            onPayerLink={async (scheduleId) => {
+              const result = await request<{ path: string; expiresHours: number }>(
+                'admin/fees/schedules/' + encodeURIComponent(scheduleId) + '/payer-link',
+                'POST',
+                {
+                  expiresHours: 72,
+                  paymentMode: 'full_balance',
+                  allowCustomAmount: false,
+                  allowComponentSelection: false,
+                },
+              );
+              if (!result.path.startsWith('/payer/')) {
+                throw new Error('Unexpected secure payer link response');
+              }
+              return window.location.origin + result.path;
+            }}
+          />
           <p>
             {mandates.length} mandate record(s) · {mandateSetups.length} setup attempt(s) ·{' '}
             {autopayAttempts.length} automated debit attempt(s) · {checkoutSessions.length} hosted
