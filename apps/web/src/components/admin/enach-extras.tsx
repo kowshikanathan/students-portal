@@ -226,7 +226,7 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
   const reportStatuses = [...new Set(reportRows.map((row) => String(row.status || '')).filter(Boolean))];
 
   function exportCsv() {
-    if (!loaded || reportFailed || included.length === 0) return;
+    if (!loaded || reportFailed || reportValuesLoadedFor !== reportType || reportError || included.length === 0) return;
     const reportValues = valuesForType;
     const report = filtered.map((row) => {
       const result: RecordRow = { ...row };
@@ -252,14 +252,14 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
   // Each report's annotations must be loaded from the same tenant and record type.
   const [reportValues, setReportValues] = useState<CustomValue[]>([]);
   const [reportError, setReportError] = useState('');
-  const [reportValuesLoaded, setReportValuesLoaded] = useState(false);
+  const [reportValuesLoadedFor, setReportValuesLoadedFor] = useState('');
   useEffect(() => {
     setReportValues([]);
-    setReportValuesLoaded(false);
+    setReportValuesLoadedFor('');
     setReportError('');
     let cancelled = false;
     void request<CustomValue[]>('admin/enach/values/' + reportType)
-      .then((result) => { if (!cancelled) { setReportValues(result); setReportValuesLoaded(true); } })
+      .then((result) => { if (!cancelled) { setReportValues(result); setReportValuesLoadedFor(reportType); } })
       .catch((error) => { if (!cancelled) setReportError((error as Error).message); });
     return () => { cancelled = true; };
   }, [session.tenant.id, reportType, reportRevision]);
@@ -334,7 +334,7 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
               </select>
             </label>
             <label className="field">
-              Custom field
+              <span>Custom field <EnachInfo topic="fieldLabel" label="Explain custom field selection" /></span>
               <select value={chosenField} onChange={(event) => setChosenField(event.target.value)}
                 required disabled={fields.length === 0}>
                 <option value="">Select a field…</option>
@@ -421,7 +421,7 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
         {reportFailed && <p role="alert" className="error-card">This record type could not load. Retry records before exporting.</p>}
         {reportError && <p role="alert" className="error-card">Custom field values could not load: {reportError}</p>}
         <button type="button" className="button primary"
-          disabled={!loaded || reportFailed || !reportValuesLoaded || !!reportError || included.length === 0 ||
+          disabled={!loaded || reportFailed || reportValuesLoadedFor !== reportType || !!reportError || included.length === 0 ||
             !!(from && to && to < from)}
           onClick={exportCsv}>Download CSV report</button>
         <p className="small">This report includes only records loaded in your current session, not an exhaustive
