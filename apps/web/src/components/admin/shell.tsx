@@ -40,12 +40,12 @@ const sections = [
   ['users', 'Staff sessions'],
   ['integrations', 'Integration status'],
 ];
-export function AdminShell() {
+export function AdminShell({ initialArea = 'overview' }: { initialArea?: string } = {}) {
   const [session, setSession] = useState<Session | null>(null),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
-    [area, setArea] = useState('overview');
+    [area, setArea] = useState(initialArea);
   const [feeTarget, setFeeTarget] = useState<'payer' | 'schedule' | 'reconciliation' | null>(null);
   async function sync() {
     try {
@@ -198,6 +198,7 @@ export function AdminShell() {
             openFeeOperations={(target) => {
               setFeeTarget(target);
               setArea('fees');
+              window.history.replaceState(null, '', '/admin/');
             }}
           />
         );
@@ -233,6 +234,13 @@ export function AdminShell() {
                   onClick={() => {
                     setFeeTarget(null);
                     setArea(key!);
+                    if (key === 'enach' || window.location.pathname.startsWith('/admin/enach')) {
+                      window.history.replaceState(
+                        null,
+                        '',
+                        key === 'enach' ? '/admin/enach/' : '/admin/',
+                      );
+                    }
                   }}
                 >
                   {title}
