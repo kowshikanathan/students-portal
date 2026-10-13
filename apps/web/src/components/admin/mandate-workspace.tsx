@@ -87,7 +87,12 @@ export function MandateWorkspace({
           <p className="eyebrow">Mandate operations</p>
           <h3>Explore mandates and payment-provider activity</h3>
         </div>
-        <button type="button" className="button outline" onClick={() => void refresh()} disabled={busy}>
+        <button
+          type="button"
+          className="button outline"
+          onClick={() => void refresh()}
+          disabled={busy}
+        >
           {busy ? 'Working…' : 'Refresh records'}
         </button>
       </div>
@@ -109,7 +114,10 @@ export function MandateWorkspace({
             type="button"
             className={view === item.id ? 'button primary' : 'button outline'}
             aria-pressed={view === item.id}
-            onClick={() => { setView(item.id); setQuery(''); }}
+            onClick={() => {
+              setView(item.id);
+              setQuery('');
+            }}
           >
             {item.label} ({mandateRows(data, item.id).length})
           </button>
@@ -130,7 +138,7 @@ export function MandateWorkspace({
             <h3>No {mandateViews.find((item) => item.id === view)?.label.toLowerCase()} found</h3>
             <p>
               {source.length === 0
-                ? 'No records exist for this institution yet. Select another view or use an active fee schedule below.'
+                ? 'No records exist yet. Select another view or use an active fee schedule below.'
                 : 'No records match the current search. Clear the search to see all records.'}
             </p>
           </div>
@@ -139,7 +147,8 @@ export function MandateWorkspace({
             <details key={String(entry.id ?? index)} className="record-row">
               <summary>
                 <strong>{mandateAccount(entry)}</strong>
-                {' · '}{mandateStatus(entry)}
+                {' · '}
+                {mandateStatus(entry)}
                 {entry.rail ? ' · ' + (entry.rail === 'enach' ? 'eNACH' : entry.rail) : ''}
                 {' · View details'}
               </summary>
@@ -180,8 +189,10 @@ export function MandateWorkspace({
           will see the eNACH setup option only when provider integration is enabled.
         </p>
         {actionable.length === 0 ? (
-          <p className="small">No active fee schedule with an assigned payer is available.
-            Create and activate a fee schedule with a payer first.</p>
+          <p className="small">
+            No active fee schedule with an assigned payer is available. Create and activate a fee
+            schedule with a payer first.
+          </p>
         ) : (
           <div className="fee-schedule-grid">
             {actionable.slice(0, 20).map((schedule) => (
@@ -199,7 +210,9 @@ export function MandateWorkspace({
             ))}
           </div>
         )}
-        {readOnly && <p className="small">The institution is read-only; link creation is disabled.</p>}
+        {readOnly && (
+          <p className="small">The institution is read-only; link creation is disabled.</p>
+        )}
         {payerLink && (
           <p className="small">
             Payer link created for the selected schedule:{' '}
@@ -209,7 +222,11 @@ export function MandateWorkspace({
           </p>
         )}
       </div>
-      {notice && <p className="admin-feedback" role="status">{notice}</p>}
+      {notice && (
+        <p className="admin-feedback" role="status">
+          {notice}
+        </p>
+      )}
     </section>
   );
 }
