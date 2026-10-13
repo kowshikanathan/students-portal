@@ -43,9 +43,11 @@ const sections = [
 export function AdminShell({
   initialArea = 'overview',
   standaloneEnach = false,
+  initialFeeTarget = null,
 }: {
   initialArea?: string;
   standaloneEnach?: boolean;
+  initialFeeTarget?: 'payer' | 'schedule' | 'reconciliation' | null;
 } = {}) {
   const [session, setSession] = useState<Session | null>(null),
     [loading, setLoading] = useState(true),
@@ -53,7 +55,7 @@ export function AdminShell({
     [error, setError] = useState(''),
     [area, setArea] = useState(initialArea);
   const [enachView, setEnachView] = useState<MandateView>('mandates');
-  const [feeTarget, setFeeTarget] = useState<'payer' | 'schedule' | 'reconciliation' | null>(null);
+  const [feeTarget, setFeeTarget] = useState<'payer' | 'schedule' | 'reconciliation' | null>(initialFeeTarget);
   async function sync() {
     try {
       setSession(await api<Session>('/v1/auth/me'));
