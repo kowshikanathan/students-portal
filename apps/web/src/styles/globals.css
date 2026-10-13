@@ -2891,3 +2891,141 @@ p {
     margin-top: 6px;
   }
 }
+
+/* eNACH-only custom annotations, reports and contextual help.
+   No styling changes to Dodo Studio or the public website. */
+.admin-main .enach-extras {
+  scroll-margin-top: 24px;
+  min-width: 0;
+}
+.admin-main .enach-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.admin-main .enach-section-heading h2,
+.admin-main .enach-section-heading h3 {
+  margin: 0;
+}
+.admin-main .enach-help {
+  display: inline-block;
+  position: relative;
+  vertical-align: middle;
+  font-weight: 400;
+  max-width: 100%;
+  line-height: 1.4;
+}
+.admin-main .enach-help > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid #9abdb7;
+  border-radius: 999px;
+  color: #115e59;
+  background: #f0fdfa;
+  min-height: 28px;
+  padding: 2px 8px;
+  font-size: 14px;
+}
+.admin-main .enach-help > summary::-webkit-details-marker {
+  display: none;
+}
+.admin-main .enach-help > summary:hover,
+.admin-main .enach-help > summary:focus-visible {
+  background: #ccfbf1;
+}
+.admin-main .enach-help-eye {
+  font-size: 12px;
+}
+.admin-main .enach-help > p {
+  position: relative;
+  z-index: 2;
+  width: min(360px, 100%);
+  max-width: 100%;
+  border: 1px solid #badbd3;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #f8fffc;
+  box-shadow: 0 8px 22px #0f51321a;
+  font-size: 13px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+  margin: 6px 0;
+}
+.admin-main .enach-form {
+  max-width: 100%;
+  display: grid;
+  gap: 14px;
+}
+.admin-main .enach-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+  min-width: 0;
+}
+.admin-main .enach-form-grid .field {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+}
+.admin-main .enach-form-grid .field > span {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.admin-main .enach-form-grid input,
+.admin-main .enach-form-grid select,
+.admin-main .enach-form-grid textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  border-radius: 9px;
+  border: 1px solid #cdd3e1;
+  padding: 9px 12px;
+  background: white;
+}
+.admin-main .enach-form .button,
+.admin-main .enach-extras > .button {
+  justify-self: start;
+  max-width: 100%;
+  white-space: normal;
+}
+.admin-main .enach-column-chooser {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 10px 16px;
+  padding: 14px;
+  border: 1px solid #cdd3e1;
+  border-radius: 12px;
+  min-width: 0;
+}
+.admin-main .enach-column-chooser legend {
+  padding: 0 6px;
+  font-weight: 600;
+}
+.admin-main .enach-column-chooser label {
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  align-items: start;
+  overflow-wrap: anywhere;
+}
+.admin-main .enach-column-chooser input {
+  flex: 0 0 auto;
+  margin-top: 5px;
+}
+@media (max-width: 750px) {
+  .admin-main .enach-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-main .enach-form .button,
+  .admin-main .enach-extras > .button {
+    width: 100%;
+    justify-self: stretch;
+  }
+}
