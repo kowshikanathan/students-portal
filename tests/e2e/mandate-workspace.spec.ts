@@ -84,7 +84,7 @@ test('mandate operations has navigable working record views', async ({ page }, i
   }
   await page.setViewportSize({ width: 1440, height: 900 });
 
-  await page.getByRole('button', { name: 'Create fee schedule' }).click();
+  await page.getByRole('button', { name: 'Create fee schedule' }).first().click();
   await expect(page).toHaveURL(/\/admin\/fees\/schedule\/?$/);
   await expect(page.getByRole('heading', { name: 'Create fee schedule' })).toBeVisible();
 
