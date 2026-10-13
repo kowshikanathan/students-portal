@@ -121,18 +121,35 @@ export function MandateWorkspace({
       )}
       <div className="admin-toolbar" role="group" aria-label="Mandate record views">
         {mandateViews.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={view === item.id ? 'button primary' : 'button outline'}
-            aria-pressed={view === item.id}
-            onClick={() => {
-              setView(item.id);
-              setQuery('');
-            }}
-          >
-            {item.label} ({mandateRows(data, item.id).length})
-          </button>
+          <span key={item.id} className="enach-view-option">
+            <button
+              type="button"
+              className={view === item.id ? 'button primary' : 'button outline'}
+              aria-pressed={view === item.id}
+              onClick={() => {
+                setView(item.id);
+                setQuery('');
+              }}
+            >
+              {item.label} ({mandateRows(data, item.id).length})
+            </button>
+            {showFieldHelp && (
+              <EnachInfo
+                topic={
+                  item.id === 'mandates'
+                    ? 'Mandates reflect recurring debit permissions confirmed by the provider. No admin can approve a bank mandate from this view.'
+                    : item.id === 'setups'
+                      ? 'Setup attempts track registration requests. A pending request does not mean the payer has authorized it.'
+                      : item.id === 'debits'
+                        ? 'Automatic debits list provider debit attempts. A request is not evidence of payment success.'
+                        : item.id === 'settlements'
+                          ? 'Settlements show provider-reconciled transfers. A successful debit does not automatically mean funds have settled.'
+                          : 'Checkouts list hosted payment sessions. Provider confirmation is needed before recording a successful payment.'
+                }
+                label={'Explain ' + item.label}
+              />
+            )}
+          </span>
         ))}
       </div>
       <label className="field">
