@@ -191,7 +191,7 @@ export function AdminShell() {
       case 'fees':
         return <FeeOperations />;
       case 'enach':
-        return <EnachDashboard openFeeOperations={() => setArea('fees')} />;
+        return <EnachDashboard key={session.tenant.id} openFeeOperations={() => setArea('fees')} />;
       case 'fee-plans':
         return <FeePlanStudio />;
       case 'academic':
