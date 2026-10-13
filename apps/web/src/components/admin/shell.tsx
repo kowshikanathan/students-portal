@@ -12,6 +12,7 @@ import { TenantCollections } from './tenant-collections';
 import { Workflows } from './workflows';
 import { Dashboard, Campaigns, Media, Settings, Records } from './panels';
 import { FeeOperations } from './fees';
+import { EnachDashboard } from './enach-dashboard';
 import { TenancyStudio } from './tenancy';
 import { AcademicOperations } from './academic';
 import { FeePlanStudio } from './fee-plans';
@@ -23,6 +24,7 @@ const sections = [
   ['notifications', 'Notifications'],
   ['collections', 'Custom collections'],
   ['fees', 'Fee operations'],
+  ['enach', 'eNACH & AutoPay'],
   ['fee-plans', 'Fee plans & receivables'],
   ['academic', 'Students & academic'],
   ['tenant', 'Organisation & access'],
@@ -126,7 +128,7 @@ export function AdminShell() {
             <span className="brand-mark" aria-hidden="true">
               ◆
             </span>
-            <strong>Owner workspace</strong>
+            <strong>Dodo owner workspace</strong>
           </div>
           <h1>Your owner workspace.</h1>
           <p>Manage content, enquiries and fee operations for this installation.</p>
@@ -188,6 +190,8 @@ export function AdminShell() {
         return <Workflows />;
       case 'fees':
         return <FeeOperations />;
+      case 'enach':
+        return <EnachDashboard openFeeOperations={() => setArea('fees')} />;
       case 'fee-plans':
         return <FeePlanStudio />;
       case 'academic':
@@ -207,9 +211,9 @@ export function AdminShell() {
       <div className="admin-root admin-shell">
         <aside className="admin-sidebar">
           <Link href="/" className="admin-logo">
-            Platform<span className="yellow-dot">.</span> studio
+            Dodo<span className="yellow-dot">.</span> studio
           </Link>
-          <p>TENANT CONSOLE · SAAS BLUEPRINT 2.0</p>
+          <p>DODO · INSTITUTION CONSOLE</p>
           <nav className="admin-nav" aria-label="Owner navigation">
             {sections
               .filter(([key]) => canViewAdminArea(session.tenant.role, key!))
