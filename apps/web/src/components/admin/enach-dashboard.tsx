@@ -206,6 +206,10 @@ export function EnachDashboard({
           key={displayView}
           initialView={displayView}
           showFieldHelp
+          onViewChange={(next) => {
+            setDisplayView(next);
+            onViewChange?.(next);
+          }}
           data={data}
           schedules={schedules}
           providerName={provider?.provider}
