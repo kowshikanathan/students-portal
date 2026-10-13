@@ -3,7 +3,8 @@
 ## Dedicated Dodo eNACH dashboard
 
 The owner sidebar now includes **eNACH & AutoPay**, independent of the longer
-**Fee operations** page. It reuses the existing mandate, setup, debit,
+**Fee operations** page. Owners can also bookmark **/admin/enach/**; the
+URL preserves that dashboard after a reload. It reuses the existing mandate, setup, debit,
 settlement, checkout, schedules, provider-readiness and investigation APIs
 and the same interactive mandate workspace. Its cards show actual
 workspace-scoped counts rather than fabricated transactions, and partial
