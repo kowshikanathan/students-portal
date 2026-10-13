@@ -2631,3 +2631,188 @@ p {
   gap: 10px;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
 }
+
+
+/* Dodo owner console: prevent controls and financial records from overlapping.
+ * Scope these rules to the admin so public and payer layouts remain unchanged.
+ * Keep overflow inside its data region instead of clipping actions or fields. */
+.admin-shell {
+  grid-template-columns: 245px minmax(0, 1fr);
+  width: 100%;
+}
+.admin-main,
+.admin-panel,
+.admin-grid,
+.admin-grid > *,
+.admin-form,
+.admin-form .row,
+.admin-form .row > *,
+.admin-toolbar,
+.admin-toolbar > *,
+.admin-topbar > *,
+.dashboard-stats,
+.dashboard-stat,
+.fee-schedule-grid,
+.fee-schedule-card {
+  min-width: 0;
+  max-width: 100%;
+}
+.admin-panel,
+.admin-notice,
+.admin-feedback,
+.dashboard-stat,
+.fee-schedule-card,
+.admin-main .small {
+  overflow-wrap: anywhere;
+}
+.admin-toolbar {
+  align-items: center;
+  max-width: 100%;
+}
+.admin-toolbar .button,
+.admin-toolbar button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.admin-main .field {
+  min-width: 0;
+  max-width: 100%;
+}
+.admin-main .field > input,
+.admin-main .field > select,
+.admin-main .field > textarea,
+.admin-main .admin-form input,
+.admin-main .admin-form select,
+.admin-main .admin-form textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.admin-main .admin-form .row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+.admin-main .dashboard-stats {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.admin-main .dashboard-stat strong {
+  font-size: clamp(1.4rem, 2.5vw, 2.3rem);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+.admin-main .record-row {
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, auto);
+  align-items: start;
+}
+.admin-main .record-row > *,
+.admin-main .fee-installments > div > * {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.admin-main details.record-row {
+  display: block;
+}
+.admin-main details.record-row > summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.admin-main details.record-row > .admin-panel {
+  margin: 12px 0;
+}
+.admin-main .admin-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.admin-main .admin-topbar {
+  flex-wrap: wrap;
+}
+.admin-main .admin-top-actions {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.admin-main .admin-top-actions select {
+  min-width: 0;
+  max-width: 100%;
+}
+.admin-main #mandate-workspace,
+.admin-main [aria-label="eNACH and AutoPay dashboard"],
+.admin-main [aria-label="Mandate and recurring collections workspace"] {
+  min-width: 0;
+  max-width: 100%;
+}
+@media (max-width: 1400px) {
+  .admin-main .dashboard-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1150px) {
+  .admin-shell {
+    grid-template-columns: 215px minmax(0, 1fr);
+  }
+  .admin-main .record-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 850px) {
+  .admin-shell {
+    display: block;
+  }
+  .admin-sidebar {
+    position: static;
+    height: auto;
+    max-width: 100%;
+    padding: 16px;
+  }
+  .admin-sidebar > p {
+    display: none;
+  }
+  .admin-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    margin-top: 12px;
+    padding-bottom: 8px;
+    max-width: 100%;
+  }
+  .admin-nav button,
+  .admin-nav a {
+    white-space: nowrap;
+    flex: 0 0 auto;
+  }
+  .admin-main {
+    padding: 20px 16px;
+  }
+  .admin-main .admin-form .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-main .admin-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .admin-main {
+    padding: 16px 12px;
+  }
+  .admin-main .admin-panel {
+    padding: 16px 12px;
+  }
+  .admin-main .dashboard-stats,
+  .admin-main .record-row,
+  .admin-main .fee-installments > div {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .admin-main .admin-toolbar .button {
+    flex: 1 1 100%;
+  }
+  .admin-main .admin-topbar {
+    display: block;
+  }
+  .admin-main .admin-top-actions {
+    justify-content: flex-start;
+    margin-top: 12px;
+  }
+}
