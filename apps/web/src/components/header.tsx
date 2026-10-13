@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { SmartLink } from './links';
 export function Header({
   navigation,
-  name = 'YourCompany',
+  name = 'Dodo',
 }: {
   navigation: { label: string; href: string }[];
   name?: string;
