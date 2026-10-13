@@ -51,7 +51,7 @@ export function Chat() {
       <dialog className="chat-dialog" ref={box} onClose={() => setOpen(false)}>
         <div className="chat-top">
           <div>
-            <strong>Jodo product guide</strong>
+            <strong>Dodo product guide</strong>
             <small>Guided demo assistant · not a live agent</small>
           </div>
           <button aria-label="Close assistant" onClick={() => box.current?.close()}>
