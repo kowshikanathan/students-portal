@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { EnachInfo } from './enach-extras';
 import {
   eligiblePayerSchedules,
   mandateAccount,
@@ -29,6 +30,7 @@ type Props = {
   onPreparePayer?: () => void;
   onPrepareSchedule?: () => void;
   initialView?: MandateView;
+  showFieldHelp?: boolean;
 };
 
 export function MandateWorkspace({
@@ -42,6 +44,7 @@ export function MandateWorkspace({
   onPreparePayer,
   onPrepareSchedule,
   initialView = 'mandates',
+  showFieldHelp = false,
 }: Props) {
   const [view, setView] = useState<MandateView>(initialView);
   const [busy, setBusy] = useState(false);
@@ -91,7 +94,10 @@ export function MandateWorkspace({
       <div className="admin-toolbar">
         <div>
           <p className="eyebrow">Mandate operations</p>
-          <h3>Explore mandates and payment-provider activity</h3>
+          <div className="enach-section-heading">
+            <h3>Explore mandates and payment-provider activity</h3>
+            {showFieldHelp && <EnachInfo topic="Browse provider-generated record views, search for a reference, expand details, and refresh. These records cannot be manually marked paid or active." label="Explain mandate operations" />}
+          </div>
         </div>
         <button
           type="button"
@@ -130,7 +136,10 @@ export function MandateWorkspace({
         ))}
       </div>
       <label className="field">
-        Search {mandateViews.find((item) => item.id === view)?.label.toLowerCase()}
+        <span>
+          Search {mandateViews.find((item) => item.id === view)?.label.toLowerCase()}
+          {showFieldHelp && <EnachInfo topic="Search by account reference, current status, rail or provider reference. Search only filters the displayed records." label="Explain record search" />}
+        </span>
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
@@ -189,7 +198,10 @@ export function MandateWorkspace({
         {rows.length > 100 && <p className="small">Showing the first 100 matching records.</p>}
       </div>
       <div className="admin-panel">
-        <h3>Open eNACH setup in the payer portal</h3>
+        <div className="enach-section-heading">
+          <h3>Open eNACH setup in the payer portal</h3>
+          {showFieldHelp && <EnachInfo topic="Select an active payer-linked fee schedule, generate a 72-hour secure payer link and open it. This does not authorize a bank mandate; a configured provider and payer authorization are required." label="Explain secure payer links" />}
+        </div>
         <p className="small">
           Select an active fee schedule to create a time-limited payer link. The payer
           will see the eNACH setup option only when provider integration is enabled.
