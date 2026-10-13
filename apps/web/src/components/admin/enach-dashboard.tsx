@@ -5,7 +5,9 @@ import { useAdminApi } from './context';
 import { MandateWorkspace } from './mandate-workspace';
 import type { MandateDashboardData } from './mandate-view-model';
 
-type Props = { openFeeOperations: () => void };
+type Props = {
+  openFeeOperations: (target: 'payer' | 'schedule' | 'reconciliation') => void;
+};
 type Schedule = {
   id: string;
   account_reference: string;
@@ -130,7 +132,7 @@ export function EnachDashboard({ openFeeOperations }: Props) {
           </div>
         )}
         <div className="admin-toolbar">
-          <button type="button" className="button outline" onClick={openFeeOperations}>
+          <button type="button" className="button outline" onClick={() => openFeeOperations('payer')}>
             Create payer / fee schedule
           </button>
           <button type="button" className="button outline" onClick={openFeeOperations}>
@@ -153,8 +155,8 @@ export function EnachDashboard({ openFeeOperations }: Props) {
           readOnly={session.tenant.readOnly === true}
           onRefresh={load}
           onPayerLink={createPayerLink}
-          onPreparePayer={openFeeOperations}
-          onPrepareSchedule={openFeeOperations}
+          onPreparePayer={() => openFeeOperations('payer')}
+          onPrepareSchedule={() => openFeeOperations('schedule')}
         />
       </div>
     </section>
