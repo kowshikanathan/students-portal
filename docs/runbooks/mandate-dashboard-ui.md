@@ -2,17 +2,22 @@
 
 ## Dedicated Dodo eNACH dashboard
 
-The owner sidebar now includes **eNACH & AutoPay**, independent of the longer
-**Fee operations** page. Owners can also bookmark **/admin/enach/**; the
-URL preserves that dashboard after a reload. It reuses the existing mandate, setup, debit,
+The dedicated eNACH application is now served at **/enach/** with its own
+**Dodo eNACH** sidebar, separate from **Dodo Studio /admin/**. The main Studio
+sidebar no longer includes an eNACH menu item. Owners can bookmark **/enach/**,
+and the legacy **/admin/enach/** URL redirects to the separate application.
+The eNACH navigation selects the existing mandate, setup, debit, settlement
+and checkout views. It reuses the existing mandate, setup, debit,
 settlement, checkout, schedules, provider-readiness and investigation APIs
 and the same interactive mandate workspace. Its cards show actual
 workspace-scoped counts rather than fabricated transactions, and partial
 API failures are shown without hiding successfully loaded records.
 
-**Create payer profile** and **Create fee schedule** take the user to the
-corresponding existing forms in Fee operations. **Reconciliation and evidence
-review** takes the user to the existing investigation controls. **Generate
+**Create payer profile** and **Create fee schedule** take the owner to
+**/admin/fees/payer/** and **/admin/fees/schedule/**, respectively.
+**Reconciliation and evidence review** opens **/admin/fees/reconciliation/**.
+Those routes preserve the existing secure financial workflows instead of
+creating parallel API or database services. **Generate
 payer link** invokes the existing secured 72-hour payer-link API and opens the
 same payer portal. The separate dashboard creates no additional database
 tables, mandate endpoints, approval rights or direct debit permissions.
