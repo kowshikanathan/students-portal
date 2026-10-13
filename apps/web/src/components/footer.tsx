@@ -1,6 +1,6 @@
 import { SmartLink } from './links';
 
-export function Footer({ name = 'YourCompany' }: { name?: string }) {
+export function Footer({ name = 'Dodo' }: { name?: string }) {
   return (
     <footer className="site-footer">
       <div className="footer-grid wrap">
@@ -38,7 +38,7 @@ export function Footer({ name = 'YourCompany' }: { name?: string }) {
           ))}
         </div>
         <div>
-          <h2>Platform</h2>
+          <h2>Dodo</h2>
           {[
             ['Cost calculator', '/tools/hidden-cost-calculator/'],
             ['Support', '/support/'],
