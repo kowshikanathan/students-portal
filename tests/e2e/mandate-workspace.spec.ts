@@ -47,6 +47,13 @@ test('mandate operations has navigable working record views', async ({ page }, i
     name: 'Mandate and recurring collections workspace',
   });
   await expect(page.getByText(/Some fee data could not load: communications/)).toBeVisible();
+  // Mandate controls must precede the long payer/schedule forms and occupy
+  // the main content width, not a buried half-width summary column.
+  const workspaceBounds = await workspace.boundingBox();
+  const scheduleFormBounds = await page.getByRole('heading', { name: 'Create fee schedule' }).boundingBox();
+  expect(workspaceBounds).not.toBeNull();
+  expect(scheduleFormBounds).not.toBeNull();
+  expect(workspaceBounds!.y).toBeLessThan(scheduleFormBounds!.y);
   await expect(workspace.getByRole('button', { name: /^Mandates \(/ })).toBeVisible();
   await expect(workspace.getByRole('button', { name: /^Setup attempts \(/ })).toBeVisible();
   await expect(workspace.getByRole('button', { name: /^Automatic debits \(/ })).toBeVisible();
@@ -62,6 +69,13 @@ test('mandate operations has navigable working record views', async ({ page }, i
     'aria-pressed',
     'true',
   );
+
+  await workspace.getByRole('button', { name: /^Automatic debits \(/ }).click();
+  await expect(workspace.getByLabel('Search automatic debits')).toBeVisible();
+  await workspace.getByRole('button', { name: /^Checkouts \(/ }).click();
+  await expect(workspace.getByLabel('Search checkouts')).toBeVisible();
+  await workspace.getByRole('button', { name: /^Mandates \(/ }).click();
+  await expect(workspace.getByLabel('Search mandates')).toBeVisible();
 
   await workspace.getByRole('button', { name: /^Setup attempts \(/ }).click();
   await expect(workspace.getByLabel('Search setup attempts')).toBeVisible();
