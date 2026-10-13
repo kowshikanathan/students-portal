@@ -53,7 +53,7 @@ export default async function PayerPortal({ params, searchParams }: Props) {
           <span className="brand-mark" aria-hidden="true">
             ◆
           </span>
-          <strong>{process.env.NEXT_PUBLIC_BRAND_NAME || 'YourCompany'}</strong>
+          <strong>{process.env.NEXT_PUBLIC_BRAND_NAME || 'Dodo'}</strong>
         </div>
         <span className="status-pill">Secure schedule view</span>
       </header>
