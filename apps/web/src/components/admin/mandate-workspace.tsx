@@ -26,6 +26,8 @@ type Props = {
   readOnly: boolean;
   onRefresh: () => Promise<void>;
   onPayerLink: (scheduleId: string) => Promise<string>;
+  onPreparePayer?: () => void;
+  onPrepareSchedule?: () => void;
 };
 
 export function MandateWorkspace({
@@ -36,6 +38,8 @@ export function MandateWorkspace({
   readOnly,
   onRefresh,
   onPayerLink,
+  onPreparePayer,
+  onPrepareSchedule,
 }: Props) {
   const [view, setView] = useState<MandateView>('mandates');
   const [busy, setBusy] = useState(false);
@@ -189,10 +193,26 @@ export function MandateWorkspace({
           will see the eNACH setup option only when provider integration is enabled.
         </p>
         {actionable.length === 0 ? (
-          <p className="small">
-            No active fee schedule with an assigned payer is available. Create and activate a fee
-            schedule with a payer first.
-          </p>
+          <div>
+            <p className="small">
+              No active fee schedule with an assigned payer is available. Create and activate a fee
+              schedule with a payer first.
+            </p>
+            {!readOnly && (onPreparePayer || onPrepareSchedule) && (
+              <div className="admin-toolbar">
+                {onPreparePayer && (
+                  <button type="button" className="button outline" onClick={onPreparePayer}>
+                    Create payer profile
+                  </button>
+                )}
+                {onPrepareSchedule && (
+                  <button type="button" className="button outline" onClick={onPrepareSchedule}>
+                    Create fee schedule
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         ) : (
           <div className="fee-schedule-grid">
             {actionable.slice(0, 20).map((schedule) => (
