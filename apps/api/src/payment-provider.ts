@@ -43,6 +43,8 @@ export class PaymentProviderController {
       webhookMode: webhookEnabled ? 'signed_hmac' : 'disabled',
       checkoutMode: checkoutEnabled ? 'redirect_api' : 'disabled',
       autopayMode: autopayEnabled ? 'mandate_api' : 'disabled',
+      reconciliationMode:
+        process.env.AUTOPAY_RECONCILE_MODE === 'read_only' ? 'read_only' : 'disabled',
       moneyMovement: checkoutEnabled || autopayEnabled,
       note:
         checkoutEnabled || autopayEnabled
