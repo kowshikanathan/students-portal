@@ -2851,3 +2851,43 @@ p {
 .admin-main .fee-schedule-card .record-row {
   max-width: 100%;
 }
+
+/* Public login chooser: match the original Login button and keep both
+ * protected dashboards accessible at narrow widths. */
+.navigation .login-dropdown {
+  position: relative;
+  min-width: 0;
+}
+.navigation .login-dropdown > summary.login-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  cursor: pointer;
+  margin-left: 30px;
+  min-width: 125px;
+  padding: 11px 24px;
+}
+.navigation .login-dropdown > div {
+  left: auto;
+  right: 0;
+  z-index: 50;
+  width: max-content;
+  max-width: min(340px, calc(100vw - 32px));
+}
+.navigation .login-dropdown > div a {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 960px) {
+  .navigation .login-dropdown > summary.login-link {
+    width: 100%;
+    margin: 0;
+  }
+  .navigation .login-dropdown > div {
+    width: 100%;
+    max-width: 100%;
+    position: static;
+    margin-top: 6px;
+  }
+}
