@@ -33,6 +33,22 @@ test('mandate operations has navigable working record views', async ({ page }, i
   await expect(page).toHaveURL(/\/enach\/?$/);
   await expect(page.locator('.admin-logo')).toContainText('Dodo eNACH');
   await expect(page.getByRole('navigation', { name: 'eNACH navigation' })).toBeVisible();
+  const customPanel = page.getByRole('region', { name: 'eNACH custom fields' });
+  const reportsPanel = page.getByRole('region', { name: 'eNACH report builder' });
+  await expect(customPanel.getByRole('heading', { name: 'Custom fields' })).toBeVisible();
+  await expect(reportsPanel.getByRole('heading', { name: 'Report builder' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Custom fields' })).toHaveAttribute(
+    'href',
+    '#enach-custom-fields',
+  );
+  await expect(page.getByRole('link', { name: 'Reports' })).toHaveAttribute(
+    'href',
+    '#enach-reports',
+  );
+  await page.getByRole('button', { name: 'Explain mandate operations' }).click();
+  await expect(page.getByText(/Browse provider-generated record views/)).toBeVisible();
+  await expect(reportsPanel.getByRole('button', { name: 'Download CSV report' })).toBeEnabled();
+
   const enachNav = page.getByRole('navigation', { name: 'eNACH navigation' });
   await enachNav.getByRole('button', { name: 'Automatic debits' }).click();
   await expect(
