@@ -24,12 +24,23 @@ test('mandate operations has navigable working record views', async ({ page }, i
     .fill(authenticator.generate(process.env.OWNER_TOTP_SECRET!));
   await page.getByRole('button', { name: 'Sign in securely' }).click();
 
+  // The mandate workspace must remain functional if an unrelated dashboard
+  // endpoint is temporarily unavailable.
+  await page.route('**/api/v1/admin/fees/communications', async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: 'Synthetic communications outage' }),
+    });
+  });
+
   await page.getByRole('button', { name: 'Fee operations', exact: true }).click();
   await page.getByRole('button', { name: 'Go to Mandates & AutoPay' }).click();
 
   const workspace = page.getByRole('region', {
     name: 'Mandate and recurring collections workspace',
   });
+  await expect(page.getByText(/Some fee data could not load: communications/)).toBeVisible();
   await expect(workspace.getByRole('button', { name: /^Mandates \(/ })).toBeVisible();
   await expect(workspace.getByRole('button', { name: /^Setup attempts \(/ })).toBeVisible();
   await expect(workspace.getByRole('button', { name: /^Automatic debits \(/ })).toBeVisible();
