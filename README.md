@@ -1,8 +1,16 @@
-# Education Payments Website Platform
+# Dodo — Education Payments Platform
 
 A working, independently implemented education-payments website platform inspired by the feature class of modern fee-management products, with an owned CMS, secure staff console, enquiry management and a durable background worker. Built against **Website Master Blueprint v1.3, 7 October 2026**.
 
 **Delivery status:** working development/demo implementation; **not approved for production**, not a claim that every requirement in the 273-page blueprint is complete. See [release status](docs/acceptance/RELEASE.md), the 120-capability [register](docs/acceptance/blueprint-register.json), and [test evidence](docs/evidence/README.md).
+
+**Product identity:** Dodo. The GitHub repository, existing database roles,
+migrations, signing-key configuration and legacy storage identifiers retain
+their current technical names for compatibility. The owner console has an
+**eNACH & AutoPay** sidebar dashboard that reuses the current fee operation APIs.
+Historical source citations to Jodo remain attributed to Jodo and must not be
+presented as Dodo customer or compliance claims. Existing published CMS copy
+may still require an owner-reviewed rebrand.
 
 ## Included
 
