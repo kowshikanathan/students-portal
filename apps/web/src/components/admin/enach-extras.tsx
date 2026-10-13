@@ -36,11 +36,15 @@ const help: Record<string, string> = {
 };
 
 export function EnachInfo({ topic, label = 'Show help' }: { topic: string; label?: string }) {
+  const [open, setOpen] = useState(false);
   return (
-    <details className="enach-help">
-      <summary title={label} aria-label={label}>ⓘ <span className="enach-help-eye" aria-hidden="true">◉</span></summary>
-      <p>{help[topic] || topic}</p>
-    </details>
+    <span className="enach-help">
+      <button type="button" title={label} aria-label={label} aria-expanded={open}
+        onClick={() => setOpen((previous) => !previous)}>
+        ⓘ <span className="enach-help-eye" aria-hidden="true">◉</span>
+      </button>
+      {open && <span className="enach-help-note" role="note">{help[topic] || topic}</span>}
+    </span>
   );
 }
 
