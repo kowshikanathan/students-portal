@@ -64,8 +64,23 @@ const toMinor = (value: FormDataEntryValue | null) => {
   return Math.round(n * 100);
 };
 
-export function FeeOperations() {
+export function FeeOperations({
+  scrollTarget,
+}: {
+  scrollTarget?: 'payer' | 'schedule' | 'reconciliation' | null;
+} = {}) {
   const { request, session } = useAdminApi();
+  useEffect(() => {
+    if (!scrollTarget) return;
+    const id =
+      scrollTarget === 'payer'
+        ? 'fee-payer-create'
+        : scrollTarget === 'schedule'
+          ? 'fee-schedule-create'
+          : 'mandate-workspace';
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [scrollTarget]);
+
   const [overview, setOverview] = useState<any>(null);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [payments, setPayments] = useState<any[]>([]);
