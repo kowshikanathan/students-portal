@@ -2816,3 +2816,38 @@ p {
     margin-top: 12px;
   }
 }
+
+/* The investigation forms are not built from .field labels: give their
+ * evidence inputs the same responsive layout as standard fee forms. */
+.admin-main #mandate-workspace form {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+.admin-main #mandate-workspace form label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+.admin-main #mandate-workspace form input,
+.admin-main #mandate-workspace form select,
+.admin-main #mandate-workspace form textarea {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 12px;
+}
+.admin-main #mandate-workspace .record-row button {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+}
+.admin-main .fee-schedule-card .admin-toolbar,
+.admin-main .fee-schedule-card .record-row {
+  max-width: 100%;
+}
