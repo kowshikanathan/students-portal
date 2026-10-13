@@ -50,7 +50,9 @@ test('mandate operations has navigable working record views', async ({ page }, i
   // Mandate controls must precede the long payer/schedule forms and occupy
   // the main content width, not a buried half-width summary column.
   const workspaceBounds = await workspace.boundingBox();
-  const scheduleFormBounds = await page.getByRole('heading', { name: 'Create fee schedule' }).boundingBox();
+  const scheduleFormBounds = await page
+    .getByRole('heading', { name: 'Create fee schedule' })
+    .boundingBox();
   expect(workspaceBounds).not.toBeNull();
   expect(scheduleFormBounds).not.toBeNull();
   expect(workspaceBounds!.y).toBeLessThan(scheduleFormBounds!.y);
