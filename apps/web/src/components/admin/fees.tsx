@@ -416,186 +416,127 @@ export function FeeOperations() {
       </section>
 
       {/* Keep the existing mandate and reconciliation controls immediately visible. */}
-        <div className="admin-panel" id="mandate-workspace">
-          <h2>Mandates, AutoPay & settlements</h2>
-          <MandateWorkspace
-            data={{
-              mandates,
-              setups: mandateSetups,
-              debits: autopayAttempts,
-              settlements,
-              checkouts: checkoutSessions,
-            }}
-            schedules={schedules}
-            providerName={providerStatus?.provider}
-            providerMode={providerStatus?.autopayMode}
-            readOnly={session.tenant.readOnly === true}
-            onPreparePayer={() =>
-              document.getElementById('fee-payer-create')?.scrollIntoView({ behavior: 'smooth' })
+      <div className="admin-panel" id="mandate-workspace">
+        <h2>Mandates, AutoPay & settlements</h2>
+        <MandateWorkspace
+          data={{
+            mandates,
+            setups: mandateSetups,
+            debits: autopayAttempts,
+            settlements,
+            checkouts: checkoutSessions,
+          }}
+          schedules={schedules}
+          providerName={providerStatus?.provider}
+          providerMode={providerStatus?.autopayMode}
+          readOnly={session.tenant.readOnly === true}
+          onPreparePayer={() =>
+            document.getElementById('fee-payer-create')?.scrollIntoView({ behavior: 'smooth' })
+          }
+          onPrepareSchedule={() =>
+            document.getElementById('fee-schedule-create')?.scrollIntoView({ behavior: 'smooth' })
+          }
+          onRefresh={refreshMandateWorkspace}
+          onPayerLink={async (scheduleId) => {
+            const result = await request<{ path: string; expiresHours: number }>(
+              'admin/fees/schedules/' + encodeURIComponent(scheduleId) + '/payer-link',
+              'POST',
+              {
+                expiresHours: 72,
+                paymentMode: 'full_balance',
+                allowCustomAmount: false,
+                allowComponentSelection: false,
+              },
+            );
+            if (!result.path.startsWith('/payer/')) {
+              throw new Error('Unexpected secure payer link response');
             }
-            onPrepareSchedule={() =>
-              document.getElementById('fee-schedule-create')?.scrollIntoView({ behavior: 'smooth' })
-            }
-            onRefresh={refreshMandateWorkspace}
-            onPayerLink={async (scheduleId) => {
-              const result = await request<{ path: string; expiresHours: number }>(
-                'admin/fees/schedules/' + encodeURIComponent(scheduleId) + '/payer-link',
-                'POST',
-                {
-                  expiresHours: 72,
-                  paymentMode: 'full_balance',
-                  allowCustomAmount: false,
-                  allowComponentSelection: false,
-                },
-              );
-              if (!result.path.startsWith('/payer/')) {
-                throw new Error('Unexpected secure payer link response');
-              }
-              return window.location.origin + result.path;
-            }}
-          />
-          <p>
-            {mandates.length} mandate record(s) · {mandateSetups.length} setup attempt(s) ·{' '}
-            {autopayAttempts.length} automated debit attempt(s) · {checkoutSessions.length} hosted
-            checkout(s) · {settlements.length} settlement record(s) · {communications.length}{' '}
-            communication record(s).
-          </p>
-          <p className="small">
-            Hosted mandate setup and due-date debit submission activate only when an approved
-            provider endpoint is configured. Payer bank credentials, UPI PINs and OTPs are never
-            collected by this console. Verified callbacks remain the source of truth for final
-            payment and mandate status.
-          </p>
-          {uncertainMandateSetups.length > 0 && (
-            <div className="admin-notice" role="status">
-              <strong>
-                {uncertainMandateSetups.length} mandate setup(s) require investigation.
-              </strong>
-              <p>
-                Do not create another authorization for the same schedule. Record only the approved
-                provider support case reference; never enter bank details, OTPs or credentials.
-              </p>
-              <p className="small">
-                {mandateCases.filter((entry) => entry.status === 'open').length} open
-                investigation(s)
-                {' · '}
-                {
-                  mandateCases.filter(
-                    (entry) => entry.status === 'open' && Number(entry.age_hours) >= 24,
-                  ).length
-                }{' '}
-                older than 24 hours. Case age is a triage indicator, not a bank status or retry
-                authorization.
-              </p>
-              {uncertainMandateSetups.map((setup) => {
-                const existingCase = mandateCases.find((entry) => entry.setup_id === setup.id);
-                return (
-                  <div key={setup.id}>
-                    <div className="record-row">
-                      <strong>{setup.account_reference}</strong>
-                      <span>{setup.rail}</span>
-                      <span>{existingCase?.provider_case_reference || 'No provider case'}</span>
-                      <span className="status-pill">{setup.status}</span>
-                    </div>
-                    {existingCase && (
-                      <p className="small">
-                        Queue: {String(existingCase.queue_state).replaceAll('_', ' ')}
-                        {' · '}
-                        {existingCase.age_hours} hour(s) open
-                        {' · '}
-                        {existingCase.evidence_count} evidence item(s)
-                        {' · '}
-                        {existingCase.pending_review_count} awaiting independent review. No
-                        investigation outcome releases a mandate.
-                      </p>
-                    )}
+            return window.location.origin + result.path;
+          }}
+        />
+        <p>
+          {mandates.length} mandate record(s) · {mandateSetups.length} setup attempt(s) ·{' '}
+          {autopayAttempts.length} automated debit attempt(s) · {checkoutSessions.length} hosted
+          checkout(s) · {settlements.length} settlement record(s) · {communications.length}{' '}
+          communication record(s).
+        </p>
+        <p className="small">
+          Hosted mandate setup and due-date debit submission activate only when an approved
+          provider endpoint is configured. Payer bank credentials, UPI PINs and OTPs are never
+          collected by this console. Verified callbacks remain the source of truth for final
+          payment and mandate status.
+        </p>
+        {uncertainMandateSetups.length > 0 && (
+          <div className="admin-notice" role="status">
+            <strong>
+              {uncertainMandateSetups.length} mandate setup(s) require investigation.
+            </strong>
+            <p>
+              Do not create another authorization for the same schedule. Record only the approved
+              provider support case reference; never enter bank details, OTPs or credentials.
+            </p>
+            <p className="small">
+              {mandateCases.filter((entry) => entry.status === 'open').length} open
+              investigation(s)
+              {' · '}
+              {
+                mandateCases.filter(
+                  (entry) => entry.status === 'open' && Number(entry.age_hours) >= 24,
+                ).length
+              }{' '}
+              older than 24 hours. Case age is a triage indicator, not a bank status or retry
+              authorization.
+            </p>
+            {uncertainMandateSetups.map((setup) => {
+              const existingCase = mandateCases.find((entry) => entry.setup_id === setup.id);
+              return (
+                <div key={setup.id}>
+                  <div className="record-row">
+                    <strong>{setup.account_reference}</strong>
+                    <span>{setup.rail}</span>
+                    <span>{existingCase?.provider_case_reference || 'No provider case'}</span>
+                    <span className="status-pill">{setup.status}</span>
+                  </div>
+                  {existingCase && (
+                    <p className="small">
+                      Queue: {String(existingCase.queue_state).replaceAll('_', ' ')}
+                      {' · '}
+                      {existingCase.age_hours} hour(s) open
+                      {' · '}
+                      {existingCase.evidence_count} evidence item(s)
+                      {' · '}
+                      {existingCase.pending_review_count} awaiting independent review. No
+                      investigation outcome releases a mandate.
+                    </p>
+                  )}
 
-                    {existingCase && (
-                      <div>
-                        <button
-                          type="button"
-                          className="button outline"
-                          disabled={
-                            session.tenant.readOnly === true ||
-                            providerStatus?.reconciliationMode !== 'read_only'
-                          }
-                          onClick={() => void inquireMandateProvider(existingCase.id)}
-                        >
-                          Inquire with configured provider (read-only)
-                        </button>
-                        {providerStatus?.reconciliationMode !== 'read_only' && (
-                          <p className="small">
-                            Bank inquiry is not configured. Use the provider support reference
-                            and evidence form; no mandate is activated by an inquiry.
-                          </p>
-                        )}
-                        <form
-                          className="admin-form"
-                          onSubmit={(e) => submitMandateEvidence(e, existingCase.id)}
-                        >
-                          <label>
-                            Provider evidence reference
-                            <input
-                              name="providerEvidenceReference"
-                              required
-                              minLength={3}
-                              maxLength={120}
-                              pattern="[A-Za-z0-9._:-]+"
-                              autoComplete="off"
-                            />
-                          </label>
-                          <label>
-                            Provider investigation finding
-                            <select name="finding" defaultValue="provider_inquiry_pending">
-                              <option value="provider_inquiry_pending">Inquiry pending</option>
-                              <option value="provider_reports_registered">
-                                Provider reports registration exists
-                              </option>
-                              <option value="provider_reports_not_registered">
-                                Provider reports registration absent
-                              </option>
-                              <option value="provider_outcome_inconclusive">Inconclusive</option>
-                            </select>
-                          </label>
-                          <button type="submit">Record provider evidence</button>
-                        </form>
-                        {mandateEvidence
-                          .filter((entry) => entry.case_id === existingCase.id)
-                          .map((entry) => (
-                            <div className="record-row" key={entry.id}>
-                              <strong>{entry.provider_evidence_reference}</strong>
-                              <span>{entry.finding}</span>
-                              <span className="status-pill">
-                                {entry.decision || 'Review required'}
-                              </span>
-                              {!entry.decision && entry.submitted_by !== session.user.id && (
-                                <div>
-                                  <button
-                                    className="button outline"
-                                    onClick={() => void reviewMandateEvidence(entry.id, 'verified')}
-                                  >
-                                    Verify evidence
-                                  </button>
-                                  <button
-                                    className="button outline"
-                                    onClick={() =>
-                                      void reviewMandateEvidence(entry.id, 'insufficient_evidence')
-                                    }
-                                  >
-                                    Insufficient evidence
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                      </div>
-                    )}
-                    {!existingCase && (
-                      <form className="admin-form" onSubmit={(e) => openMandateCase(e, setup.id)}>
+                  {existingCase && (
+                    <div>
+                      <button
+                        type="button"
+                        className="button outline"
+                        disabled={
+                          session.tenant.readOnly === true ||
+                          providerStatus?.reconciliationMode !== 'read_only'
+                        }
+                        onClick={() => void inquireMandateProvider(existingCase.id)}
+                      >
+                        Inquire with configured provider (read-only)
+                      </button>
+                      {providerStatus?.reconciliationMode !== 'read_only' && (
+                        <p className="small">
+                          Bank inquiry is not configured. Use the provider support reference
+                          and evidence form; no mandate is activated by an inquiry.
+                        </p>
+                      )}
+                      <form
+                        className="admin-form"
+                        onSubmit={(e) => submitMandateEvidence(e, existingCase.id)}
+                      >
                         <label>
-                          Provider case reference
+                          Provider evidence reference
                           <input
-                            name="providerCaseReference"
+                            name="providerEvidenceReference"
                             required
                             minLength={3}
                             maxLength={120}
@@ -604,95 +545,154 @@ export function FeeOperations() {
                           />
                         </label>
                         <label>
-                          Investigation reason
-                          <select name="evidenceSummary" defaultValue="provider_inquiry_opened">
-                            <option value="provider_inquiry_opened">Provider inquiry opened</option>
-                            <option value="provider_reference_not_returned">
-                              Provider reference not returned
+                          Provider investigation finding
+                          <select name="finding" defaultValue="provider_inquiry_pending">
+                            <option value="provider_inquiry_pending">Inquiry pending</option>
+                            <option value="provider_reports_registered">
+                              Provider reports registration exists
                             </option>
-                            <option value="provider_status_not_confirmed">
-                              Provider status not confirmed
+                            <option value="provider_reports_not_registered">
+                              Provider reports registration absent
                             </option>
+                            <option value="provider_outcome_inconclusive">Inconclusive</option>
                           </select>
                         </label>
-                        <button type="submit">Record investigation</button>
+                        <button type="submit">Record provider evidence</button>
                       </form>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {mandateCases.some((entry) => entry.status === 'resolved_signed') && (
-            <div className="admin-notice">
-              <strong>Provider-signed mandate investigation resolutions</strong>
-              <p>
-                Closed cases below reflect authenticated terminal provider callbacks, not manual
-                approval or a new payment instruction.
-              </p>
-              {mandateCases
-                .filter((entry) => entry.status === 'resolved_signed')
-                .slice(0, 12)
-                .map((entry) => (
-                  <div className="record-row" key={entry.id}>
-                    <strong>{entry.account_reference}</strong>
-                    <span>{entry.rail}</span>
-                    <span>{entry.mandate_setup_status}</span>
-                    <span className="status-pill">Signed resolution</span>
-                  </div>
-                ))}
-            </div>
-          )}
-          {uncertainCheckouts.length > 0 && (
-            <div className="admin-notice" role="status">
-              <strong>
-                {uncertainCheckouts.length} hosted checkout(s) require reconciliation.
-              </strong>
-              <p>
-                Unknown bank session creation is not a payment failure. Verify the provider outcome
-                before permitting another collection.
-              </p>
-              {uncertainCheckouts.slice(0, 8).map((session) => (
-                <div className="record-row" key={session.id}>
-                  <strong>{session.account_reference}</strong>
-                  <span>
-                    #{session.sequence} · {rupees(session.amount_minor)}
-                  </span>
-                  <span>{session.failure_code || 'BANK_OUTCOME_UNKNOWN'}</span>
-                  <span className="status-pill">{session.status}</span>
+                      {mandateEvidence
+                        .filter((entry) => entry.case_id === existingCase.id)
+                        .map((entry) => (
+                          <div className="record-row" key={entry.id}>
+                            <strong>{entry.provider_evidence_reference}</strong>
+                            <span>{entry.finding}</span>
+                            <span className="status-pill">
+                              {entry.decision || 'Review required'}
+                            </span>
+                            {!entry.decision && entry.submitted_by !== session.user.id && (
+                              <div>
+                                <button
+                                  className="button outline"
+                                  onClick={() => void reviewMandateEvidence(entry.id, 'verified')}
+                                >
+                                  Verify evidence
+                                </button>
+                                <button
+                                  className="button outline"
+                                  onClick={() =>
+                                    void reviewMandateEvidence(entry.id, 'insufficient_evidence')
+                                  }
+                                >
+                                  Insufficient evidence
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                  {!existingCase && (
+                    <form className="admin-form" onSubmit={(e) => openMandateCase(e, setup.id)}>
+                      <label>
+                        Provider case reference
+                        <input
+                          name="providerCaseReference"
+                          required
+                          minLength={3}
+                          maxLength={120}
+                          pattern="[A-Za-z0-9._:-]+"
+                          autoComplete="off"
+                        />
+                      </label>
+                      <label>
+                        Investigation reason
+                        <select name="evidenceSummary" defaultValue="provider_inquiry_opened">
+                          <option value="provider_inquiry_opened">Provider inquiry opened</option>
+                          <option value="provider_reference_not_returned">
+                            Provider reference not returned
+                          </option>
+                          <option value="provider_status_not_confirmed">
+                            Provider status not confirmed
+                          </option>
+                        </select>
+                      </label>
+                      <button type="submit">Record investigation</button>
+                    </form>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {mandateCases.some((entry) => entry.status === 'resolved_signed') && (
+          <div className="admin-notice">
+            <strong>Provider-signed mandate investigation resolutions</strong>
+            <p>
+              Closed cases below reflect authenticated terminal provider callbacks, not manual
+              approval or a new payment instruction.
+            </p>
+            {mandateCases
+              .filter((entry) => entry.status === 'resolved_signed')
+              .slice(0, 12)
+              .map((entry) => (
+                <div className="record-row" key={entry.id}>
+                  <strong>{entry.account_reference}</strong>
+                  <span>{entry.rail}</span>
+                  <span>{entry.mandate_setup_status}</span>
+                  <span className="status-pill">Signed resolution</span>
                 </div>
               ))}
-            </div>
-          )}
-          {uncertainAttempts.length > 0 && (
-            <p className="admin-notice" role="status">
-              <strong>{uncertainAttempts.length} debit(s) require reconciliation.</strong> Check the
-              signed provider outcome before collecting again. Never assume payment success from a
-              redirect or a timeout.
-            </p>
-          )}
-          <div className="record-row">
-            <strong>Recurring provider</strong>
-            <span>{providerStatus?.provider || 'Not configured'}</span>
-            <span>{providerStatus?.autopayMode || 'disabled'}</span>
-            <span className="status-pill">
-              {autopayAttempts.filter((attempt) => attempt.status === 'confirmed').length} confirmed
-            </span>
           </div>
-          {prioritizedAttempts.map((attempt) => (
-            <div className="record-row" key={attempt.id}>
-              <strong>{attempt.account_reference}</strong>
-              <span>
-                #{attempt.sequence} · {rupees(attempt.amount_minor)}
-              </span>
-              <span>
-                attempt {attempt.attempt_no}
-                {attempt.failure_code ? ' · ' + attempt.failure_code : ''}
-              </span>
-              <span className="status-pill">{attempt.status}</span>
-            </div>
-          ))}
+        )}
+        {uncertainCheckouts.length > 0 && (
+          <div className="admin-notice" role="status">
+            <strong>
+              {uncertainCheckouts.length} hosted checkout(s) require reconciliation.
+            </strong>
+            <p>
+              Unknown bank session creation is not a payment failure. Verify the provider outcome
+              before permitting another collection.
+            </p>
+            {uncertainCheckouts.slice(0, 8).map((session) => (
+              <div className="record-row" key={session.id}>
+                <strong>{session.account_reference}</strong>
+                <span>
+                  #{session.sequence} · {rupees(session.amount_minor)}
+                </span>
+                <span>{session.failure_code || 'BANK_OUTCOME_UNKNOWN'}</span>
+                <span className="status-pill">{session.status}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {uncertainAttempts.length > 0 && (
+          <p className="admin-notice" role="status">
+            <strong>{uncertainAttempts.length} debit(s) require reconciliation.</strong> Check the
+            signed provider outcome before collecting again. Never assume payment success from a
+            redirect or a timeout.
+          </p>
+        )}
+        <div className="record-row">
+          <strong>Recurring provider</strong>
+          <span>{providerStatus?.provider || 'Not configured'}</span>
+          <span>{providerStatus?.autopayMode || 'disabled'}</span>
+          <span className="status-pill">
+            {autopayAttempts.filter((attempt) => attempt.status === 'confirmed').length} confirmed
+          </span>
         </div>
+        {prioritizedAttempts.map((attempt) => (
+          <div className="record-row" key={attempt.id}>
+            <strong>{attempt.account_reference}</strong>
+            <span>
+              #{attempt.sequence} · {rupees(attempt.amount_minor)}
+            </span>
+            <span>
+              attempt {attempt.attempt_no}
+              {attempt.failure_code ? ' · ' + attempt.failure_code : ''}
+            </span>
+            <span className="status-pill">{attempt.status}</span>
+          </div>
+        ))}
+      </div>
 
       <form
         id="fee-payer-create"
@@ -1338,7 +1338,6 @@ export function FeeOperations() {
             ))
           )}
         </div>
-
       </section>
     </>
   );
