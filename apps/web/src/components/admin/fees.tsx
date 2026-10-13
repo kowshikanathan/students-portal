@@ -83,6 +83,7 @@ export function FeeOperations() {
   const [autopayAttempts, setAutopayAttempts] = useState<any[]>([]);
   const [checkoutSessions, setCheckoutSessions] = useState<any[]>([]);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [installmentRows, setInstallmentRows] = useState([{ dueDate: '', amount: '' }]);
   const [componentRows, setComponentRows] = useState([
     { code: 'tuition', label: 'Tuition fee', amount: '', bankRouteKey: '' },
@@ -160,13 +161,9 @@ export function FeeOperations() {
     const failed = results.flatMap((result, i) =>
       result.status === 'rejected' ? [resources[i]!.label] : [],
     );
-    if (failed.length) {
-      setMessage(
-        'Some fee data could not load: ' +
-          failed.join(', ') +
-          '. Other sections remain available; refresh to retry.',
-      );
-    }
+    setLoadError(
+      failed.length ? 'Some fee data could not load: ' + failed.join(', ') + '.' : '',
+    );
   };
   useEffect(() => {
     void load();
@@ -371,6 +368,14 @@ export function FeeOperations() {
 
   return (
     <>
+      {loadError && (
+        <div className="admin-notice" role="alert">
+          <p>{loadError} Loaded records remain available.</p>
+          <button type="button" className="button outline" onClick={() => void load()}>
+            Retry loading fee data
+          </button>
+        </div>
+      )}
       {message && (
         <p role="status" className="admin-feedback">
           {message}
