@@ -1,15 +1,22 @@
 # Mandates, AutoPay & settlements — dashboard controls
 
-In the institution owner console, open **Fee operations**, then select **Go to
-Mandates & AutoPay** near the top of the page. The original finance lifecycle,
-payment ledger, provider callbacks and reconciliation forms remain in place.
+In the institution owner console, open **Fee operations**. The existing
+**Mandates, AutoPay & settlements** workspace now appears immediately after the
+fee dashboard summary and before payer and fee-schedule forms, at full content
+width. Select **Go to Mandates & AutoPay** to jump directly to it. The heading
+is a section title, not a financial-action button; use the five selectable
+record-view buttons immediately below it. Existing payment ledgers, provider
+callbacks and reconciliation forms remain intact.
 
 The mandate panel now has five selectable views: Mandates, Setup attempts,
 Automatic debits, Settlements, and Checkouts. Every view shows actual rows from
 the existing tenant-scoped admin endpoints, offers text filtering, supports
 expandable read-only record details and refreshes without posting financial
 instructions. An empty collection shows an explicit empty state rather than
-presenting an inert zero counter as an action.
+presenting an inert zero counter as an action. If no active payer-linked schedule
+exists, owners of writable institutions can use **Create payer profile** and
+**Create fee schedule** to jump to the existing entry forms without creating
+duplicate payment modules. Read-only workspaces do not offer mutation shortcuts.
 
 For an active fee schedule with an assigned payer, an owner of a writable
 institution can select **Generate payer link**. This calls the existing
