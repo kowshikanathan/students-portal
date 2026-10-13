@@ -274,12 +274,8 @@ export function AdminShell({
                   onClick={() => {
                     setFeeTarget(null);
                     setArea(key!);
-                    if (key === 'enach' || window.location.pathname.startsWith('/admin/enach')) {
-                      window.history.replaceState(
-                        null,
-                        '',
-                        key === 'enach' ? '/admin/enach/' : '/admin/',
-                      );
+                    if (window.location.pathname !== '/admin/') {
+                      window.history.replaceState(null, '', '/admin/');
                     }
                   }}
                 >
@@ -295,7 +291,11 @@ export function AdminShell({
         <main id="main" className="admin-main">
           <div className="admin-topbar">
             <div>
-              <h1>{standaloneEnach ? 'eNACH operations' : sections.find((s) => s[0] === activeArea)?.[1]}</h1>
+              <h1>
+                {standaloneEnach
+                  ? 'eNACH operations'
+                  : sections.find((item) => item[0] === activeArea)?.[1]}
+              </h1>
               <p>
                 {session.user.email} · {session.tenant.name} · {session.tenant.role}
               </p>
