@@ -200,6 +200,7 @@ export function EnachDashboard({ openFeeOperations, initialView = 'mandates' }: 
         <MandateWorkspace
           key={displayView}
           initialView={displayView}
+          showFieldHelp
           data={data}
           schedules={schedules}
           providerName={provider?.provider}
