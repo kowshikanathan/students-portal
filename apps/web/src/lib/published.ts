@@ -56,7 +56,7 @@ export const site = cache(async () => {
       settings: {
         navigation: defaultNavigation,
         brand: {
-          name: process.env.NEXT_PUBLIC_BRAND_NAME || 'YourCompany',
+          name: process.env.NEXT_PUBLIC_BRAND_NAME || 'Dodo',
           primary: process.env.NEXT_PUBLIC_BRAND_PRIMARY || '#0f766e',
         },
         form: formDefinition,
