@@ -46,6 +46,7 @@ export function AdminShell() {
     [busy, setBusy] = useState(false),
     [error, setError] = useState(''),
     [area, setArea] = useState('overview');
+  const [feeTarget, setFeeTarget] = useState<'payer' | 'schedule' | 'reconciliation' | null>(null);
   async function sync() {
     try {
       setSession(await api<Session>('/v1/auth/me'));
@@ -189,9 +190,17 @@ export function AdminShell() {
       case 'workflows':
         return <Workflows />;
       case 'fees':
-        return <FeeOperations />;
+        return <FeeOperations scrollTarget={feeTarget} />;
       case 'enach':
-        return <EnachDashboard key={session.tenant.id} openFeeOperations={() => setArea('fees')} />;
+        return (
+          <EnachDashboard
+            key={session.tenant.id}
+            openFeeOperations={(target) => {
+              setFeeTarget(target);
+              setArea('fees');
+            }}
+          />
+        );
       case 'fee-plans':
         return <FeePlanStudio />;
       case 'academic':
@@ -221,7 +230,10 @@ export function AdminShell() {
                 <button
                   className={activeArea === key ? 'selected' : ''}
                   key={key}
-                  onClick={() => setArea(key!)}
+                  onClick={() => {
+                    setFeeTarget(null);
+                    setArea(key!);
+                  }}
                 >
                   {title}
                 </button>
