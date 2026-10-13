@@ -64,6 +64,33 @@ signed callbacks, and retry policies remain under the existing section and
 backend. No new payment authority was added. Backend role/tenant and
 read-only checks remain the enforcement boundary.
 
+## eNACH-only custom fields, reports and help
+
+In **/enach/**, the eNACH sidebar has **Custom fields** and **Reports**.
+These are **not added to Dodo Studio, Fee Operations or the public website**.
+Users can click the **ⓘ / eye** control beside eNACH features and relevant
+fields to see an explanation without changing a transaction.
+
+An authorized owner can create up to 30 optional tenant-scoped eNACH fields:
+short text, number, date or choice/dropdown (with configurable options).
+Provide a lowercase key such as `campus_code`, a descriptive label, and a
+field type; choose an existing mandate, setup attempt, debit, settlement or
+checkout record before saving its operational annotation. Only records
+belonging to the current tenant can be annotated. These extra values are
+held in `enach_custom_fields` and `enach_custom_values` (migration 033);
+they do **not** alter any bank-mandate, debit, settlement or evidence record.
+Apply the migration using the established `npm run migrate` deployment step.
+Never put banking credentials, OTPs, PINs or other sensitive details into
+operational notes.
+
+In **Reports**, choose one of the five record types, optional account/status
+and creation-date filters, and the columns to include. Click **Download CSV
+report** to export the *currently loaded* tenant-scoped records together
+with optional custom columns. This is a filtered working report, **not**
+a complete audit export. It does not establish bank authorization or
+payment settlement, and CSV cell content is escaped against spreadsheet
+formula execution. Report generation is entirely read-only.
+
 ## Verification
 
 - `npm run typecheck`
