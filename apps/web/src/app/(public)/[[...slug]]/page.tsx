@@ -32,14 +32,14 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
     found?.body.title ||
     (
       {
-        '/blog/': 'Perspectives | YourCompany',
-        '/case-studies/': 'Case studies | YourCompany',
-        '/search/': 'Search | YourCompany',
-        '/cookie-preferences/': 'Privacy choices | YourCompany',
+        '/blog/': 'Perspectives | Dodo',
+        '/case-studies/': 'Case studies | Dodo',
+        '/search/': 'Search | Dodo',
+        '/cookie-preferences/': 'Privacy choices | Dodo',
       } as Record<string, string>
     )[path] ||
     process.env.NEXT_PUBLIC_BRAND_NAME ||
-    'YourCompany';
+    'Dodo';
   return {
     title,
     description: found?.body.description || 'Browse the education payments platform.',
@@ -50,7 +50,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
     },
     openGraph: {
       title,
-      description: found?.body.description || process.env.NEXT_PUBLIC_BRAND_NAME || 'YourCompany',
+      description: found?.body.description || process.env.NEXT_PUBLIC_BRAND_NAME || 'Dodo',
       url: new URL(path, origin).toString(),
       ...(found?.body.cover ? { images: [new URL(found.body.cover, origin).toString()] } : {}),
     },
