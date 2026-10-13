@@ -28,6 +28,7 @@ type Props = {
   onPayerLink: (scheduleId: string) => Promise<string>;
   onPreparePayer?: () => void;
   onPrepareSchedule?: () => void;
+  initialView?: MandateView;
 };
 
 export function MandateWorkspace({
@@ -40,8 +41,9 @@ export function MandateWorkspace({
   onPayerLink,
   onPreparePayer,
   onPrepareSchedule,
+  initialView = 'mandates',
 }: Props) {
-  const [view, setView] = useState<MandateView>('mandates');
+  const [view, setView] = useState<MandateView>(initialView);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [query, setQuery] = useState('');
