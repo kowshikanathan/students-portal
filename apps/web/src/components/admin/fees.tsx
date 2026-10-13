@@ -1,6 +1,7 @@
 'use client';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAdminApi } from './context';
+import { MandateWorkspace } from './mandate-workspace';
 
 type Installment = {
   id: string;
@@ -962,6 +963,36 @@ export function FeeOperations() {
         </div>
         <div className="admin-panel">
           <h2>Mandates, AutoPay & settlements</h2>
+          <MandateWorkspace
+            data={{
+              mandates,
+              setups: mandateSetups,
+              debits: autopayAttempts,
+              settlements,
+              checkouts: checkoutSessions,
+            }}
+            schedules={schedules}
+            providerName={providerStatus?.provider}
+            providerMode={providerStatus?.autopayMode}
+            readOnly={session.tenant.readOnly === true}
+            onRefresh={load}
+            onPayerLink={async (scheduleId) => {
+              const result = await request<{ path: string; expiresHours: number }>(
+                'admin/fees/schedules/' + encodeURIComponent(scheduleId) + '/payer-link',
+                'POST',
+                {
+                  expiresHours: 72,
+                  paymentMode: 'full_balance',
+                  allowCustomAmount: false,
+                  allowComponentSelection: false,
+                },
+              );
+              if (!result.path.startsWith('/payer/')) {
+                throw new Error('Unexpected secure payer link response');
+              }
+              return window.location.origin + result.path;
+            }}
+          />
           <p>
             {mandates.length} mandate record(s) · {mandateSetups.length} setup attempt(s) ·{' '}
             {autopayAttempts.length} automated debit attempt(s) · {checkoutSessions.length} hosted
