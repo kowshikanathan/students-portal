@@ -210,6 +210,7 @@ export default async function Page({ params, searchParams }: Props) {
             ],
             ['Businesses', process.env.NEXT_PUBLIC_BUSINESS_PORTAL_URL || '/contact-us/'],
             ['Owner console', '/admin/'],
+            ['Dodo eNACH Dashboard', '/enach/'],
           ].map(([name, href]) => (
             <article key={name}>
               <h2>{name}</h2>
@@ -218,7 +219,9 @@ export default async function Page({ params, searchParams }: Props) {
                   ? 'Configured secure external portal'
                   : name === 'Owner console'
                     ? 'Local staff authentication with MFA'
-                    : 'Portal integration is not configured yet; continue to contact.'}
+                    : name === 'Dodo eNACH Dashboard'
+                      ? 'Dedicated eNACH console; requires an authorized institution owner session'
+                      : 'Portal integration is not configured yet; continue to contact.'}
               </p>
               <SmartLink className="button primary" href={href!}>
                 Continue
