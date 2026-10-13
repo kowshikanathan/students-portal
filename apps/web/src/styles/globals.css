@@ -3029,3 +3029,40 @@ p {
     justify-self: stretch;
   }
 }
+
+.admin-main .enach-help > button {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid #9abdb7;
+  border-radius: 999px;
+  color: #115e59;
+  background: #f0fdfa;
+  min-height: 28px;
+  padding: 2px 8px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+.admin-main .enach-help > button:hover,
+.admin-main .enach-help > button:focus-visible {
+  background: #ccfbf1;
+}
+.admin-main .enach-help > .enach-help-note {
+  display: block;
+  position: relative;
+  z-index: 2;
+  width: min(360px, 100%);
+  max-width: 100%;
+  border: 1px solid #badbd3;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #f8fffc;
+  box-shadow: 0 8px 22px #0f51321a;
+  font-size: 13px;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+  margin: 6px 0;
+}
