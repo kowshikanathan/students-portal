@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAdminApi } from './context';
 import { MandateWorkspace } from './mandate-workspace';
+import { EnachExtras, EnachInfo } from './enach-extras';
 import type { MandateDashboardData, MandateView } from './mandate-view-model';
 
 type Props = {
@@ -31,6 +32,7 @@ const emptyData: MandateDashboardData = {
 export function EnachDashboard({ openFeeOperations, initialView = 'mandates' }: Props) {
   const { request, session } = useAdminApi();
   const [data, setData] = useState<MandateDashboardData>(emptyData);
+  const [displayView, setDisplayView] = useState<MandateView>(initialView);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [provider, setProvider] = useState<ProviderState | null>(null);
   const [cases, setCases] = useState<Array<{ id: string; status: string }>>([]);
@@ -116,12 +118,16 @@ export function EnachDashboard({ openFeeOperations, initialView = 'mandates' }: 
   const uncertain = data.setups.filter((entry) => entry.status === 'uncertain').length;
   const active = data.mandates.filter((entry) => entry.status === 'active').length;
   const unresolved = cases.filter((entry) => entry.status === 'open').length;
+  useEffect(() => setDisplayView(initialView), [initialView]);
 
   return (
     <section aria-label="eNACH and AutoPay dashboard">
       <div className="admin-panel">
         <p className="eyebrow">Dodo · eNACH operations</p>
-        <h2>eNACH & AutoPay dashboard</h2>
+        <div className="enach-section-heading">
+          <h2>eNACH & AutoPay dashboard</h2>
+          <EnachInfo topic="See actual mandate and debit records, plus pending provider investigations. A zero count means there are no matching records returned." label="Explain dashboard overview" />
+        </div>
         <p>
           Manage mandate registrations, recurring debit attempts, settlements and pending
           investigations using the existing tenant-scoped financial services.
@@ -192,8 +198,8 @@ export function EnachDashboard({ openFeeOperations, initialView = 'mandates' }: 
       </div>
       <div className="admin-panel">
         <MandateWorkspace
-          key={initialView}
-          initialView={initialView}
+          key={displayView}
+          initialView={displayView}
           data={data}
           schedules={schedules}
           providerName={provider?.provider}
@@ -205,6 +211,13 @@ export function EnachDashboard({ openFeeOperations, initialView = 'mandates' }: 
           onPrepareSchedule={() => openFeeOperations('schedule')}
         />
       </div>
+      <EnachExtras
+        data={data}
+        view={displayView}
+        onViewChange={setDisplayView}
+        loaded={!loading}
+        failedResources={failedResources}
+      />
     </section>
   );
 }
