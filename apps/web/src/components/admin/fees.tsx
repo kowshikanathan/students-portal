@@ -1067,10 +1067,20 @@ export function FeeOperations() {
                         <button
                           type="button"
                           className="button outline"
+                          disabled={
+                            session.tenant.readOnly === true ||
+                            providerStatus?.reconciliationMode !== 'read_only'
+                          }
                           onClick={() => void inquireMandateProvider(existingCase.id)}
                         >
                           Inquire with configured provider (read-only)
                         </button>
+                        {providerStatus?.reconciliationMode !== 'read_only' && (
+                          <p className="small">
+                            Bank inquiry is not configured. Use the provider support reference
+                            and evidence form; no mandate is activated by an inquiry.
+                          </p>
+                        )}
                         <form
                           className="admin-form"
                           onSubmit={(e) => submitMandateEvidence(e, existingCase.id)}
