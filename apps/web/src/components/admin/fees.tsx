@@ -136,6 +136,23 @@ export function FeeOperations() {
     void load();
   }, []);
 
+  const refreshMandateWorkspace = async () => {
+    const [m, st, ps, ms, aa, cs] = await Promise.all([
+      request<any[]>('admin/fees/mandates'),
+      request<any[]>('admin/fees/settlements'),
+      request<any>('provider/payments/status'),
+      request<any[]>('admin/fees/mandate-setups'),
+      request<any[]>('admin/fees/autopay-attempts'),
+      request<any[]>('admin/fees/checkout-sessions'),
+    ]);
+    setMandates(m);
+    setSettlements(st);
+    setProviderStatus(ps);
+    setMandateSetups(ms);
+    setAutopayAttempts(aa);
+    setCheckoutSessions(cs);
+  };
+
   const activeInstallments = useMemo(
     () =>
       schedules.flatMap((s) =>
@@ -295,6 +312,13 @@ export function FeeOperations() {
       <section className="admin-panel">
         <p className="eyebrow">Fee lifecycle</p>
         <h2>Collection operations dashboard</h2>
+        <button
+          type="button"
+          className="button outline"
+          onClick={() => document.getElementById('mandate-workspace')?.scrollIntoView()}
+        >
+          Go to Mandates & AutoPay
+        </button>
         <p>
           Schedules, installments, externally confirmed payment evidence, refunds, mandates,
           settlements and reconciliation share one audited ledger. This workspace does not move
@@ -961,7 +985,7 @@ export function FeeOperations() {
             ))
           )}
         </div>
-        <div className="admin-panel">
+        <div className="admin-panel" id="mandate-workspace">
           <h2>Mandates, AutoPay & settlements</h2>
           <MandateWorkspace
             data={{
@@ -975,7 +999,7 @@ export function FeeOperations() {
             providerName={providerStatus?.provider}
             providerMode={providerStatus?.autopayMode}
             readOnly={session.tenant.readOnly === true}
-            onRefresh={load}
+            onRefresh={refreshMandateWorkspace}
             onPayerLink={async (scheduleId) => {
               const result = await request<{ path: string; expiresHours: number }>(
                 'admin/fees/schedules/' + encodeURIComponent(scheduleId) + '/payer-link',
