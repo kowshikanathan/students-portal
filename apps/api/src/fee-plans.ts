@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import { Db } from './db';
+import { syncQueuedDebitBalances, assertNoProcessingCollections } from './fee-balances';
 import { AuthGuard, AuthedRequest, Roles } from './auth';
 
 const money = z.number().int().positive().max(1_000_000_000_000);
@@ -700,6 +701,7 @@ export class FeePlanController {
           [request.schedule_id, req.actor.tenantId],
         )
       ).rows;
+      await assertNoProcessingCollections(c, req.actor.tenantId, null, request.schedule_id);
       let remaining = Number(request.amount_minor);
       for (const installment of installments) {
         if (remaining <= 0) break;
@@ -719,6 +721,7 @@ export class FeePlanController {
            WHERE id=$1`,
           [installment.id, nextAdjustment, settled],
         );
+        await syncQueuedDebitBalances(c, this.db, req.actor.tenantId, installment.id, req.actor.id);
         remaining -= applied;
       }
       if (remaining > 0)
@@ -828,6 +831,7 @@ export class FeePlanController {
           [req.actor.tenantId, creditId, input.installmentId, input.amountMinor, req.actor.id],
         )
       ).rows[0];
+      await assertNoProcessingCollections(c, req.actor.tenantId, input.installmentId);
       const nextApplied = Number(credit.applied_minor) + input.amountMinor;
       await c.query(
         `UPDATE fee_credits
@@ -844,6 +848,13 @@ export class FeePlanController {
          SET paid_amount_minor=$2,status=CASE WHEN $3 THEN 'paid' ELSE 'part_paid' END
          WHERE id=$1`,
         [input.installmentId, nextPaid, settled],
+      );
+      await syncQueuedDebitBalances(
+        c,
+        this.db,
+        req.actor.tenantId,
+        input.installmentId,
+        req.actor.id,
       );
       const open = (
         await c.query(

@@ -178,9 +178,7 @@ export function FeeOperations({
     const failed = results.flatMap((result, i) =>
       result.status === 'rejected' ? [resources[i]!.label] : [],
     );
-    setLoadError(
-      failed.length ? 'Some fee data could not load: ' + failed.join(', ') + '.' : '',
-    );
+    setLoadError(failed.length ? 'Some fee data could not load: ' + failed.join(', ') + '.' : '');
   };
   useEffect(() => {
     void load();
@@ -255,14 +253,8 @@ export function FeeOperations({
     setScheduleFeedback('');
     try {
       const feeTotal = componentRows.reduce((sum, row) => sum + toMinor(row.amount), 0);
-      const concessionTotal = concessionRows.reduce(
-        (sum, row) => sum + toMinor(row.amount),
-        0,
-      );
-      const installmentTotal = installmentRows.reduce(
-        (sum, row) => sum + toMinor(row.amount),
-        0,
-      );
+      const concessionTotal = concessionRows.reduce((sum, row) => sum + toMinor(row.amount), 0);
+      const installmentTotal = installmentRows.reduce((sum, row) => sum + toMinor(row.amount), 0);
       if (installmentTotal !== feeTotal - concessionTotal) {
         throw new Error(
           'Installment amounts must add up to the fee components minus concessions. ' +
@@ -503,23 +495,20 @@ export function FeeOperations({
           communication record(s).
         </p>
         <p className="small">
-          Hosted mandate setup and due-date debit submission activate only when an approved
-          provider endpoint is configured. Payer bank credentials, UPI PINs and OTPs are never
-          collected by this console. Verified callbacks remain the source of truth for final
-          payment and mandate status.
+          Hosted mandate setup and due-date debit submission activate only when an approved provider
+          endpoint is configured. Payer bank credentials, UPI PINs and OTPs are never collected by
+          this console. Verified callbacks remain the source of truth for final payment and mandate
+          status.
         </p>
         {uncertainMandateSetups.length > 0 && (
           <div className="admin-notice" role="status">
-            <strong>
-              {uncertainMandateSetups.length} mandate setup(s) require investigation.
-            </strong>
+            <strong>{uncertainMandateSetups.length} mandate setup(s) require investigation.</strong>
             <p>
               Do not create another authorization for the same schedule. Record only the approved
               provider support case reference; never enter bank details, OTPs or credentials.
             </p>
             <p className="small">
-              {mandateCases.filter((entry) => entry.status === 'open').length} open
-              investigation(s)
+              {mandateCases.filter((entry) => entry.status === 'open').length} open investigation(s)
               {' · '}
               {
                 mandateCases.filter(
@@ -567,8 +556,8 @@ export function FeeOperations({
                       </button>
                       {providerStatus?.reconciliationMode !== 'read_only' && (
                         <p className="small">
-                          Bank inquiry is not configured. Use the provider support reference
-                          and evidence form; no mandate is activated by an inquiry.
+                          Bank inquiry is not configured. Use the provider support reference and
+                          evidence form; no mandate is activated by an inquiry.
                         </p>
                       )}
                       <form
@@ -687,9 +676,7 @@ export function FeeOperations({
         )}
         {uncertainCheckouts.length > 0 && (
           <div className="admin-notice" role="status">
-            <strong>
-              {uncertainCheckouts.length} hosted checkout(s) require reconciliation.
-            </strong>
+            <strong>{uncertainCheckouts.length} hosted checkout(s) require reconciliation.</strong>
             <p>
               Unknown bank session creation is not a payment failure. Verify the provider outcome
               before permitting another collection.
@@ -788,7 +775,6 @@ export function FeeOperations({
             Reminder channel
             <select name="preferredChannel" defaultValue="email">
               <option value="email">Email</option>
-              <option value="whatsapp">WhatsApp (provider required)</option>
               <option value="none">No automated reminders</option>
             </select>
           </label>
@@ -803,9 +789,7 @@ export function FeeOperations({
         onInvalidCapture={(event) => {
           const field = event.target as HTMLInputElement;
           const label = field.closest('label')?.textContent?.trim() || 'Required field';
-          setScheduleFeedback(
-            'Please complete ' + label + ' before creating the draft schedule.',
-          );
+          setScheduleFeedback('Please complete ' + label + ' before creating the draft schedule.');
         }}
       >
         <h2>Create fee schedule</h2>

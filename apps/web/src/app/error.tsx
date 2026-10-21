@@ -5,14 +5,14 @@ export default function ErrorPage({ reset }: { reset: () => void }) {
     <main id="main" className="wrap narrow section">
       <h1>This page is temporarily unavailable.</h1>
       <p>
-        The content service could not be reached. An unavailable form never means your enquiry was
-        accepted.
+        The service could not complete this request. Refresh to reload your records. A payment is
+        confirmed only when it appears in your ledger.
       </p>
       <button className="button primary" onClick={reset}>
         Try again
       </button>
-      <Link className="button outline" href="/">
-        Home
+      <Link className="button outline" href="/admin/">
+        Finance dashboard
       </Link>
     </main>
   );

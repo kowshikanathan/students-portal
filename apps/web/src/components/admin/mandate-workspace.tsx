@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { EnachInfo } from './enach-extras';
 import {
   eligiblePayerSchedules,
@@ -58,8 +58,11 @@ export function MandateWorkspace({
   const normalized = query.trim().toLowerCase();
   const rows = normalized
     ? source.filter((entry) =>
-        [mandateAccount(entry), entry.status, entry.rail, entry.provider_reference]
-          .some((value) => String(value ?? '').toLowerCase().includes(normalized)),
+        [mandateAccount(entry), entry.status, entry.rail, entry.provider_reference].some((value) =>
+          String(value ?? '')
+            .toLowerCase()
+            .includes(normalized),
+        ),
       )
     : source;
   const actionable = eligiblePayerSchedules(schedules);
@@ -98,7 +101,12 @@ export function MandateWorkspace({
           <p className="eyebrow">Mandate operations</p>
           <div className="enach-section-heading">
             <h3>Explore mandates and payment-provider activity</h3>
-            {showFieldHelp && <EnachInfo topic="Browse provider-generated record views, search for a reference, expand details, and refresh. These records cannot be manually marked paid or active." label="Explain mandate operations" />}
+            {showFieldHelp && (
+              <EnachInfo
+                topic="Browse provider-generated record views, search for a reference, expand details, and refresh. These records cannot be manually marked paid or active."
+                label="Explain mandate operations"
+              />
+            )}
           </div>
         </div>
         <button
@@ -158,7 +166,12 @@ export function MandateWorkspace({
       <label className="field">
         <span>
           Search {mandateViews.find((item) => item.id === view)?.label.toLowerCase()}
-          {showFieldHelp && <EnachInfo topic="Search by account reference, current status, rail or provider reference. Search only filters the displayed records." label="Explain record search" />}
+          {showFieldHelp && (
+            <EnachInfo
+              topic="Search by account reference, current status, rail or provider reference. Search only filters the displayed records."
+              label="Explain record search"
+            />
+          )}
         </span>
         <input
           value={query}
@@ -208,8 +221,8 @@ export function MandateWorkspace({
                     </p>
                   ))}
                 <p className="small">
-                  Read-only provider evidence. Status changes require verified provider events
-                  or the established independent reconciliation process.
+                  Read-only provider evidence. Status changes require verified provider events or
+                  the established independent reconciliation process.
                 </p>
               </div>
             </details>
@@ -220,11 +233,16 @@ export function MandateWorkspace({
       <div className="admin-panel">
         <div className="enach-section-heading">
           <h3>Open eNACH setup in the payer portal</h3>
-          {showFieldHelp && <EnachInfo topic="Select an active payer-linked fee schedule, generate a 72-hour secure payer link and open it. This does not authorize a bank mandate; a configured provider and payer authorization are required." label="Explain secure payer links" />}
+          {showFieldHelp && (
+            <EnachInfo
+              topic="Select an active payer-linked fee schedule, generate a 72-hour secure payer link and open it. This does not authorize a bank mandate; a configured provider and payer authorization are required."
+              label="Explain secure payer links"
+            />
+          )}
         </div>
         <p className="small">
-          Select an active fee schedule to create a time-limited payer link. The payer
-          will see the eNACH setup option only when provider integration is enabled.
+          Select an active fee schedule to create a time-limited payer link. The payer will see the
+          eNACH setup option only when provider integration is enabled.
         </p>
         {actionable.length === 0 ? (
           <div>

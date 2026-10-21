@@ -5,14 +5,19 @@ import {
   Get,
   Inject,
   Param,
+  Query,
+  NotFoundException,
   Post,
   Req,
   UseGuards,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
+import type { PoolClient } from 'pg';
+import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import { Db } from './db';
+import { syncQueuedDebitBalances, assertNoProcessingCollections } from './fee-balances';
 import { AuthGuard, AuthedRequest, Roles } from './auth';
 import { uuid } from './content';
 import {
@@ -68,19 +73,385 @@ const lateFeeWaiverSchema = z.object({ reason: z.string().trim().min(3).max(240)
 export class FeeOperationsController {
   constructor(@Inject(Db) private db: Db) {}
 
+  @Get('receipts/:id')
+  async receipt(@Req() req: AuthedRequest, @Param('id') id: string) {
+    const row = (
+      await this.db.query(
+        `SELECT r.receipt_number,r.issued_at,r.snapshot
+      FROM fee_receipts r JOIN payment_records p ON p.id=r.payment_id AND p.tenant_id=r.tenant_id
+      WHERE r.id=$1 AND r.tenant_id=$2`,
+        [uuid(id), req.actor.tenantId],
+      )
+    )[0];
+    if (!row) throw new NotFoundException('Receipt not found');
+    return row;
+  }
+
+  @Get('records')
+  async financeRecords(@Req() req: AuthedRequest, @Query() query: unknown) {
+    const input = z
+      .object({
+        kind: z.enum([
+          'installments',
+          'payments',
+          'settlements',
+          'debits',
+          'reconciliation',
+          'overdue',
+        ]),
+        page: z.coerce.number().int().min(1).max(100000).default(1),
+        pageSize: z.coerce.number().int().min(1).max(100).default(25),
+        search: z.string().trim().max(100).default(''),
+        status: z.string().trim().max(40).default(''),
+        sort: z.enum(['date', 'amount']).default('date'),
+      })
+      .parse(query);
+    const sources = {
+      installments: `SELECT i.id,s.account_reference,i.sequence,i.due_date,i.amount_minor,i.paid_amount_minor,greatest(i.amount_minor-i.adjustment_amount_minor-i.paid_amount_minor,0)::bigint AS remaining_minor,i.status,i.due_date AS sort_date,i.amount_minor AS sort_amount,s.account_reference AS search_text FROM fee_installments i JOIN fee_schedules s ON s.id=i.schedule_id AND s.tenant_id=i.tenant_id WHERE i.tenant_id=$1 AND s.status IN ('active','completed') AND i.status<>'cancelled'`,
+      payments: `SELECT p.id,s.account_reference,p.provider,coalesce(p.collection_reference,p.provider_reference) AS provider_reference,p.amount_minor,p.refunded_amount_minor,p.recorded_at,p.status,p.direct_details->>'mode' AS payment_mode,r.receipt_number,p.recorded_at AS sort_date,p.amount_minor AS sort_amount,s.account_reference||' '||coalesce(p.collection_reference,p.provider_reference) AS search_text FROM payment_records p JOIN fee_schedules s ON s.id=p.schedule_id AND s.tenant_id=p.tenant_id LEFT JOIN fee_receipts r ON r.payment_id=p.id AND r.tenant_id=p.tenant_id WHERE p.tenant_id=$1`,
+      settlements: `SELECT s.id,s.provider,s.provider_reference,s.amount_minor,s.settled_at,s.expected_on,s.status,(SELECT count(*)::int FROM settlement_payments sp WHERE sp.settlement_id=s.id) AS payment_count,coalesce(s.settled_at,s.created_at) AS sort_date,s.amount_minor AS sort_amount,s.provider_reference AS search_text FROM settlement_records s WHERE s.tenant_id=$1`,
+      debits: `SELECT a.id,a.provider,a.installment_id,(SELECT student_id FROM student_fee_plan_assignments sf WHERE sf.tenant_id=a.tenant_id AND sf.schedule_id=a.schedule_id ORDER BY sf.assigned_on DESC LIMIT 1) AS student_id,s.account_reference,a.provider_reference,a.amount_minor,a.status,a.attempt_no,a.failure_code,a.recovery_status,a.recovery_note,a.created_at,a.created_at AS sort_date,a.amount_minor AS sort_amount,s.account_reference AS search_text FROM autopay_debit_attempts a JOIN fee_schedules s ON s.id=a.schedule_id AND s.tenant_id=a.tenant_id WHERE a.tenant_id=$1`,
+      reconciliation: `SELECT r.id,s.account_reference,p.provider_reference AS payment_reference,st.provider_reference AS settlement_reference,r.status,r.reason,r.created_at,p.amount_minor,r.created_at AS sort_date,coalesce(p.amount_minor,st.amount_minor) AS sort_amount,coalesce(s.account_reference,'')||' '||coalesce(st.provider_reference,'') AS search_text FROM reconciliation_entries r LEFT JOIN payment_records p ON p.id=r.payment_id AND p.tenant_id=r.tenant_id LEFT JOIN fee_schedules s ON s.id=p.schedule_id AND s.tenant_id=r.tenant_id LEFT JOIN settlement_records st ON st.id=r.settlement_id AND st.tenant_id=r.tenant_id WHERE r.tenant_id=$1`,
+      overdue: `SELECT b.schedule_id AS id,b.account_reference,b.outstanding_minor,b.overdue_minor,'overdue'::text AS status,(SELECT min(i.due_date) FROM fee_installments i WHERE i.tenant_id=b.tenant_id AND i.schedule_id=b.schedule_id AND i.status NOT IN ('cancelled','paid','adjusted') AND i.amount_minor-i.adjustment_amount_minor-i.paid_amount_minor>0) AS oldest_due_date,(SELECT min(i.due_date) FROM fee_installments i WHERE i.tenant_id=b.tenant_id AND i.schedule_id=b.schedule_id AND i.status NOT IN ('cancelled','paid','adjusted') AND i.amount_minor-i.adjustment_amount_minor-i.paid_amount_minor>0) AS sort_date,b.overdue_minor AS sort_amount,b.account_reference AS search_text FROM finance_schedule_balances b WHERE b.tenant_id=$1 AND b.overdue_minor>0`,
+    };
+    const result = await this.db.query(
+      `WITH records AS (${sources[input.kind]}), filtered AS (
+      SELECT * FROM records WHERE ($2='' OR strpos(lower(search_text),lower($2))>0) AND ($3='' OR status=$3)
+    ) SELECT (SELECT count(*)::int FROM filtered) AS total,
+    coalesce((SELECT json_agg(p) FROM (SELECT * FROM filtered ORDER BY ${input.sort === 'amount' ? 'sort_amount' : 'sort_date'} DESC NULLS LAST,id LIMIT $4 OFFSET $5) p),'[]'::json) AS rows`,
+      [
+        req.actor.tenantId,
+        input.search,
+        input.status,
+        input.pageSize,
+        (input.page - 1) * input.pageSize,
+      ],
+    );
+    return { ...result[0], page: input.page, pageSize: input.pageSize };
+  }
+
+  @Get('schedules/:id/flex')
+  async flexSchedule(@Req() req: AuthedRequest, @Param('id') id: string) {
+    const rows = await this.db.query(
+      `SELECT s.id,s.version,s.schedule_kind,s.total_amount_minor,
+      coalesce((SELECT json_agg(i ORDER BY i.sequence) FROM (
+        SELECT id,sequence,due_date,amount_minor,paid_amount_minor,adjustment_amount_minor,status,
+          (paid_amount_minor=0 AND due_date>current_date AND status NOT IN ('cancelled','paid','adjusted') AND NOT EXISTS(SELECT 1 FROM payment_records fp WHERE fp.tenant_id=fee_installments.tenant_id AND fp.installment_id=fee_installments.id)) AS editable
+        FROM fee_installments WHERE tenant_id=$1 AND schedule_id=s.id AND status<>'cancelled'
+      ) i),'[]'::json) AS installments
+      FROM fee_schedules s WHERE s.tenant_id=$1 AND s.id=$2`,
+      [req.actor.tenantId, uuid(id)],
+    );
+    if (!rows[0]) throw new NotFoundException('Fee schedule not found');
+    return rows[0];
+  }
+
+  @Post('schedules/:id/flex')
+  async editFlex(@Req() req: AuthedRequest, @Param('id') id: string, @Body() body: unknown) {
+    const scheduleId = uuid(id);
+    const input = z
+      .object({
+        version: z.number().int().positive(),
+        reason: z.string().trim().min(3).max(300),
+        installments: z
+          .array(z.object({ dueDate: z.iso.date(), amountMinor: moneyMinor }).strict())
+          .min(1)
+          .max(60),
+      })
+      .strict()
+      .parse(body);
+    if (new Set(input.installments.map((i) => i.dueDate)).size !== input.installments.length)
+      throw new UnprocessableEntityException('Installment dates must be unique');
+    return this.db.tx(async (c) => {
+      const s = (
+        await c.query(
+          `SELECT * FROM fee_schedules WHERE tenant_id=$1 AND id=$2 AND status='active' FOR UPDATE`,
+          [req.actor.tenantId, scheduleId],
+        )
+      ).rows[0];
+      if (!s || s.version !== input.version)
+        throw new ConflictException('Schedule changed. Refresh before editing.');
+      const pending = (
+        await c.query(
+          `SELECT id FROM autopay_debit_attempts WHERE tenant_id=$1 AND schedule_id=$2 AND status IN ('submitted','uncertain') LIMIT 1`,
+          [req.actor.tenantId, scheduleId],
+        )
+      ).rows[0];
+      const checkouts = (
+        await c.query(
+          `SELECT id FROM payment_checkout_sessions WHERE tenant_id=$1 AND schedule_id=$2 AND (status='uncertain' OR (status IN('requested','created') AND (expires_at IS NULL OR expires_at>now()))) LIMIT 1`,
+          [req.actor.tenantId, scheduleId],
+        )
+      ).rows[0];
+      if (pending || checkouts)
+        throw new ConflictException('Resolve processing payments before changing the schedule');
+      const rows = (
+        await c.query(
+          `SELECT *,due_date::text AS due_date, (paid_amount_minor=0 AND due_date>current_date AND status NOT IN ('cancelled','paid','adjusted') AND NOT EXISTS(SELECT 1 FROM payment_records fp WHERE fp.tenant_id=fee_installments.tenant_id AND fp.installment_id=fee_installments.id)) AS editable FROM fee_installments WHERE tenant_id=$1 AND schedule_id=$2 ORDER BY sequence FOR UPDATE`,
+          [req.actor.tenantId, scheduleId],
+        )
+      ).rows;
+      const currentTotal = rows
+        .filter((i) => i.status !== 'cancelled')
+        .reduce((sum, i) => sum + Number(i.amount_minor) - Number(i.adjustment_amount_minor), 0);
+      const fixed = rows.filter((i) => i.status !== 'cancelled' && !i.editable);
+      const fixedTotal = fixed.reduce(
+        (sum, i) => sum + Number(i.amount_minor) - Number(i.adjustment_amount_minor),
+        0,
+      );
+      const futureTotal = input.installments.reduce((sum, i) => sum + i.amountMinor, 0);
+      if (fixedTotal + futureTotal !== currentTotal)
+        throw new UnprocessableEntityException(
+          'Future installments must reconcile to the current net payable',
+        );
+      const today = (await c.query(`SELECT current_date::text AS today`)).rows[0].today;
+      const fixedDates = new Set(fixed.map((i) => new Date(i.due_date).toISOString().slice(0, 10)));
+      if (input.installments.some((i) => i.dueDate <= today || fixedDates.has(i.dueDate)))
+        throw new UnprocessableEntityException(
+          'Use future dates that do not conflict with preserved installments',
+        );
+      // Preserve every historical row and receipt. Only unpaid future items retire.
+      const editableIds = rows.filter((i) => i.editable).map((i) => i.id);
+      if (!editableIds.length)
+        throw new ConflictException('No unpaid future installments can be customized');
+      await c.query(
+        `UPDATE autopay_debit_attempts SET status='cancelled',failure_code='FLEX_SCHEDULE_REPLACED',updated_at=now() WHERE tenant_id=$1 AND installment_id=ANY($2::uuid[]) AND status='queued'`,
+        [req.actor.tenantId, editableIds],
+      );
+      await c.query(
+        `UPDATE fee_installments SET status='cancelled' WHERE tenant_id=$1 AND id=ANY($2::uuid[])`,
+        [req.actor.tenantId, editableIds],
+      );
+      // Existing uniqueness includes retired rows. Keep their dates for history;
+      // reuse rows at identical dates, and append genuinely new dates/sequences.
+      let sequence = Math.max(0, ...rows.map((i) => Number(i.sequence)));
+      let discountPool = rows
+        .filter((i) => i.editable)
+        .reduce((sum, i) => sum + Number(i.adjustment_amount_minor), 0);
+      for (const item of [...input.installments].sort((a, b) =>
+        a.dueDate.localeCompare(b.dueDate),
+      )) {
+        const discount = discountPool;
+        discountPool = 0;
+        const grossAmount = item.amountMinor + discount;
+        const same = rows.find(
+          (i) => i.editable && new Date(i.due_date).toISOString().slice(0, 10) === item.dueDate,
+        );
+        if (same)
+          await c.query(
+            `UPDATE fee_installments SET amount_minor=$2,adjustment_amount_minor=$3,status='scheduled' WHERE id=$1`,
+            [same.id, grossAmount, discount],
+          );
+        else {
+          const occupied = rows.some(
+            (i) => new Date(i.due_date).toISOString().slice(0, 10) === item.dueDate,
+          );
+          if (occupied)
+            throw new ConflictException(
+              'This date belongs to a historical installment. Choose a different future date.',
+            );
+          await c.query(
+            `INSERT INTO fee_installments(tenant_id,schedule_id,sequence,due_date,amount_minor,adjustment_amount_minor) VALUES($1,$2,$3,$4,$5,$6)`,
+            [req.actor.tenantId, scheduleId, ++sequence, item.dueDate, grossAmount, discount],
+          );
+        }
+      }
+      await c.query(
+        `UPDATE fee_schedules SET schedule_kind='flex',version=version+1,updated_at=now() WHERE id=$1`,
+        [scheduleId],
+      );
+      await this.db.audit(c, req.actor.id, 'fees.schedule.flex', scheduleId, {
+        tenantId: req.actor.tenantId,
+        reason: input.reason,
+        oldValue: rows,
+        newValue: input.installments,
+      });
+      return { id: scheduleId, version: s.version + 1, status: 'saved' };
+    });
+  }
+
+  @Get('students')
+  async students(@Req() req: AuthedRequest, @Query() query: unknown) {
+    const input = z
+      .object({
+        page: z.coerce.number().int().min(1).max(100000).default(1),
+        pageSize: z.coerce.number().int().min(1).max(100).default(25),
+        search: z.string().trim().max(100).default(''),
+        status: z.enum(['all', 'active', 'inactive', 'withdrawn', 'graduated']).default('all'),
+        sort: z.enum(['name', 'reference']).default('name'),
+      })
+      .parse(query);
+    const rows = await this.db.query(
+      `WITH matched AS (
+        SELECT id,full_name,student_reference FROM academic_students
+        WHERE tenant_id=$1 AND ($2='all' OR status=$2)
+          AND ($3='' OR strpos(lower(full_name),lower($3))>0 OR strpos(lower(student_reference),lower($3))>0)
+      ), filtered AS (
+        SELECT s.id,s.full_name,s.student_reference,s.status,t.display_name AS institute,
+          (SELECT label FROM academic_years ay WHERE ay.tenant_id=s.tenant_id AND ay.id=s.academic_year_id) AS academic_year,
+          (SELECT name FROM branches br WHERE br.tenant_id=s.tenant_id AND br.id=s.branch_id) AS campus,
+          (SELECT string_agg(c.label,', ' ORDER BY c.label) FROM student_catalogue_assignments ca JOIN academic_catalogue c ON c.id=ca.catalogue_id AND c.tenant_id=ca.tenant_id WHERE ca.tenant_id=s.tenant_id AND ca.student_id=s.id AND ca.ended_on IS NULL AND ca.effective_on<=current_date AND c.kind='course') AS course,
+          (SELECT string_agg(c.label,', ' ORDER BY c.label) FROM student_catalogue_assignments ca JOIN academic_catalogue c ON c.id=ca.catalogue_id AND c.tenant_id=ca.tenant_id WHERE ca.tenant_id=s.tenant_id AND ca.student_id=s.id AND ca.ended_on IS NULL AND ca.effective_on<=current_date AND c.kind='batch') AS group_name,
+          (SELECT string_agg(c.label,', ' ORDER BY c.label) FROM student_catalogue_assignments ca JOIN academic_catalogue c ON c.id=ca.catalogue_id AND c.tenant_id=ca.tenant_id WHERE ca.tenant_id=s.tenant_id AND ca.student_id=s.id AND ca.ended_on IS NULL AND ca.effective_on<=current_date AND c.kind='grade') AS grade,
+          coalesce((SELECT m.status FROM payment_mandates m WHERE m.tenant_id=s.tenant_id AND m.rail='enach' AND EXISTS(SELECT 1 FROM student_fee_plan_assignments fa WHERE fa.tenant_id=s.tenant_id AND fa.student_id=s.id AND fa.schedule_id=m.schedule_id) ORDER BY CASE WHEN m.status='active' THEN 0 ELSE 1 END,m.last_event_at DESC LIMIT 1),'not_registered') AS enach_status,
+          coalesce(b.net_payable_minor,0)::bigint AS net_payable_minor,
+          coalesce(b.paid_minor,0)::bigint AS paid_minor,
+          coalesce(b.outstanding_minor,0)::bigint AS outstanding_minor
+        FROM (SELECT ast.* FROM academic_students ast WHERE ast.id IN (
+          SELECT id FROM matched ORDER BY CASE WHEN $4='reference' THEN student_reference ELSE full_name END,id LIMIT $5 OFFSET $6
+        )) s JOIN tenants t ON t.id=s.tenant_id
+        LEFT JOIN LATERAL (
+          SELECT sum(f.net_payable_minor) AS net_payable_minor,sum(f.paid_minor) AS paid_minor,sum(f.outstanding_minor) AS outstanding_minor
+          FROM finance_schedule_balances f
+          WHERE f.tenant_id=s.tenant_id AND EXISTS (
+            SELECT 1 FROM student_fee_plan_assignments a
+            WHERE a.tenant_id=s.tenant_id AND a.student_id=s.id AND a.schedule_id=f.schedule_id
+          )
+        ) b ON true
+        WHERE s.tenant_id=$1 AND ($2='all' OR s.status=$2)
+          AND ($3='' OR strpos(lower(s.full_name),lower($3))>0 OR strpos(lower(s.student_reference),lower($3))>0)
+      ) SELECT (SELECT count(*)::int FROM matched) AS total,
+        coalesce((SELECT json_agg(p) FROM (
+          SELECT * FROM filtered ORDER BY CASE WHEN $4='reference' THEN student_reference ELSE full_name END,id
+        ) p),'[]'::json) AS rows`,
+      [
+        req.actor.tenantId,
+        input.status,
+        input.search,
+        input.sort,
+        input.pageSize,
+        (input.page - 1) * input.pageSize,
+      ],
+    );
+    return { ...rows[0], page: input.page, pageSize: input.pageSize };
+  }
+
+  @Get('students/:id')
+  async student(@Req() req: AuthedRequest, @Param('id') id: string) {
+    const studentId = uuid(id);
+    const rows = await this.db.query(
+      `WITH balances AS (
+        SELECT b.* FROM finance_schedule_balances b WHERE b.tenant_id=$2 AND EXISTS (
+          SELECT 1 FROM student_fee_plan_assignments a WHERE a.student_id=$1 AND a.tenant_id=$2 AND a.schedule_id=b.schedule_id
+        )
+      ) SELECT s.id,s.full_name,s.student_reference,s.status,t.display_name AS institute,
+          (SELECT label FROM academic_years ay WHERE ay.tenant_id=s.tenant_id AND ay.id=s.academic_year_id) AS academic_year,
+          (SELECT name FROM branches br WHERE br.tenant_id=s.tenant_id AND br.id=s.branch_id) AS campus,
+          (SELECT string_agg(c.label,', ' ORDER BY c.label) FROM student_catalogue_assignments ca JOIN academic_catalogue c ON c.id=ca.catalogue_id AND c.tenant_id=ca.tenant_id WHERE ca.tenant_id=s.tenant_id AND ca.student_id=s.id AND ca.ended_on IS NULL AND ca.effective_on<=current_date AND c.kind='course') AS course,
+          (SELECT string_agg(c.label,', ' ORDER BY c.label) FROM student_catalogue_assignments ca JOIN academic_catalogue c ON c.id=ca.catalogue_id AND c.tenant_id=ca.tenant_id WHERE ca.tenant_id=s.tenant_id AND ca.student_id=s.id AND ca.ended_on IS NULL AND ca.effective_on<=current_date AND c.kind='batch') AS group_name,
+          (SELECT string_agg(c.label,', ' ORDER BY c.label) FROM student_catalogue_assignments ca JOIN academic_catalogue c ON c.id=ca.catalogue_id AND c.tenant_id=ca.tenant_id WHERE ca.tenant_id=s.tenant_id AND ca.student_id=s.id AND ca.ended_on IS NULL AND ca.effective_on<=current_date AND c.kind='grade') AS grade,
+          coalesce((SELECT m.status FROM payment_mandates m WHERE m.tenant_id=s.tenant_id AND m.rail='enach' AND EXISTS(SELECT 1 FROM student_fee_plan_assignments fa WHERE fa.tenant_id=s.tenant_id AND fa.student_id=s.id AND fa.schedule_id=m.schedule_id) ORDER BY CASE WHEN m.status='active' THEN 0 ELSE 1 END,m.last_event_at DESC LIMIT 1),'not_registered') AS enach_status,
+        coalesce((SELECT json_agg(b) FROM balances b),'[]'::json) AS balances,
+        (SELECT json_build_object('net_payable_minor',coalesce(sum(net_payable_minor),0),
+          'paid_minor',coalesce(sum(paid_minor),0),'outstanding_minor',coalesce(sum(outstanding_minor),0)) FROM balances) AS summary
+      FROM academic_students s JOIN tenants t ON t.id=s.tenant_id WHERE s.id=$1 AND s.tenant_id=$2`,
+      [studentId, req.actor.tenantId],
+    );
+    if (!rows[0]) throw new NotFoundException('Student not found');
+    return rows[0];
+  }
+
+  @Get('students/:id/records')
+  async studentRecords(
+    @Req() req: AuthedRequest,
+    @Param('id') id: string,
+    @Query() query: unknown,
+  ) {
+    const studentId = uuid(id);
+    const input = z
+      .object({
+        section: z.enum([
+          'components',
+          'master',
+          'installments',
+          'payments',
+          'mandates',
+          'receipts',
+        ]),
+        page: z.coerce.number().int().min(1).max(100000).default(1),
+        pageSize: z.coerce.number().int().min(1).max(100).default(25),
+      })
+      .parse(query);
+    const sources = {
+      master: `SELECT p.id,p.sequence,p.due_date,p.amount_minor FROM fee_plan_installments p JOIN student_fee_plan_assignments a ON a.plan_id=p.plan_id AND a.tenant_id=p.tenant_id WHERE p.tenant_id=$1 AND a.student_id=$2 AND a.status='active'`,
+      components: `SELECT c.id,c.label,c.code,c.amount_minor,s.account_reference FROM fee_schedule_components c JOIN fee_schedules s ON s.id=c.schedule_id WHERE c.tenant_id=$1 AND EXISTS (SELECT 1 FROM student_fee_plan_assignments a WHERE a.tenant_id=$1 AND a.student_id=$2 AND a.schedule_id=c.schedule_id)`,
+      installments: `SELECT i.id,i.sequence,i.due_date,i.amount_minor,i.paid_amount_minor,i.adjustment_amount_minor,greatest(i.amount_minor-i.adjustment_amount_minor-i.paid_amount_minor,0)::bigint AS remaining_minor,i.status FROM fee_installments i WHERE i.tenant_id=$1 AND EXISTS (SELECT 1 FROM student_fee_plan_assignments a WHERE a.tenant_id=$1 AND a.student_id=$2 AND a.schedule_id=i.schedule_id)`,
+      payments: `SELECT p.id,coalesce(p.collection_reference,p.provider_reference) AS provider_reference,p.amount_minor,p.refunded_amount_minor,p.recorded_at,p.status FROM payment_records p WHERE p.tenant_id=$1 AND EXISTS (SELECT 1 FROM student_fee_plan_assignments a WHERE a.tenant_id=$1 AND a.student_id=$2 AND a.schedule_id=p.schedule_id)`,
+      mandates: `SELECT m.id,m.provider,m.provider_reference,m.status,m.last_event_at,m.rail FROM payment_mandates m WHERE m.tenant_id=$1 AND m.rail='enach' AND EXISTS (SELECT 1 FROM student_fee_plan_assignments a WHERE a.tenant_id=$1 AND a.student_id=$2 AND a.schedule_id=m.schedule_id)`,
+      receipts: `SELECT r.id,r.receipt_number,r.issued_at,r.payment_id FROM fee_receipts r JOIN payment_records p ON p.id=r.payment_id AND p.tenant_id=r.tenant_id WHERE r.tenant_id=$1 AND EXISTS (SELECT 1 FROM student_fee_plan_assignments a WHERE a.tenant_id=$1 AND a.student_id=$2 AND a.schedule_id=p.schedule_id)`,
+    };
+    const order = {
+      master: 'due_date,id',
+      components: 'label,id',
+      installments: 'due_date,id',
+      payments: 'recorded_at DESC,id',
+      mandates: 'last_event_at DESC,id',
+      receipts: 'issued_at DESC,id',
+    };
+    const result = await this.db.query(
+      `WITH records AS (${sources[input.section]})
+      SELECT (SELECT count(*)::int FROM records) AS total,
+      coalesce((SELECT json_agg(p) FROM (SELECT * FROM records ORDER BY ${order[input.section]} LIMIT $3 OFFSET $4) p),'[]'::json) AS rows`,
+      [req.actor.tenantId, studentId, input.pageSize, (input.page - 1) * input.pageSize],
+    );
+    return { ...result[0], page: input.page, pageSize: input.pageSize };
+  }
+
+  @Get('dashboard')
+  async dashboard(@Req() req: AuthedRequest) {
+    const rows = await this.db.query(
+      `SELECT
+        (SELECT count(*)::int FROM academic_students WHERE tenant_id=$1) AS students,
+        coalesce(sum(net_payable_minor),0)::bigint AS net_payable_minor,
+        coalesce(sum(paid_minor),0)::bigint AS paid_minor,
+        coalesce(sum(outstanding_minor),0)::bigint AS outstanding_minor,
+        coalesce(sum(overdue_minor),0)::bigint AS overdue_minor,
+        coalesce(sum(due_today_minor),0)::bigint AS due_today_minor,
+        coalesce(sum(upcoming_week_minor),0)::bigint AS upcoming_week_minor,
+        (SELECT coalesce(sum(greatest(i.amount_minor-i.adjustment_amount_minor-i.paid_amount_minor,0)),0)::bigint FROM fee_installments i JOIN fee_schedules s ON s.id=i.schedule_id AND s.tenant_id=i.tenant_id WHERE i.tenant_id=$1 AND s.status='active' AND i.status NOT IN ('cancelled','adjusted','paid') AND i.due_date>=date_trunc('week',current_date) AND i.due_date<date_trunc('week',current_date)+interval '1 week') AS expected_week_minor,
+        (SELECT coalesce(sum(greatest(i.amount_minor-i.adjustment_amount_minor-i.paid_amount_minor,0)),0)::bigint FROM fee_installments i JOIN fee_schedules s ON s.id=i.schedule_id AND s.tenant_id=i.tenant_id WHERE i.tenant_id=$1 AND s.status='active' AND i.status NOT IN ('cancelled','adjusted','paid') AND i.due_date>=date_trunc('month',current_date) AND i.due_date<date_trunc('month',current_date)+interval '1 month') AS expected_month_minor,
+        (SELECT coalesce(sum(amount_minor-refunded_amount_minor),0)::bigint FROM payment_records WHERE tenant_id=$1 AND recorded_at>=date_trunc('month',current_date)) AS collected_month_minor,
+        (SELECT coalesce(sum(b.due_today_minor+b.upcoming_week_minor),0)::bigint FROM finance_schedule_balances b WHERE b.tenant_id=$1 AND EXISTS(SELECT 1 FROM payment_mandates m WHERE m.tenant_id=$1 AND m.schedule_id=b.schedule_id AND m.rail='enach' AND m.status='active')) AS upcoming_enach_minor,
+        (SELECT coalesce(sum(greatest(i.amount_minor-i.adjustment_amount_minor-i.paid_amount_minor,0)),0)::bigint FROM fee_installments i JOIN fee_schedules s ON s.id=i.schedule_id AND s.tenant_id=i.tenant_id WHERE i.tenant_id=$1 AND s.status='active' AND i.status NOT IN ('paid','adjusted','cancelled') AND EXISTS(SELECT 1 FROM autopay_debit_attempts a WHERE a.tenant_id=$1 AND a.installment_id=i.id AND a.status='failed' AND a.recovery_status<>'resolved')) AS failed_debit_remaining_minor,
+        (SELECT json_agg(x ORDER BY x.month) FROM (SELECT m.period::date AS month,
+          (SELECT coalesce(sum(i.amount_minor-i.adjustment_amount_minor),0)::bigint FROM fee_installments i JOIN fee_schedules s ON s.id=i.schedule_id AND s.tenant_id=i.tenant_id WHERE i.tenant_id=$1 AND s.status IN ('active','completed') AND i.status<>'cancelled' AND i.due_date>=m.period AND i.due_date<m.period+interval '1 month') AS expected_minor,
+          (SELECT coalesce(sum(p.amount_minor-p.refunded_amount_minor),0)::bigint FROM payment_records p WHERE p.tenant_id=$1 AND p.recorded_at>=m.period AND p.recorded_at<m.period+interval '1 month') AS collected_minor
+          FROM generate_series(date_trunc('month',current_date)-interval '5 months',date_trunc('month',current_date),interval '1 month') AS m(period)) x) AS trend,
+        (SELECT count(*)::int FROM payment_mandates WHERE tenant_id=$1 AND rail='enach' AND status='active') AS active_mandates,
+        (SELECT count(*)::int FROM autopay_debit_attempts WHERE tenant_id=$1 AND status='failed') AS failed_debits,
+        (SELECT coalesce(sum(amount_minor),0)::bigint FROM settlement_records WHERE tenant_id=$1 AND status='pending') AS pending_settlements_minor,
+        (SELECT count(*)::int FROM reconciliation_entries WHERE tenant_id=$1 AND status IN ('unmatched','needs_review')) AS reconciliation_review,
+        coalesce((SELECT json_agg(x) FROM (
+          SELECT i.id,s.account_reference,i.sequence,i.due_date,
+            greatest(i.amount_minor-i.adjustment_amount_minor-i.paid_amount_minor,0)::bigint AS remaining_minor
+          FROM fee_installments i JOIN fee_schedules s ON s.id=i.schedule_id AND s.tenant_id=i.tenant_id
+          WHERE i.tenant_id=$1 AND s.status='active' AND i.status NOT IN ('cancelled','adjusted','paid')
+            AND i.amount_minor-i.adjustment_amount_minor-i.paid_amount_minor>0
+          ORDER BY i.due_date,i.id LIMIT 8
+        ) x),'[]'::json) AS upcoming,
+        coalesce((SELECT json_agg(x) FROM (
+          SELECT p.id,s.account_reference,p.amount_minor,p.status,p.recorded_at
+          FROM payment_records p JOIN fee_schedules s ON s.id=p.schedule_id AND s.tenant_id=p.tenant_id
+          WHERE p.tenant_id=$1 ORDER BY p.recorded_at DESC,p.id LIMIT 8
+        ) x),'[]'::json) AS recent_payments
+      FROM finance_schedule_balances WHERE tenant_id=$1`,
+      [req.actor.tenantId],
+    );
+    return { ...rows[0], updatedAt: new Date().toISOString() };
+  }
+
   @Get('overview')
   async overview(@Req() req: AuthedRequest) {
     const [summary, upcoming, mandates, reconciliation] = await Promise.all([
       this.db.query(
         `SELECT
-          count(*)::int AS schedules,
+          (SELECT count(*)::int FROM fee_schedules WHERE tenant_id=$1) AS schedules,
           count(*) FILTER (WHERE status='active')::int AS active_schedules,
-          coalesce(sum(total_amount_minor),0)::bigint AS scheduled_minor,
-          coalesce((SELECT sum(amount_minor-refunded_amount_minor) FROM payment_records WHERE tenant_id=$1),0)::bigint AS confirmed_minor,
-          coalesce((SELECT sum(amount_minor-adjustment_amount_minor-paid_amount_minor) FROM fee_installments WHERE tenant_id=$1 AND status NOT IN('paid','cancelled','adjusted')),0)::bigint AS outstanding_minor,
-          coalesce((SELECT sum(amount_minor-adjustment_amount_minor-paid_amount_minor) FROM fee_installments WHERE tenant_id=$1 AND due_date<current_date AND status NOT IN('paid','cancelled','adjusted')),0)::bigint AS overdue_minor
-        FROM fee_schedules
-        WHERE tenant_id=$1`,
+          coalesce(sum(net_payable_minor),0)::bigint AS scheduled_minor,
+          coalesce(sum(paid_minor),0)::bigint AS confirmed_minor,
+          coalesce(sum(outstanding_minor),0)::bigint AS outstanding_minor,
+          coalesce(sum(overdue_minor),0)::bigint AS overdue_minor
+        FROM finance_schedule_balances WHERE tenant_id=$1`,
         [req.actor.tenantId],
       ),
       this.db.query(
@@ -317,22 +688,14 @@ export class FeeOperationsController {
   async analytics(@Req() req: AuthedRequest) {
     const [byScope, byComponent, collectionTrend, lateFees] = await Promise.all([
       this.db.query(
-        `SELECT scope_type,scope_reference,
+        `SELECT s.scope_type,s.scope_reference,
           count(*)::int AS schedules,
-          coalesce(sum(total_amount_minor),0)::bigint AS scheduled_minor,
-          coalesce(sum((
-            SELECT sum(i.paid_amount_minor) FROM fee_installments i WHERE i.schedule_id=s.id
-          )),0)::bigint AS paid_minor,
-          coalesce(sum((
-            SELECT sum(i.amount_minor-i.paid_amount_minor)
-            FROM fee_installments i
-            WHERE i.schedule_id=s.id AND i.status NOT IN('paid','cancelled','adjusted')
-          )),0)::bigint AS outstanding_minor
-         FROM fee_schedules s
-         WHERE s.tenant_id=$1
-         GROUP BY scope_type,scope_reference
-         ORDER BY scheduled_minor DESC,scope_reference
-         LIMIT 200`,
+          coalesce(sum(b.net_payable_minor),0)::bigint AS scheduled_minor,
+          coalesce(sum(b.paid_minor),0)::bigint AS paid_minor,
+          coalesce(sum(b.outstanding_minor),0)::bigint AS outstanding_minor
+         FROM fee_schedules s JOIN finance_schedule_balances b ON b.schedule_id=s.id AND b.tenant_id=s.tenant_id
+         WHERE s.tenant_id=$1 GROUP BY s.scope_type,s.scope_reference
+         ORDER BY scheduled_minor DESC,s.scope_reference LIMIT 200`,
         [req.actor.tenantId],
       ),
       this.db.query(
@@ -423,152 +786,311 @@ export class FeeOperationsController {
   @Post('payments/external-confirmation')
   async recordPayment(@Body() body: unknown, @Req() req: AuthedRequest) {
     const v = externalPaymentRecordSchema.parse(body);
+    return this.db.tx((c) => this.applyRecordedPayment(c, v, req));
+  }
+
+  @Post('students/:id/payments')
+  async recordAdvance(@Req() req: AuthedRequest, @Param('id') id: string, @Body() body: unknown) {
+    const studentId = uuid(id),
+      input = externalPaymentRecordSchema.omit({ installmentId: true }).parse(body);
     return this.db.tx(async (c) => {
-      await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['payment:' + v.idempotencyKey]);
+      await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        'collection:' + input.idempotencyKey,
+      ]);
+      await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+        'payment-reference:' + req.actor.tenantId + ':' + input.providerReference,
+      ]);
       const replay = (
-        await c.query('SELECT * FROM payment_records WHERE tenant_id=$1 AND idempotency_key=$2', [
+        await c.query(
+          `SELECT p.*,r.receipt_number,
+        EXISTS(SELECT 1 FROM student_fee_plan_assignments a WHERE a.tenant_id=$1 AND a.student_id=$3 AND a.schedule_id=p.schedule_id) AS student_linked
+        FROM payment_records p LEFT JOIN fee_receipts r ON r.payment_id=p.id AND r.tenant_id=p.tenant_id
+        WHERE p.tenant_id=$1 AND p.collection_key=$2 ORDER BY p.recorded_at,p.id`,
+          [req.actor.tenantId, input.idempotencyKey, studentId],
+        )
+      ).rows;
+      if (replay.length) {
+        if (
+          replay.some(
+            (p) =>
+              !p.student_linked ||
+              p.collection_reference !== input.providerReference ||
+              p.currency !== input.currency ||
+              p.evidence_note !== input.evidenceNote ||
+              !isDeepStrictEqual(p.direct_details || {}, input.directPayment || {}),
+          ) ||
+          replay.reduce((sum, p) => sum + Number(p.amount_minor), 0) !== input.amountMinor
+        )
+          throw new ConflictException('Collection key was already used for a different payment');
+        return { payments: replay, allocatedAmountMinor: input.amountMinor, replayed: true };
+      }
+      const student = (
+        await c.query('SELECT id FROM academic_students WHERE tenant_id=$1 AND id=$2', [
           req.actor.tenantId,
-          v.idempotencyKey,
+          studentId,
         ])
       ).rows[0];
-      if (replay) return { ...replay, replayed: true };
-
-      const installment = (
+      if (!student) throw new NotFoundException('Student not found');
+      const installments = (
         await c.query(
-          `SELECT i.*,s.status AS schedule_status,s.currency,s.account_reference,s.payer_id,
-                  p.preferred_channel
+          `SELECT i.* FROM fee_installments i JOIN fee_schedules s ON s.id=i.schedule_id AND s.tenant_id=i.tenant_id
+        WHERE i.tenant_id=$1 AND s.status='active' AND i.status NOT IN ('paid','cancelled','adjusted') AND i.amount_minor-i.adjustment_amount_minor-i.paid_amount_minor>0
+        AND EXISTS(SELECT 1 FROM student_fee_plan_assignments a WHERE a.tenant_id=$1 AND a.student_id=$2 AND a.schedule_id=s.id)
+        ORDER BY i.due_date,i.sequence,i.id LIMIT 1000 FOR UPDATE OF i,s`,
+          [req.actor.tenantId, studentId],
+        )
+      ).rows;
+      if (
+        installments.reduce(
+          (sum, i) =>
+            sum +
+            Number(i.amount_minor) -
+            Number(i.adjustment_amount_minor) -
+            Number(i.paid_amount_minor),
+          0,
+        ) < input.amountMinor
+      )
+        throw new UnprocessableEntityException(
+          installments.length === 1000
+            ? 'Payment spans too many installments. Use a smaller payment.'
+            : 'Payment exceeds the student outstanding balance',
+        );
+      let remaining = input.amountMinor;
+      const payments = [];
+      for (const installment of installments) {
+        if (remaining === 0) break;
+        const amount = Math.min(
+          remaining,
+          Number(installment.amount_minor) -
+            Number(installment.adjustment_amount_minor) -
+            Number(installment.paid_amount_minor),
+        );
+        const bytes = createHash('sha256')
+          .update(input.idempotencyKey + ':' + installment.id)
+          .digest()
+          .subarray(0, 16);
+        bytes[6] = (bytes[6]! & 15) | 64;
+        bytes[8] = (bytes[8]! & 63) | 128;
+        const key = bytes
+          .toString('hex')
+          .replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+        payments.push(
+          await this.applyRecordedPayment(
+            c,
+            {
+              ...input,
+              installmentId: installment.id,
+              idempotencyKey: key,
+              providerReference: 'COL-' + input.idempotencyKey + '-' + (payments.length + 1),
+              amountMinor: amount,
+            },
+            req,
+            { key: input.idempotencyKey, reference: input.providerReference },
+          ),
+        );
+        remaining -= amount;
+      }
+      await this.db.audit(c, req.actor.id, 'fees.payment.advance_allocated', input.idempotencyKey, {
+        tenantId: req.actor.tenantId,
+        studentId,
+        amountMinor: input.amountMinor,
+        reference: input.providerReference,
+        paymentIds: payments.map((p) => p.id),
+      });
+      return { payments, allocatedAmountMinor: input.amountMinor, replayed: false };
+    });
+  }
+
+  private async applyRecordedPayment(
+    c: PoolClient,
+    v: z.infer<typeof externalPaymentRecordSchema>,
+    req: AuthedRequest,
+    collection?: { key: string; reference: string },
+  ) {
+    const originalReference = collection?.reference || v.providerReference;
+    await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
+      'payment-reference:' + req.actor.tenantId + ':' + originalReference,
+    ]);
+    await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['payment:' + v.idempotencyKey]);
+    const replay = (
+      await c.query('SELECT * FROM payment_records WHERE tenant_id=$1 AND idempotency_key=$2', [
+        req.actor.tenantId,
+        v.idempotencyKey,
+      ])
+    ).rows[0];
+    if (replay) {
+      if (
+        replay.installment_id !== v.installmentId ||
+        Number(replay.amount_minor) !== v.amountMinor ||
+        replay.provider_reference !== v.providerReference ||
+        replay.currency !== v.currency ||
+        replay.evidence_note !== v.evidenceNote ||
+        !isDeepStrictEqual(replay.direct_details || {}, v.directPayment || {})
+      )
+        throw new ConflictException('Submission key was already used for a different payment');
+      const receipt = (
+        await c.query(
+          'SELECT id,receipt_number,issued_at FROM fee_receipts WHERE payment_id=$1 AND tenant_id=$2',
+          [replay.id, req.actor.tenantId],
+        )
+      ).rows[0];
+      return { ...replay, receipt, replayed: true };
+    }
+
+    const referenceUsed = (
+      await c.query(
+        `SELECT id FROM payment_records WHERE tenant_id=$1 AND provider='manual_external' AND (collection_reference=$2 OR provider_reference=$2) AND ($3::uuid IS NULL OR collection_key IS DISTINCT FROM $3) LIMIT 1`,
+        [req.actor.tenantId, originalReference, collection?.key || null],
+      )
+    ).rows[0];
+    if (referenceUsed) throw new ConflictException('This payment reference was already recorded');
+    const installment = (
+      await c.query(
+        `SELECT i.*,s.status AS schedule_status,s.currency,s.account_reference,s.payer_id,
+                  p.preferred_channel,
+                  (SELECT ast.full_name FROM student_fee_plan_assignments a JOIN academic_students ast ON ast.id=a.student_id AND ast.tenant_id=a.tenant_id WHERE a.tenant_id=s.tenant_id AND a.schedule_id=s.id ORDER BY a.assigned_on DESC LIMIT 1) AS student_name,
+                  (SELECT display_name FROM tenants WHERE id=s.tenant_id) AS institute_name
            FROM fee_installments i
            JOIN fee_schedules s ON s.id=i.schedule_id
            LEFT JOIN fee_payers p ON p.id=s.payer_id
            WHERE i.id=$1 AND s.tenant_id=$2
            FOR UPDATE OF i,s`,
-          [v.installmentId, req.actor.tenantId],
-        )
-      ).rows[0];
-      if (!installment) throw new ConflictException('Installment does not exist');
-      if (installment.schedule_status !== 'active')
-        throw new ConflictException(
-          'Fee schedule must be active before payment evidence is recorded',
-        );
-      if (installment.status === 'cancelled')
-        throw new ConflictException('Cancelled installment cannot accept payment evidence');
-      if (installment.currency !== v.currency)
-        throw new ConflictException('Payment currency does not match schedule currency');
-      const remaining =
-        Number(installment.amount_minor) -
-        Number(installment.adjustment_amount_minor || 0) -
-        Number(installment.paid_amount_minor);
-      if (v.amountMinor > remaining)
-        throw new UnprocessableEntityException('Payment exceeds the installment balance');
+        [v.installmentId, req.actor.tenantId],
+      )
+    ).rows[0];
+    if (!installment) throw new ConflictException('Installment does not exist');
+    if (installment.schedule_status !== 'active')
+      throw new ConflictException(
+        'Fee schedule must be active before payment evidence is recorded',
+      );
+    if (installment.status === 'cancelled')
+      throw new ConflictException('Cancelled installment cannot accept payment evidence');
+    if (installment.currency !== v.currency)
+      throw new ConflictException('Payment currency does not match schedule currency');
+    await assertNoProcessingCollections(c, req.actor.tenantId, v.installmentId);
+    const remaining =
+      Number(installment.amount_minor) -
+      Number(installment.adjustment_amount_minor || 0) -
+      Number(installment.paid_amount_minor);
+    if (v.amountMinor > remaining)
+      throw new UnprocessableEntityException('Payment exceeds the installment balance');
 
-      const payment = (
-        await c.query(
-          `INSERT INTO payment_records(
-            schedule_id,installment_id,idempotency_key,provider_reference,amount_minor,currency,
-            evidence_note,recorded_by
-          ) VALUES($1,$2,$3,$4,$5,$6,$7,$8)
-          RETURNING *`,
-          [
-            installment.schedule_id,
-            v.installmentId,
-            v.idempotencyKey,
-            v.providerReference,
-            v.amountMinor,
-            v.currency,
-            v.evidenceNote,
-            req.actor.id,
-          ],
-        )
-      ).rows[0];
-      const nextPaid = Number(installment.paid_amount_minor) + v.amountMinor;
-      const nextStatus =
-        nextPaid + Number(installment.adjustment_amount_minor || 0) ===
-        Number(installment.amount_minor)
-          ? 'paid'
-          : 'part_paid';
-      await c.query('UPDATE fee_installments SET paid_amount_minor=$2,status=$3 WHERE id=$1', [
-        v.installmentId,
-        nextPaid,
-        nextStatus,
-      ]);
-      const open = (
-        await c.query(
-          `SELECT count(*)::int AS count FROM fee_installments
-           WHERE schedule_id=$1 AND status NOT IN('paid','cancelled','adjusted')`,
-          [installment.schedule_id],
-        )
-      ).rows[0]!.count;
-      if (open === 0)
-        await c.query(
-          `UPDATE fee_schedules SET status='completed',version=version+1,updated_at=now() WHERE id=$1`,
-          [installment.schedule_id],
-        );
-      const receiptNumber = 'RCP-' + randomUUID().slice(0, 8).toUpperCase();
-      const receipt = (
-        await c.query(
-          `INSERT INTO fee_receipts(payment_id,receipt_number,snapshot)
-           VALUES($1,$2,$3) RETURNING id,receipt_number,issued_at`,
-          [
-            payment.id,
-            receiptNumber,
-            {
-              scheduleId: installment.schedule_id,
-              accountReference: installment.account_reference || null,
-              installmentId: v.installmentId,
-              amountMinor: v.amountMinor,
-              currency: v.currency,
-              providerReference: v.providerReference,
-              recordedAt: payment.recorded_at,
-            },
-          ],
-        )
-      ).rows[0];
-      const eventId = randomUUID();
+    const payment = (
       await c.query(
-        `INSERT INTO outbox(event_id,type,aggregate_id,payload)
-         VALUES($1,'payment.external_confirmed',$2,$3)`,
+        `INSERT INTO payment_records(
+            schedule_id,installment_id,idempotency_key,provider_reference,amount_minor,currency,
+            evidence_note,recorded_by,direct_details,collection_key,collection_reference
+          ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          RETURNING *`,
         [
-          eventId,
+          installment.schedule_id,
+          v.installmentId,
+          v.idempotencyKey,
+          v.providerReference,
+          v.amountMinor,
+          v.currency,
+          v.evidenceNote,
+          req.actor.id,
+          v.directPayment || {},
+          collection?.key || null,
+          collection?.reference || null,
+        ],
+      )
+    ).rows[0];
+    const nextPaid = Number(installment.paid_amount_minor) + v.amountMinor;
+    const nextStatus =
+      nextPaid + Number(installment.adjustment_amount_minor || 0) ===
+      Number(installment.amount_minor)
+        ? 'paid'
+        : 'part_paid';
+    await c.query('UPDATE fee_installments SET paid_amount_minor=$2,status=$3 WHERE id=$1', [
+      v.installmentId,
+      nextPaid,
+      nextStatus,
+    ]);
+    await syncQueuedDebitBalances(c, this.db, req.actor.tenantId, v.installmentId, req.actor.id);
+    const open = (
+      await c.query(
+        `SELECT count(*)::int AS count FROM fee_installments
+           WHERE schedule_id=$1 AND status NOT IN('paid','cancelled','adjusted')`,
+        [installment.schedule_id],
+      )
+    ).rows[0]!.count;
+    if (open === 0)
+      await c.query(
+        `UPDATE fee_schedules SET status='completed',version=version+1,updated_at=now() WHERE id=$1`,
+        [installment.schedule_id],
+      );
+    const receiptNumber = 'RCP-' + randomUUID().replaceAll('-', '').toUpperCase();
+    const receipt = (
+      await c.query(
+        `INSERT INTO fee_receipts(payment_id,receipt_number,snapshot)
+           VALUES($1,$2,$3) RETURNING id,receipt_number,issued_at`,
+        [
           payment.id,
+          receiptNumber,
           {
+            studentName: installment.student_name || null,
+            instituteName: installment.institute_name || null,
             scheduleId: installment.schedule_id,
+            accountReference: installment.account_reference || null,
+            installmentId: v.installmentId,
             amountMinor: v.amountMinor,
-            receiptId: receipt.id,
-            receiptNumber: receipt.receipt_number,
-            payerCommunication: Boolean(
-              installment.payer_id &&
-              installment.preferred_channel &&
-              installment.preferred_channel !== 'none',
-            ),
+            currency: v.currency,
+            providerReference: collection?.reference || v.providerReference,
+            collectionKey: collection?.key || null,
+            recordedAt: payment.recorded_at,
+            directPayment: v.directPayment || null,
+            notes: v.evidenceNote,
           },
         ],
-      );
-      if (
-        installment.payer_id &&
-        installment.preferred_channel &&
-        installment.preferred_channel !== 'none'
-      ) {
-        await c.query(
-          `INSERT INTO fee_communication_log(
+      )
+    ).rows[0];
+    const eventId = randomUUID();
+    await c.query(
+      `INSERT INTO outbox(event_id,type,aggregate_id,payload)
+         VALUES($1,'payment.external_confirmed',$2,$3)`,
+      [
+        eventId,
+        payment.id,
+        {
+          scheduleId: installment.schedule_id,
+          amountMinor: v.amountMinor,
+          receiptId: receipt.id,
+          receiptNumber: receipt.receipt_number,
+          payerCommunication: Boolean(
+            installment.payer_id &&
+            installment.preferred_channel &&
+            installment.preferred_channel !== 'none',
+          ),
+        },
+      ],
+    );
+    if (
+      installment.payer_id &&
+      installment.preferred_channel &&
+      installment.preferred_channel !== 'none'
+    ) {
+      await c.query(
+        `INSERT INTO fee_communication_log(
              event_id,schedule_id,installment_id,payer_id,channel,kind,status
            ) VALUES($1,$2,$3,$4,$5,'receipt','pending')`,
-          [
-            eventId,
-            installment.schedule_id,
-            v.installmentId,
-            installment.payer_id,
-            installment.preferred_channel,
-          ],
-        );
-      }
-      await this.db.audit(c, req.actor.id, 'fees.payment.external_confirmed', payment.id, {
-        scheduleId: installment.schedule_id,
-        providerReference: v.providerReference,
-        amountMinor: v.amountMinor,
-        eventId,
-      });
-      return { ...payment, receipt, replayed: false };
+        [
+          eventId,
+          installment.schedule_id,
+          v.installmentId,
+          installment.payer_id,
+          installment.preferred_channel,
+        ],
+      );
+    }
+    await this.db.audit(c, req.actor.id, 'fees.payment.external_confirmed', payment.id, {
+      scheduleId: installment.schedule_id,
+      providerReference: v.providerReference,
+      amountMinor: v.amountMinor,
+      eventId,
     });
+    return { ...payment, receipt, replayed: false };
   }
 
   @Post('refunds')
@@ -622,7 +1144,8 @@ export class FeeOperationsController {
           ? new Date(installment.due_date) < new Date()
             ? 'overdue'
             : 'scheduled'
-          : newPaid === Number(installment.amount_minor)
+          : newPaid + Number(installment.adjustment_amount_minor || 0) ===
+              Number(installment.amount_minor)
             ? 'paid'
             : 'part_paid';
       await c.query('UPDATE fee_installments SET paid_amount_minor=$2,status=$3 WHERE id=$1', [
@@ -630,6 +1153,7 @@ export class FeeOperationsController {
         newPaid,
         status,
       ]);
+      await syncQueuedDebitBalances(c, this.db, req.actor.tenantId, installment.id, req.actor.id);
       await c.query(
         `UPDATE fee_schedules
          SET status=CASE WHEN status='completed' THEN 'active' ELSE status END,

@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAdminApi } from './context';
 import { MandateWorkspace } from './mandate-workspace';
 import { EnachExtras, EnachInfo } from './enach-extras';
@@ -50,10 +51,7 @@ export function EnachDashboard({
       ['mandates', () => request<MandateDashboardData['mandates']>('admin/fees/mandates')],
       ['setups', () => request<MandateDashboardData['setups']>('admin/fees/mandate-setups')],
       ['debits', () => request<MandateDashboardData['debits']>('admin/fees/autopay-attempts')],
-      [
-        'settlements',
-        () => request<MandateDashboardData['settlements']>('admin/fees/settlements'),
-      ],
+      ['settlements', () => request<MandateDashboardData['settlements']>('admin/fees/settlements')],
       [
         'checkouts',
         () => request<MandateDashboardData['checkouts']>('admin/fees/checkout-sessions'),
@@ -63,9 +61,7 @@ export function EnachDashboard({
       [
         'cases',
         () =>
-          request<Array<{ id: string; status: string }>>(
-            'admin/fees/mandate-reconciliation-cases',
-          ),
+          request<Array<{ id: string; status: string }>>('admin/fees/mandate-reconciliation-cases'),
       ],
     ] as const;
     const results = await Promise.allSettled(resources.map(([, run]) => run()));
@@ -126,12 +122,20 @@ export function EnachDashboard({
   useEffect(() => setDisplayView(initialView), [initialView]);
 
   return (
-    <section aria-label="eNACH and AutoPay dashboard">
+    <section aria-label="Flex and eNACH dashboard">
+      <nav className="admin-toolbar" aria-label="Collection operations">
+        <Link href="/admin/students/">Student sandbox registration</Link>
+        <Link href="/admin/debits/">Debit queue and attempts</Link>
+        <Link href="/admin/failed-debits/">Failed payments and recovery</Link>
+      </nav>
       <div className="admin-panel">
         <p className="eyebrow">Dodo · eNACH operations</p>
         <div className="enach-section-heading">
-          <h2>eNACH & AutoPay dashboard</h2>
-          <EnachInfo topic="See actual mandate and debit records, plus pending provider investigations. A zero count means there are no matching records returned." label="Explain dashboard overview" />
+          <h2>Flex / eNACH</h2>
+          <EnachInfo
+            topic="See actual mandate and debit records, plus pending provider investigations. A zero count means there are no matching records returned."
+            label="Explain dashboard overview"
+          />
         </div>
         <p>
           Manage mandate registrations, recurring debit attempts, settlements and pending

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { Db } from '../../api/src/db';
+import { submitSandboxDebit } from '../../api/src/sandbox-enach';
 
 const debitProviderResponseSchema = z
   .object({
@@ -45,6 +46,17 @@ function nextRetry(attemptNo: number) {
 }
 
 export async function submitAutopayDebit(db: Db, eventId: string) {
+  if (process.env.AUTOPAY_PROVIDER_MODE === 'sandbox') {
+    const attempt = (
+      await db.query(
+        `SELECT aggregate_id FROM outbox WHERE event_id=$1 AND type='autopay.debit.requested'`,
+        [eventId],
+      )
+    )[0];
+    if (!attempt) throw new Error('AUTOPAY_ATTEMPT_NOT_FOUND');
+    await submitSandboxDebit(db, attempt.aggregate_id);
+    return 'provider_accepted';
+  }
   if (process.env.AUTOPAY_PROVIDER_MODE !== 'mandate_api') return 'disabled';
 
   const attempt = (
@@ -89,8 +101,7 @@ export async function submitAutopayDebit(db: Db, eventId: string) {
            AND NOT EXISTS (
              SELECT 1 FROM payment_checkout_sessions pc
              WHERE pc.tenant_id=a.tenant_id AND pc.installment_id=a.installment_id
-               AND pc.status IN('requested','created','uncertain')
-               AND (pc.expires_at IS NULL OR pc.expires_at>now())
+               AND (pc.status='uncertain' OR (pc.status IN('requested','created') AND (pc.expires_at IS NULL OR pc.expires_at>now())))
            )
          LIMIT 1 FOR UPDATE OF i`,
         [attempt.id],

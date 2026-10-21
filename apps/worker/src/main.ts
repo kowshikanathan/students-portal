@@ -211,7 +211,7 @@ export async function tick(db: Db) {
       });
     }
 
-    if (process.env.AUTOPAY_PROVIDER_MODE === 'mandate_api') {
+    if (['mandate_api', 'sandbox'].includes(process.env.AUTOPAY_PROVIDER_MODE || 'disabled')) {
       const maxAttempts = Math.max(1, Math.min(10, Number(process.env.AUTOPAY_MAX_ATTEMPTS || 3)));
       const autopayRows = (
         await c.query(
@@ -226,6 +226,7 @@ export async function tick(db: Db) {
              SELECT pm.id,pm.provider,pm.last_event_at
              FROM payment_mandates pm
              WHERE pm.schedule_id=s.id AND pm.status='active'
+               AND (($2::boolean AND pm.provider='sandbox_enach' AND pm.rail='enach') OR (NOT $2::boolean AND pm.provider<>'sandbox_enach'))
              ORDER BY pm.last_event_at DESC
              LIMIT 1
            ) m ON true
@@ -242,8 +243,7 @@ export async function tick(db: Db) {
              AND NOT EXISTS (
                SELECT 1 FROM payment_checkout_sessions pc
                WHERE pc.tenant_id=i.tenant_id AND pc.installment_id=i.id
-                 AND pc.status IN('requested','created','uncertain')
-                 AND (pc.expires_at IS NULL OR pc.expires_at>now())
+                 AND (pc.status='uncertain' OR (pc.status IN('requested','created') AND (pc.expires_at IS NULL OR pc.expires_at>now())))
              )
              AND (
                last_attempt.attempt_no IS NULL
@@ -257,7 +257,7 @@ export async function tick(db: Db) {
            ORDER BY i.due_date,i.sequence
            FOR UPDATE OF i SKIP LOCKED
            LIMIT 100`,
-          [maxAttempts],
+          [maxAttempts, process.env.AUTOPAY_PROVIDER_MODE === 'sandbox'],
         )
       ).rows;
       for (const row of autopayRows) {

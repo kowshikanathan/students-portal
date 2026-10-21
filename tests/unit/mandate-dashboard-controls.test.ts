@@ -29,7 +29,10 @@ test('payer authorization links are restricted to active payer-owned schedules',
     { id: 'b', status: 'draft', payer_id: 'p2' },
     { id: 'c', status: 'active', payer_id: null },
   ];
-  assert.deepEqual(eligiblePayerSchedules(schedules).map((row) => row.id), ['a']);
+  assert.deepEqual(
+    eligiblePayerSchedules(schedules).map((row) => row.id),
+    ['a'],
+  );
 });
 
 test('present empty records without inventing a provider state', () => {

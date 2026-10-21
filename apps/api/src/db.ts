@@ -25,6 +25,13 @@ export class Db implements OnModuleDestroy {
       c.release();
     }
   }
+  /** Reuse existing domain transactions inside one bulk transaction, without another pool. */
+  transactionView(c: PoolClient): Db {
+    const view = Object.create(this) as Db;
+    view.tx = async (f) => f(c);
+    view.query = async (sql, args = []) => (await c.query(sql, args)).rows;
+    return view;
+  }
   async audit(
     c: PoolClient,
     actor: string,

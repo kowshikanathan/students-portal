@@ -43,13 +43,9 @@ test('active payer schedule renders a controlled authorization link action', () 
     createElement(MandateWorkspace, {
       data: {
         ...emptyData,
-        mandates: [
-          { id: 'm1', account_reference: 'FEE-1001', status: 'active', rail: 'enach' },
-        ],
+        mandates: [{ id: 'm1', account_reference: 'FEE-1001', status: 'active', rail: 'enach' }],
       },
-      schedules: [
-        { id: 's1', account_reference: 'FEE-1001', payer_id: 'p1', status: 'active' },
-      ],
+      schedules: [{ id: 's1', account_reference: 'FEE-1001', payer_id: 'p1', status: 'active' }],
       providerMode: 'mandate_api',
       providerName: 'approved-provider',
       readOnly: false,
@@ -99,12 +95,12 @@ test('read-only institution cannot create payer portal links', () => {
   const html = renderToStaticMarkup(
     createElement(MandateWorkspace, {
       data: emptyData,
-      schedules: [
-        { id: 's1', account_reference: 'FEE-1001', payer_id: 'p1', status: 'active' },
-      ],
+      schedules: [{ id: 's1', account_reference: 'FEE-1001', payer_id: 'p1', status: 'active' }],
       readOnly: true,
       onRefresh: async () => {},
-      onPayerLink: async () => { throw new Error('Should never be called'); },
+      onPayerLink: async () => {
+        throw new Error('Should never be called');
+      },
     }),
   );
   assert.match(html, /disabled=""[^>]*>Generate payer link/);

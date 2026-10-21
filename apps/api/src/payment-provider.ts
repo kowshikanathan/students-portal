@@ -13,7 +13,9 @@ import {
 } from '@nestjs/common';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { Request } from 'express';
+import { z } from 'zod';
 import { Db } from './db';
+import { syncQueuedDebitBalances } from './fee-balances';
 import { AuthGuard, AuthedRequest, Roles } from './auth';
 import { paymentProviderEventSchema } from '../../../packages/core/src/contracts';
 import { isNewerMandateEvent } from '../../../packages/core/src/mandate-events';
@@ -32,17 +34,20 @@ export class PaymentProviderController {
 
   @Get('status')
   status() {
+    const sandbox = process.env.AUTOPAY_PROVIDER_MODE === 'sandbox';
     const webhookEnabled = process.env.PAYMENT_PROVIDER_MODE === 'signed_hmac';
     const checkoutEnabled = process.env.PAYMENT_CHECKOUT_MODE === 'redirect_api';
     const autopayEnabled = process.env.AUTOPAY_PROVIDER_MODE === 'mandate_api';
     return {
-      provider:
-        webhookEnabled || checkoutEnabled || autopayEnabled
+      provider: sandbox
+        ? 'sandbox_enach'
+        : webhookEnabled || checkoutEnabled || autopayEnabled
           ? process.env.PAYMENT_PROVIDER_NAME
           : null,
+      sandboxSimulationAllowed: sandbox && process.env.DEPLOYMENT_MODE !== 'production',
       webhookMode: webhookEnabled ? 'signed_hmac' : 'disabled',
       checkoutMode: checkoutEnabled ? 'redirect_api' : 'disabled',
-      autopayMode: autopayEnabled ? 'mandate_api' : 'disabled',
+      autopayMode: sandbox ? 'sandbox' : autopayEnabled ? 'mandate_api' : 'disabled',
       reconciliationMode:
         process.env.AUTOPAY_RECONCILE_MODE === 'read_only' ? 'read_only' : 'disabled',
       moneyMovement: checkoutEnabled || autopayEnabled,
@@ -100,6 +105,17 @@ export class PaymentProviderController {
     const event = paymentProviderEventSchema.parse(body);
     const bodyHash = createHash('sha256').update(raw).digest('hex');
 
+    return this.applyVerifiedEvent(provider, event, bodyHash);
+  }
+
+  // Internal provider boundary. HTTP callers must pass through signature verification.
+  // Sandbox supplies tenant ownership explicitly and uses the same ledger/receipt logic.
+  async applyVerifiedEvent(
+    provider: string,
+    event: z.infer<typeof paymentProviderEventSchema>,
+    bodyHash: string,
+    expectedTenantId?: string,
+  ) {
     return this.db.tx(async (c) => {
       const tenant =
         event.type === 'mandate_status'
@@ -117,6 +133,8 @@ export class PaymentProviderController {
       if (!tenant)
         throw new ForbiddenException('Provider event references an unknown financial record');
       const tenantId = tenant.tenant_id;
+      if (expectedTenantId && tenantId !== expectedTenantId)
+        throw new ForbiddenException('Provider tenant mismatch');
 
       const inserted = (
         await c.query(
@@ -570,7 +588,9 @@ export class PaymentProviderController {
       const installment = (
         await c.query(
           `SELECT i.*,s.status AS schedule_status,s.currency,s.account_reference,s.payer_id,
-                  p.preferred_channel
+                  p.preferred_channel,
+                  (SELECT ast.full_name FROM student_fee_plan_assignments a JOIN academic_students ast ON ast.id=a.student_id AND ast.tenant_id=a.tenant_id WHERE a.tenant_id=s.tenant_id AND a.schedule_id=s.id ORDER BY a.assigned_on DESC LIMIT 1) AS student_name,
+                  (SELECT display_name FROM tenants WHERE id=s.tenant_id) AS institute_name
            FROM fee_installments i
            JOIN fee_schedules s ON s.id=i.schedule_id
            LEFT JOIN fee_payers p ON p.id=s.payer_id
@@ -681,7 +701,10 @@ export class PaymentProviderController {
         };
       }
 
-      const remaining = Number(installment.amount_minor) - Number(installment.paid_amount_minor);
+      const remaining =
+        Number(installment.amount_minor) -
+        Number(installment.adjustment_amount_minor || 0) -
+        Number(installment.paid_amount_minor);
       if (event.amountMinor > remaining) return fail('AMOUNT_EXCEEDS_BALANCE');
 
       const payment = (
@@ -759,13 +782,24 @@ export class PaymentProviderController {
       }
 
       const nextPaid = Number(installment.paid_amount_minor) + event.amountMinor;
-      const nextStatus = nextPaid === Number(installment.amount_minor) ? 'paid' : 'part_paid';
+      const nextStatus =
+        nextPaid + Number(installment.adjustment_amount_minor || 0) ===
+        Number(installment.amount_minor)
+          ? 'paid'
+          : 'part_paid';
       await c.query('UPDATE fee_installments SET paid_amount_minor=$2,status=$3 WHERE id=$1', [
         event.installmentId,
         nextPaid,
         nextStatus,
       ]);
 
+      await syncQueuedDebitBalances(
+        c,
+        this.db,
+        tenantId,
+        event.installmentId,
+        'provider:' + provider,
+      );
       const open = (
         await c.query(
           `SELECT count(*)::int AS count
@@ -782,7 +816,7 @@ export class PaymentProviderController {
           [installment.schedule_id],
         );
 
-      const receiptNumber = 'RCP-' + randomUUID().slice(0, 8).toUpperCase();
+      const receiptNumber = 'RCP-' + randomUUID().replaceAll('-', '').toUpperCase();
       const receipt = (
         await c.query(
           `INSERT INTO fee_receipts(payment_id,receipt_number,snapshot)
@@ -792,6 +826,8 @@ export class PaymentProviderController {
             payment.id,
             receiptNumber,
             {
+              studentName: installment.student_name || null,
+              instituteName: installment.institute_name || null,
               scheduleId: installment.schedule_id,
               accountReference: installment.account_reference,
               installmentId: event.installmentId,

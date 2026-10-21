@@ -31,7 +31,6 @@ breakage or incorrectly claim Jodo's partner relationships as Dodo's.
 Previously published CMS titles/text are owner-controlled and may need
 separate review in the CMS to replace historical reference wording.
 
-
 In the institution owner console, open **Fee operations**. The existing
 **Mandates, AutoPay & settlements** workspace now appears immediately after the
 fee dashboard summary and before payer and fee-schedule forms, at full content
@@ -85,7 +84,7 @@ operational notes.
 
 In **Reports**, choose one of the five record types, optional account/status
 and creation-date filters, and the columns to include. Click **Download CSV
-report** to export the *currently loaded* tenant-scoped records together
+report** to export the _currently loaded_ tenant-scoped records together
 with optional custom columns. This is a filtered working report, **not**
 a complete audit export. It does not establish bank authorization or
 payment settlement, and CSV cell content is escaped against spreadsheet

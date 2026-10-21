@@ -29,8 +29,17 @@ export function checkConfig() {
     throw Error('Unsupported payment provider mode');
   if (!['disabled', 'redirect_api'].includes(process.env.PAYMENT_CHECKOUT_MODE || 'disabled'))
     throw Error('Unsupported payment checkout mode');
-  if (!['disabled', 'mandate_api'].includes(process.env.AUTOPAY_PROVIDER_MODE || 'disabled'))
+  if (
+    !['disabled', 'mandate_api', 'sandbox'].includes(
+      process.env.AUTOPAY_PROVIDER_MODE || 'disabled',
+    )
+  )
     throw Error('Unsupported autopay provider mode');
+  if (
+    process.env.DEPLOYMENT_MODE === 'production' &&
+    process.env.AUTOPAY_PROVIDER_MODE === 'sandbox'
+  )
+    throw Error('Sandbox collection requires a demo or test deployment');
   if (process.env.AUTOPAY_PROVIDER_MODE === 'mandate_api') {
     if (process.env.PAYMENT_PROVIDER_MODE !== 'signed_hmac')
       throw Error('AUTOPAY_PROVIDER_MODE requires signed payment provider callbacks');

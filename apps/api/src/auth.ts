@@ -4,6 +4,7 @@ import {
   Controller,
   ExecutionContext,
   ForbiddenException,
+  ConflictException,
   Get,
   Inject,
   Injectable,
@@ -21,6 +22,10 @@ import * as argon2 from 'argon2';
 import { authenticator } from 'otplib';
 import { Db } from './db';
 import { decrypt, digest, equal, keyed, token } from '../../../packages/core/src/security';
+import {
+  effectiveFinanceGrants,
+  financeRoutePermission,
+} from '../../../packages/core/src/finance-permissions';
 export interface Actor {
   id: string;
   email: string;
@@ -31,6 +36,7 @@ export interface Actor {
   tenantRole: string;
   sessionId: string;
   csrf: string;
+  permissions?: string[];
 }
 export type AuthedRequest = Request & { actor: Actor };
 export const Roles = (...roles: string[]) => SetMetadata('roles', roles);
@@ -54,11 +60,15 @@ export class AuthGuard implements CanActivate {
     if (typeof sid !== 'string') throw new UnauthorizedException('Sign in to the owner console');
     const rows = await this.db.query(
       `SELECT u.id,u.email,u.role,s.id AS session_id,s.csrf_hash,s.tenant_id,
-              t.display_name AS tenant_name,t.status AS tenant_status,m.role_key AS tenant_role,m.status AS membership_status
+              t.display_name AS tenant_name,t.status AS tenant_status,m.role_key AS tenant_role,m.status AS membership_status,
+              tr.grants AS tenant_grants,tr.explicit_denies AS tenant_denies
        FROM sessions s
        JOIN users u ON u.id=s.user_id
        JOIN tenants t ON t.id=s.tenant_id
        JOIN memberships m ON m.user_id=u.id AND m.tenant_id=s.tenant_id
+       LEFT JOIN LATERAL (SELECT grants,explicit_denies FROM tenant_roles
+         WHERE tenant_id=m.tenant_id AND role_key=m.role_key AND status='published'
+         ORDER BY version DESC LIMIT 1) tr ON true
        WHERE s.token_hash=$1
          AND s.expires_at>now()
          AND s.revoked_at IS NULL
@@ -69,6 +79,9 @@ export class AuthGuard implements CanActivate {
     );
     const row = rows[0];
     if (!row) throw new UnauthorizedException('Session expired');
+    const expectedWorkspace = req.headers['x-workspace-id'];
+    if (typeof expectedWorkspace === 'string' && expectedWorkspace !== row.tenant_id)
+      throw new ConflictException('Workspace changed. Refresh before continuing.');
     const csrf = keyed('csrf:' + sid);
     req.actor = {
       id: row.id,
@@ -80,6 +93,7 @@ export class AuthGuard implements CanActivate {
       tenantRole: row.tenant_role,
       sessionId: row.session_id,
       csrf,
+      permissions: effectiveFinanceGrants(row.tenant_grants, row.tenant_denies),
     };
     // Restricted, suspended and offboarding institutions may inspect records, but may not
     // issue new financial or configuration instructions until reinstated.
@@ -104,7 +118,19 @@ export class AuthGuard implements CanActivate {
     ]) || ['owner'];
     // Route permissions belong to the active tenant membership, not the
     // user's global account role. Never inherit rights across workspaces.
-    if (!roles.includes(row.tenant_role)) {
+    const financePermission = financeRoutePermission(path, req.method);
+    const grantedFinanceAction =
+      financePermission &&
+      req.actor.permissions?.includes(financePermission) &&
+      (!path.startsWith('/v1/admin/fees/students') ||
+        req.actor.permissions?.includes('customer.read'));
+    const selfService = [
+      '/v1/auth/me',
+      '/v1/auth/logout',
+      '/v1/auth/logout-all',
+      '/v1/auth/switch-tenant',
+    ].includes(path);
+    if (!roles.includes(row.tenant_role) && !grantedFinanceAction && !selfService) {
       await this.db.tx((c) =>
         this.db.audit(c, row.id, 'access.denied', req.route?.path || 'admin', { reason: 'role' }),
       );
@@ -223,6 +249,7 @@ export class AuthController {
         status: req.actor.tenantStatus,
         readOnly: isTenantReadOnly(req.actor.tenantStatus),
         role: req.actor.tenantRole,
+        permissions: req.actor.permissions || [],
       },
       workspaces: workspaces.map((m) => ({
         ...m,

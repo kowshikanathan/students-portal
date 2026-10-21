@@ -13,3 +13,5 @@ backups/
 .DS_Store
 *.log
 artifacts/
+
+canonical-before-implementation.zip

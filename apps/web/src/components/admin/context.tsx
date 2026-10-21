@@ -3,7 +3,14 @@ import { createContext, useContext } from 'react';
 import { api } from '@/lib/client';
 export type Session = {
   user: { id: string; email: string; role: string };
-  tenant: { id: string; name: string; role: string; status?: string; readOnly?: boolean };
+  tenant: {
+    id: string;
+    name: string;
+    role: string;
+    status?: string;
+    readOnly?: boolean;
+    permissions?: string[];
+  };
   workspaces: Array<{
     id: string;
     name: string;
@@ -23,6 +30,8 @@ export function useAdminApi() {
   const session = useContext(AdminContext);
   return {
     session,
+    can: (permission: string) =>
+      session.tenant.role === 'owner' || Boolean(session.tenant.permissions?.includes(permission)),
     request: async <T = any,>(path: string, method = 'GET', body?: unknown) => {
       if (session.tenant.readOnly && !['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase())) {
         throw new Error(
@@ -31,7 +40,7 @@ export function useAdminApi() {
       }
       return api<T>('/v1/' + path, {
         method,
-        headers: { 'X-CSRF-Token': session.csrf },
+        headers: { 'X-CSRF-Token': session.csrf, 'X-Workspace-Id': session.tenant.id },
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       });
     },

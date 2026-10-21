@@ -21,28 +21,37 @@ export const enachRecordTypes = [
   'checkouts',
 ] as const;
 const recordType = z.enum(enachRecordTypes);
-const definition = z.object({
-  key: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
-  label: z.string().trim().min(2).max(80),
-  kind: z.enum(['text', 'number', 'date', 'choice']),
-  options: z.array(z.string().trim().min(1).max(40)).max(15).default([]),
-}).strict().superRefine((value, ctx) => {
-  if (value.kind === 'choice' && value.options.length === 0) {
-    ctx.addIssue({ code: 'custom', path: ['options'], message: 'Add at least one choice' });
-  }
-  if (new Set(value.options).size !== value.options.length) {
-    ctx.addIssue({ code: 'custom', path: ['options'], message: 'Choices must be unique' });
-  }
-  if (value.kind !== 'choice' && value.options.length) {
-    ctx.addIssue({ code: 'custom', path: ['options'], message: 'Choices only apply to choice fields' });
-  }
-});
-const recordValue = z.object({
-  fieldId: z.uuid(),
-  recordType,
-  recordId: z.uuid(),
-  value: z.string().trim().max(160),
-}).strict();
+const definition = z
+  .object({
+    key: z.string().regex(/^[a-z][a-z0-9_]{1,39}$/),
+    label: z.string().trim().min(2).max(80),
+    kind: z.enum(['text', 'number', 'date', 'choice']),
+    options: z.array(z.string().trim().min(1).max(40)).max(15).default([]),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.kind === 'choice' && value.options.length === 0) {
+      ctx.addIssue({ code: 'custom', path: ['options'], message: 'Add at least one choice' });
+    }
+    if (new Set(value.options).size !== value.options.length) {
+      ctx.addIssue({ code: 'custom', path: ['options'], message: 'Choices must be unique' });
+    }
+    if (value.kind !== 'choice' && value.options.length) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['options'],
+        message: 'Choices only apply to choice fields',
+      });
+    }
+  });
+const recordValue = z
+  .object({
+    fieldId: z.uuid(),
+    recordType,
+    recordId: z.uuid(),
+    value: z.string().trim().max(160),
+  })
+  .strict();
 
 const sourceTables: Record<z.infer<typeof recordType>, string> = {
   mandates: 'payment_mandates',
@@ -52,14 +61,15 @@ const sourceTables: Record<z.infer<typeof recordType>, string> = {
   checkouts: 'payment_checkout_sessions',
 };
 
-export function validateEnachFieldValue(
-  field: { kind: string; options: string[] },
-  value: string,
-) {
+export function validateEnachFieldValue(field: { kind: string; options: string[] }, value: string) {
   if (value.length > 160) throw new ConflictException('Field value is too long');
-  if (value && field.kind === 'date' && (!/^\d{4}-\d{2}-\d{2}$/.test(value) ||
-    Number.isNaN(new Date(value + 'T00:00:00Z').valueOf()) ||
-    new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) !== value))
+  if (
+    value &&
+    field.kind === 'date' &&
+    (!/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+      Number.isNaN(new Date(value + 'T00:00:00Z').valueOf()) ||
+      new Date(value + 'T00:00:00Z').toISOString().slice(0, 10) !== value)
+  )
     throw new ConflictException('Enter a valid date (YYYY-MM-DD)');
   if (value && field.kind === 'number' && !/^-?\d{1,12}(\.\d{1,4})?$/.test(value))
     throw new ConflictException('Enter a valid number');
@@ -98,11 +108,19 @@ export class EnachCustomFieldsController {
            (tenant_id,key,label,kind,options,created_by)
          VALUES($1,$2,$3,$4,$5::jsonb,$6)
          RETURNING id,key,label,kind,options,created_at`,
-        [req.actor.tenantId, input.key, input.label, input.kind,
-          JSON.stringify(input.options), req.actor.id],
+        [
+          req.actor.tenantId,
+          input.key,
+          input.label,
+          input.kind,
+          JSON.stringify(input.options),
+          req.actor.id,
+        ],
       );
-      await this.db.audit(client, req.actor.id, 'enach.field.created', rows.rows[0].id,
-        { key: input.key, kind: input.kind });
+      await this.db.audit(client, req.actor.id, 'enach.field.created', rows.rows[0].id, {
+        key: input.key,
+        kind: input.kind,
+      });
       return rows.rows[0];
     });
   }
@@ -125,16 +143,20 @@ export class EnachCustomFieldsController {
     const input = recordValue.parse(body);
     const table = sourceTables[input.recordType];
     return this.db.tx(async (client) => {
-      const field = (await client.query(
-        `SELECT kind,options FROM enach_custom_fields WHERE id=$1 AND tenant_id=$2`,
-        [input.fieldId, req.actor.tenantId],
-      )).rows[0];
+      const field = (
+        await client.query(
+          `SELECT kind,options FROM enach_custom_fields WHERE id=$1 AND tenant_id=$2`,
+          [input.fieldId, req.actor.tenantId],
+        )
+      ).rows[0];
       if (!field) throw new ConflictException('Custom field does not exist in this workspace');
       validateEnachFieldValue(field, input.value);
-      const record = (await client.query(
-        `SELECT id FROM ${table} WHERE id=$1 AND tenant_id=$2`,
-        [input.recordId, req.actor.tenantId],
-      )).rows[0];
+      const record = (
+        await client.query(`SELECT id FROM ${table} WHERE id=$1 AND tenant_id=$2`, [
+          input.recordId,
+          req.actor.tenantId,
+        ])
+      ).rows[0];
       if (!record) throw new ConflictException('Financial record does not exist in this workspace');
       if (!input.value) {
         await client.query(
@@ -149,12 +171,20 @@ export class EnachCustomFieldsController {
            VALUES($1,$2,$3,$4,$5,$6)
            ON CONFLICT (tenant_id,field_id,record_type,record_id)
            DO UPDATE SET value=EXCLUDED.value,updated_by=EXCLUDED.updated_by,updated_at=now()`,
-          [req.actor.tenantId, input.fieldId, input.recordType,
-            input.recordId, input.value, req.actor.id],
+          [
+            req.actor.tenantId,
+            input.fieldId,
+            input.recordType,
+            input.recordId,
+            input.value,
+            req.actor.id,
+          ],
         );
       }
       await this.db.audit(client, req.actor.id, 'enach.field.value.updated', input.recordId, {
-        fieldId: input.fieldId, recordType: input.recordType, cleared: !input.value,
+        fieldId: input.fieldId,
+        recordType: input.recordType,
+        cleared: !input.value,
       });
       return { saved: true };
     });

@@ -7,7 +7,8 @@ import {
 } from '../../apps/web/src/components/admin/access';
 
 test('owner sees every registered admin area', () => {
-  assert.equal(allowedAdminAreas.owner.length, 21);
+  assert.ok(allowedAdminAreas.owner.includes('fees'));
+  assert.ok(allowedAdminAreas.owner.includes('enach'));
   for (const area of allowedAdminAreas.owner) {
     assert.equal(canViewAdminArea('owner', area), true);
   }

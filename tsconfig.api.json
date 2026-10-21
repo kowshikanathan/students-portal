@@ -12,7 +12,12 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
-    "noUncheckedIndexedAccess": true
+    "noUncheckedIndexedAccess": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["apps/web/src/*"]
+    },
+    "jsx": "react-jsx"
   },
   "include": ["apps/api/src/**/*.ts", "apps/worker/src/**/*.ts", "packages/core/src/**/*.ts"],
   "exclude": ["node_modules", "**/*.test.ts"]

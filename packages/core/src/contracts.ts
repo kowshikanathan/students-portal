@@ -234,6 +234,36 @@ export const feeScheduleCreateSchema = z
 export const feeScheduleActivationSchema = z
   .object({ expectedVersion: z.number().int().positive() })
   .strict();
+export const directPaymentDetailsSchema = z
+  .object({
+    mode: z.enum(['cash', 'neft', 'rtgs', 'imps', 'cheque', 'dd', 'bank_transfer', 'other']),
+    transactionDate: z.iso.date(),
+    bankName: z.string().trim().min(2).max(120).optional(),
+    instrumentNumber: z.string().trim().min(3).max(80).optional(),
+    instrumentDate: z.iso.date().optional(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (['neft', 'rtgs', 'imps', 'cheque', 'dd'].includes(value.mode) && !value.bankName)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['bankName'],
+        message: 'Bank name is required for this payment mode',
+      });
+    if (['cheque', 'dd'].includes(value.mode) && (!value.instrumentNumber || !value.instrumentDate))
+      ctx.addIssue({
+        code: 'custom',
+        path: ['instrumentNumber'],
+        message: 'Instrument number and date are required',
+      });
+    if (value.mode === 'cash' && (value.bankName || value.instrumentNumber || value.instrumentDate))
+      ctx.addIssue({
+        code: 'custom',
+        path: ['mode'],
+        message: 'Cash payments do not accept bank instrument fields',
+      });
+  });
+
 export const externalPaymentRecordSchema = z
   .object({
     installmentId: z.uuid(),
@@ -245,6 +275,7 @@ export const externalPaymentRecordSchema = z
       .regex(/^[A-Za-z0-9._:-]{3,120}$/),
     idempotencyKey: z.uuid(),
     evidenceNote: z.string().trim().min(3).max(300),
+    directPayment: directPaymentDetailsSchema.optional(),
   })
   .strict();
 

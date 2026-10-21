@@ -35,8 +35,8 @@ export function mandateStatus(row: Record<string, any>): string {
   return String(row.status || 'Unknown');
 }
 
-export function eligiblePayerSchedules(
-  schedules: Array<{ id: string; payer_id?: string | null; status: string }>,
-) {
+export function eligiblePayerSchedules<
+  T extends { id: string; payer_id?: string | null; status: string },
+>(schedules: T[]) {
   return schedules.filter((row) => row.status === 'active' && Boolean(row.payer_id));
 }

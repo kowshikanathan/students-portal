@@ -258,14 +258,15 @@ export class PayerPortalController {
       pendingAutopay,
     ] = await Promise.all([
       this.db.query(
-        `SELECT id,sequence,due_date,amount_minor,paid_amount_minor,
+        `SELECT id,sequence,due_date,amount_minor,paid_amount_minor,adjustment_amount_minor,
+          greatest(amount_minor-adjustment_amount_minor-paid_amount_minor,0)::bigint AS remaining_minor,
           CASE
             WHEN status='paid' THEN 'paid'
             WHEN due_date<current_date AND status NOT IN('paid','cancelled') THEN 'overdue'
             WHEN due_date=current_date AND status NOT IN('paid','cancelled') THEN 'due'
             ELSE status
           END AS status
-         FROM fee_installments WHERE schedule_id=$1 ORDER BY sequence`,
+         FROM fee_installments WHERE schedule_id=$1 AND status<>'cancelled' ORDER BY due_date,sequence`,
         [access.schedule_id],
       ),
       this.db.query(
@@ -345,8 +346,16 @@ export class PayerPortalController {
         [access.schedule_id, access.tenant_id],
       ),
     ]);
+    const summary = (
+      await this.db.query(
+        `SELECT net_payable_minor,paid_minor,outstanding_minor FROM finance_schedule_balances WHERE schedule_id=$1 AND tenant_id=$2`,
+        [access.schedule_id, access.tenant_id],
+      )
+    )[0] || { net_payable_minor: 0, paid_minor: 0, outstanding_minor: 0 };
     const profile = decrypt<PayerProfile>(access.encrypted_profile);
     return {
+      collectionMode: process.env.AUTOPAY_PROVIDER_MODE === 'sandbox' ? 'sandbox' : 'provider',
+      summary,
       payer: { displayName: profile.displayName, accountReference: access.account_reference },
       schedule: {
         id: access.schedule_id,
@@ -396,7 +405,7 @@ export class PayerPortalController {
   @Get(':token/receipts/:receiptNumber')
   async receipt(@Param('token') rawToken: string, @Param('receiptNumber') receiptNumber: string) {
     const access = await this.access(rawToken);
-    if (!/^RCP-[A-Z0-9]{8}$/.test(receiptNumber))
+    if (!/^RCP-(?:[A-Z0-9]{8}|[A-F0-9]{32})$/.test(receiptNumber))
       throw new ConflictException('Receipt does not exist');
     const row = (
       await this.db.query(

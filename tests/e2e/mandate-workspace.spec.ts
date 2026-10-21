@@ -9,9 +9,7 @@ test('mandate operations has navigable working record views', async ({ page }, i
 
   const pool = new Pool({ connectionString: process.env.MIGRATION_DATABASE_URL });
   try {
-    await pool.query('UPDATE users SET last_totp_step=0 WHERE email=$1', [
-      process.env.OWNER_EMAIL,
-    ]);
+    await pool.query('UPDATE users SET last_totp_step=0 WHERE email=$1', [process.env.OWNER_EMAIL]);
   } finally {
     await pool.end();
   }
@@ -26,9 +24,7 @@ test('mandate operations has navigable working record views', async ({ page }, i
 
   // The dedicated Dodo eNACH area must be independently navigable without
   // creating a second financial service or provider authorization path.
-  await expect(
-    page.getByRole('button', { name: 'eNACH & AutoPay', exact: true }),
-  ).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'eNACH & AutoPay', exact: true })).toHaveCount(0);
   await page.goto('/enach/');
   await expect(page).toHaveURL(/\/enach\/?$/);
   await expect(page.locator('.admin-logo')).toContainText('Dodo eNACH');
@@ -52,18 +48,18 @@ test('mandate operations has navigable working record views', async ({ page }, i
   const enachNav = page.getByRole('navigation', { name: 'eNACH navigation' });
   await enachNav.getByRole('button', { name: 'Automatic debits' }).click();
   await expect(
-    page.getByRole('region', { name: 'Mandate and recurring collections workspace' })
+    page
+      .getByRole('region', { name: 'Mandate and recurring collections workspace' })
       .getByLabel('Search automatic debits'),
   ).toBeVisible();
   await enachNav.getByRole('button', { name: 'Settlements' }).click();
   await expect(
-    page.getByRole('region', { name: 'Mandate and recurring collections workspace' })
+    page
+      .getByRole('region', { name: 'Mandate and recurring collections workspace' })
       .getByLabel('Search settlements'),
   ).toBeVisible();
   await enachNav.getByRole('button', { name: 'Mandate overview' }).click();
-  await expect(
-    page.getByRole('heading', { name: 'eNACH & AutoPay dashboard' }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Flex / eNACH' })).toBeVisible();
   const dedicated = page.getByRole('region', {
     name: 'Mandate and recurring collections workspace',
   });
@@ -72,7 +68,7 @@ test('mandate operations has navigable working record views', async ({ page }, i
   await dedicated.getByRole('button', { name: /^Setup attempts \\(/ }).click();
   await expect(dedicated.getByLabel('Search setup attempts')).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'eNACH & AutoPay dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Flex / eNACH' })).toBeVisible();
   // Responsive audit: the dedicated dashboard and its controls must fit
   // desktop, tablet and mobile viewports without clipping or overlap.
   for (const width of [1440, 1024, 768, 390]) {
@@ -104,12 +100,12 @@ test('mandate operations has navigable working record views', async ({ page }, i
   await expect(page).toHaveURL(/\/admin\/fees\/schedule\/?$/);
   await expect(page.getByRole('heading', { name: 'Create fee schedule' })).toBeVisible();
 
-  // Return to Studio and verify that no eNACH menu item appears there.
+  // Finance navigation includes the connected Flex / eNACH workspace.
   await page.goto('/admin/');
-  await expect(page.getByRole('navigation', { name: 'Owner navigation' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Finance navigation' })).toBeVisible();
   await expect(
-    page.getByRole('navigation', { name: 'Owner navigation' }).getByText('eNACH & AutoPay'),
-  ).toHaveCount(0);
+    page.getByRole('navigation', { name: 'Finance navigation' }).getByText('Flex / eNACH'),
+  ).toBeVisible();
 
   // The mandate workspace must remain functional if an unrelated dashboard
   // endpoint is temporarily unavailable.

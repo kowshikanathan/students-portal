@@ -10,10 +10,7 @@ test('eNACH report uses the selected columns and preserves literal commas and qu
       { key: 'note', title: 'Custom field' },
     ],
   );
-  assert.equal(
-    result,
-    '"Account reference","Custom field"\r\n"STU001","North, ""Block A"""',
-  );
+  assert.equal(result, '"Account reference","Custom field"\r\n"STU001","North, ""Block A"""');
   assert.ok(!result.includes('"active"'));
 });
 

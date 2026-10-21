@@ -6,11 +6,9 @@ import { EnachDashboard } from '../../apps/web/src/components/admin/enach-dashbo
 import { allowedAdminAreas, canViewAdminArea } from '../../apps/web/src/components/admin/access';
 
 test('Dodo eNACH dashboard uses existing mandate controls and never suggests a live bank is connected', () => {
-  const html = renderToStaticMarkup(
-    createElement(EnachDashboard, { openFeeOperations: () => {} }),
-  );
+  const html = renderToStaticMarkup(createElement(EnachDashboard, { openFeeOperations: () => {} }));
   assert.match(html, /Dodo · eNACH operations/);
-  assert.match(html, /eNACH &amp; AutoPay dashboard/);
+  assert.match(html, /Flex \/ eNACH/);
   assert.match(html, /Mandates \(0\)/);
   assert.match(html, /Setup attempts \(0\)/);
   assert.match(html, /Automatic debits \(0\)/);

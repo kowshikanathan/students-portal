@@ -129,7 +129,7 @@ export class PayerCheckoutController {
     const session = await this.db.tx(async (c) => {
       const installment = (
         await c.query(
-          `SELECT i.id,i.schedule_id,i.amount_minor,i.paid_amount_minor,i.status,
+          `SELECT i.id,i.schedule_id,i.amount_minor,i.paid_amount_minor,i.adjustment_amount_minor,i.status,
                   s.currency,s.payer_id
            FROM fee_installments i
            JOIN fee_schedules s ON s.id=i.schedule_id
@@ -170,7 +170,10 @@ export class PayerCheckoutController {
         throw new ConflictException(
           'An automatic debit is pending. Wait for verified reconciliation before paying again',
         );
-      const remaining = Number(installment.amount_minor) - Number(installment.paid_amount_minor);
+      const remaining =
+        Number(installment.amount_minor) -
+        Number(installment.adjustment_amount_minor || 0) -
+        Number(installment.paid_amount_minor);
       if (v.amountMinor > remaining)
         throw new ConflictException('Checkout amount exceeds the outstanding installment balance');
       if (access.min_amount_minor && v.amountMinor < Number(access.min_amount_minor))

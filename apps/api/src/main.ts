@@ -42,7 +42,9 @@ import {
 } from './mandate-autopay';
 import { TenancyController } from './tenancy';
 import { FeePlanController } from './fee-plans';
+import { FinanceBulkController } from './finance-bulk';
 import { AcademicOperationsController } from './academic';
+import { SandboxEnachController } from './sandbox-enach';
 import { keyed } from '../../../packages/core/src/security';
 @Catch()
 class SafeErrors implements ExceptionFilter {
@@ -101,6 +103,7 @@ class Health {
     ChatController,
     MediaController,
     FeeOperationsController,
+    SandboxEnachController,
     PayerAdminController,
     PayerLinkAdminController,
     PayerPortalController,
@@ -114,6 +117,7 @@ class Health {
     TenancyController,
     AcademicOperationsController,
     FeePlanController,
+    FinanceBulkController,
   ],
   providers: [Db, AuthGuard, LeadsService],
 })

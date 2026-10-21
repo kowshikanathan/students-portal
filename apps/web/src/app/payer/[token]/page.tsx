@@ -37,15 +37,8 @@ export default async function PayerPortal({ params, searchParams }: Props) {
   const pendingMandateSetup = data.mandateSetups?.find((setup: any) =>
     ['requested', 'created', 'uncertain'].includes(setup.status),
   );
-  const paid = data.installments.reduce(
-    (sum: number, i: any) => sum + Number(i.paid_amount_minor || 0),
-    0,
-  );
-  const outstanding = data.installments.reduce(
-    (sum: number, i: any) =>
-      sum + Math.max(0, Number(i.amount_minor || 0) - Number(i.paid_amount_minor || 0)),
-    0,
-  );
+  const paid = data.summary.paid_minor;
+  const outstanding = data.summary.outstanding_minor;
   return (
     <main id="main" className="payer-portal">
       <header className="payer-portal-header">
@@ -55,7 +48,11 @@ export default async function PayerPortal({ params, searchParams }: Props) {
           </span>
           <strong>{process.env.NEXT_PUBLIC_BRAND_NAME || 'Dodo'}</strong>
         </div>
-        <span className="status-pill">Secure schedule view</span>
+        <span className="status-pill">
+          {data.collectionMode === 'sandbox'
+            ? 'Sandbox account: simulated collections'
+            : 'Secure schedule view'}
+        </span>
       </header>
 
       <section className="payer-hero">
@@ -91,7 +88,7 @@ export default async function PayerPortal({ params, searchParams }: Props) {
         <div className="dashboard-stats">
           <div className="dashboard-stat">
             <span>Schedule total</span>
-            <strong>{money(data.schedule.totalAmountMinor)}</strong>
+            <strong>{money(data.summary.net_payable_minor)}</strong>
           </div>
           <div className="dashboard-stat">
             <span>Recorded paid</span>
@@ -121,10 +118,7 @@ export default async function PayerPortal({ params, searchParams }: Props) {
             <span>Status</span>
           </div>
           {data.installments.map((i: any) => {
-            const remaining = Math.max(
-              0,
-              Number(i.amount_minor || 0) - Number(i.paid_amount_minor || 0),
-            );
+            const remaining = Number(i.remaining_minor);
             const pendingAutomaticDebit = data.pendingAutopayInstallments?.includes(i.id) === true;
             const pendingCheckout = data.checkoutSessions?.some(
               (session: any) =>
@@ -254,7 +248,7 @@ export default async function PayerPortal({ params, searchParams }: Props) {
         <div className="admin-toolbar">
           <div>
             <p className="eyebrow">Automatic collections</p>
-            <h2>UPI AutoPay / eNACH mandate</h2>
+            <h2>Flex / eNACH mandate</h2>
           </div>
           {data.mandates?.[0] && <span className="status-pill">{data.mandates[0].status}</span>}
         </div>
@@ -283,13 +277,6 @@ export default async function PayerPortal({ params, searchParams }: Props) {
               PINs and OTPs stay on the provider-hosted authorization page.
             </p>
             <div className="admin-toolbar">
-              <form action={'/payer/' + encodeURIComponent(token) + '/autopay/'} method="post">
-                <input type="hidden" name="rail" value="upi_autopay" />
-                <input type="hidden" name="idempotencyKey" value={randomUUID()} />
-                <button className="button" type="submit">
-                  Set up UPI AutoPay
-                </button>
-              </form>
               <form action={'/payer/' + encodeURIComponent(token) + '/autopay/'} method="post">
                 <input type="hidden" name="rail" value="enach" />
                 <input type="hidden" name="idempotencyKey" value={randomUUID()} />
@@ -339,6 +326,17 @@ export default async function PayerPortal({ params, searchParams }: Props) {
                   <div>
                     <span className="small">Receipt</span>
                     <strong>{p.receipt_number}</strong>
+                    <a
+                      href={
+                        '/payer/' +
+                        encodeURIComponent(token) +
+                        '/receipts/' +
+                        encodeURIComponent(p.receipt_number) +
+                        '/'
+                      }
+                    >
+                      View / print receipt
+                    </a>
                   </div>
                 )}
               </article>

@@ -25,13 +25,13 @@ test('owner creates, autosaves, reviews, publishes, trashes and restores content
     .getByLabel('Authenticator code')
     .fill(authenticator.generate(process.env.OWNER_TOTP_SECRET!));
   await page.getByRole('button', { name: 'Sign in securely' }).click();
-  await expect(page.getByRole('heading', { name: 'Overview', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   const a = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
     .analyze();
   expect(a.violations.map((v) => v.id)).toEqual([]);
   await page.screenshot({ path: 'test-results/owner-overview.png', fullPage: true });
-  await page.getByRole('button', { name: 'Content & publishing', exact: true }).click();
+  await page.goto('/admin/content/');
   await page.getByRole('button', { name: 'Create content', exact: true }).click();
   const route = '/owner-qa-' + Date.now() + '/';
   await page.getByLabel('Title', { exact: true }).fill('Owner acceptance test');

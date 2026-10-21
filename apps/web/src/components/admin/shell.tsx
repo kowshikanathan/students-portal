@@ -10,44 +10,45 @@ import { TenantEnquiries } from './tenant-enquiries';
 import { TenantNotifications } from './tenant-notifications';
 import { TenantCollections } from './tenant-collections';
 import { Workflows } from './workflows';
-import { Dashboard, Campaigns, Media, Settings, Records } from './panels';
+import { Campaigns, Media, Settings, Records } from './panels';
+import { FinanceDashboard } from './finance-dashboard';
+import { FinanceSettings } from './finance-settings';
+import { FinanceBulk } from './finance-bulk';
+import { FinanceRecords, type FinanceRecordKind } from './finance-records';
 import { FeeOperations } from './fees';
 import { EnachDashboard } from './enach-dashboard';
 import { mandateViews, type MandateView } from './mandate-view-model';
 import { TenancyStudio } from './tenancy';
 import { AcademicOperations } from './academic';
+import { Students } from './students';
+import { StudentProfile } from './student-profile';
 import { FeePlanStudio } from './fee-plans';
 const sections = [
-  ['overview', 'Overview'],
-  ['content', 'Content & publishing'],
-  ['leads', 'Leads'],
-  ['enquiries', 'Institution enquiries'],
-  ['notifications', 'Notifications'],
-  ['collections', 'Custom collections'],
-  ['fees', 'Fee operations'],
-  ['fee-plans', 'Fee plans & receivables'],
-  ['academic', 'Students & academic'],
-  ['tenant', 'Organisation & access'],
-  ['tasks', 'Staff tasks'],
-  ['media', 'Media library'],
-  ['campaigns', 'Campaign links'],
-  ['workflows', 'Task workflows'],
-  ['conversations', 'Support requests'],
-  ['settings', 'Navigation & settings'],
-  ['outbox', 'Delivery queue'],
-  ['audit', 'Audit & exports'],
-  ['privacy-requests', 'Privacy requests'],
-  ['users', 'Staff sessions'],
-  ['integrations', 'Integration status'],
+  ['overview', 'Dashboard'],
+  ['academic', 'Students'],
+  ['installments', 'Installments'],
+  ['payments', 'Payments'],
+  ['settlements', 'Settlements'],
+  ['enach', 'Flex / eNACH'],
+  ['cashflow', 'Cashflow'],
+  ['overdue', 'Overdue'],
+  ['reports', 'Reports'],
+  ['bulk', 'Bulk Actions'],
+  ['tenant', 'Institutes'],
+  ['groups', 'Groups / Classes'],
+  ['users', 'Users'],
+  ['settings', 'Settings'],
 ];
 export function AdminShell({
   initialArea = 'overview',
   standaloneEnach = false,
   initialFeeTarget = null,
+  studentId,
 }: {
   initialArea?: string;
   standaloneEnach?: boolean;
   initialFeeTarget?: 'payer' | 'schedule' | 'reconciliation' | null;
+  studentId?: string;
 } = {}) {
   const [session, setSession] = useState<Session | null>(null),
     [loading, setLoading] = useState(true),
@@ -55,7 +56,9 @@ export function AdminShell({
     [error, setError] = useState(''),
     [area, setArea] = useState(initialArea);
   const [enachView, setEnachView] = useState<MandateView>('mandates');
-  const [feeTarget, setFeeTarget] = useState<'payer' | 'schedule' | 'reconciliation' | null>(initialFeeTarget);
+  const [feeTarget, setFeeTarget] = useState<'payer' | 'schedule' | 'reconciliation' | null>(
+    initialFeeTarget,
+  );
   async function sync() {
     try {
       setSession(await api<Session>('/v1/auth/me'));
@@ -125,7 +128,7 @@ export function AdminShell({
                 await api<Session>('/v1/auth/login', {
                   method: 'POST',
                   body: JSON.stringify(Object.fromEntries(f)),
-                }),
+                }).then(() => api<Session>('/v1/auth/me')),
               );
             } catch (e) {
               setError((e as Error).message);
@@ -141,7 +144,7 @@ export function AdminShell({
             <strong>Dodo owner workspace</strong>
           </div>
           <h1>Your owner workspace.</h1>
-          <p>Manage content, enquiries and fee operations for this installation.</p>
+          <p>Manage students, fees and collections for your institute.</p>
           <label className="field">
             Staff email
             <input type="email" name="email" autoComplete="username" required />
@@ -180,12 +183,44 @@ export function AdminShell({
       </main>
     );
   const activeArea = standaloneEnach
-    ? canViewAdminArea(session.tenant.role, 'enach') ? 'enach' : 'overview'
-    : safeAdminArea(session.tenant.role, area);
+    ? canViewAdminArea(session.tenant.role, 'enach', session.tenant.permissions)
+      ? 'enach'
+      : 'overview'
+    : safeAdminArea(session.tenant.role, area, session.tenant.permissions);
   const render = () => {
+    if (['installments', 'payments', 'settlements', 'overdue'].includes(activeArea))
+      return (
+        <FinanceRecords
+          key={session.tenant.id + activeArea}
+          kind={activeArea as FinanceRecordKind}
+        />
+      );
+    if (activeArea === 'debits' || activeArea === 'failed-debits')
+      return (
+        <FinanceRecords
+          key={session.tenant.id + activeArea}
+          kind="debits"
+          initialStatus={activeArea === 'failed-debits' ? 'failed' : ''}
+        />
+      );
+    if (activeArea === 'reports')
+      return <FinanceRecords key={session.tenant.id + 'reports'} report />;
+    if (activeArea === 'cashflow')
+      return <FinanceDashboard key={session.tenant.id + 'cashflow'} cashflow />;
+    if (activeArea === 'bulk') return <FinanceBulk key={session.tenant.id} />;
+    if (activeArea === 'academic-tools' || activeArea === 'groups')
+      return <AcademicOperations key={session.tenant.id + activeArea} />;
     switch (activeArea) {
       case 'overview':
-        return <Dashboard />;
+        return session.tenant.role === 'owner' ||
+          session.tenant.permissions?.includes('dashboard.read') ? (
+          <FinanceDashboard />
+        ) : (
+          <section className="admin-panel">
+            <h2>Finance workspace</h2>
+            <p>Your current role has no finance access. Contact your institute administrator.</p>
+          </section>
+        );
       case 'content':
         return <ContentList />;
       case 'leads':
@@ -222,13 +257,18 @@ export function AdminShell({
       case 'fee-plans':
         return <FeePlanStudio />;
       case 'academic':
-        return <AcademicOperations />;
+        return studentId ? (
+          <StudentProfile key={session.tenant.id + studentId} studentId={studentId} />
+        ) : (
+          <Students key={session.tenant.id} />
+        );
       case 'tenant':
+      case 'users':
         return <TenancyStudio />;
       case 'media':
         return <Media />;
       case 'settings':
-        return <Settings />;
+        return <FinanceSettings key={session.tenant.id} />;
       default:
         return <Records key={activeArea} area={activeArea} />;
     }
@@ -237,8 +277,9 @@ export function AdminShell({
     <AdminContext.Provider value={session}>
       <div className="admin-root admin-shell">
         <aside className="admin-sidebar">
-          <Link href={standaloneEnach ? '/enach/' : '/'} className="admin-logo">
-            Dodo<span className="yellow-dot">.</span>{standaloneEnach ? ' eNACH' : ' studio'}
+          <Link href={standaloneEnach ? '/enach/' : '/admin/'} className="admin-logo">
+            Dodo<span className="yellow-dot">.</span>
+            {standaloneEnach ? ' eNACH' : ' finance'}
           </Link>
           <p>{standaloneEnach ? 'DODO · ENACH CONSOLE' : 'DODO · INSTITUTION CONSOLE'}</p>
           {standaloneEnach ? (
@@ -250,45 +291,50 @@ export function AdminShell({
               >
                 Mandate overview
               </button>
-              {mandateViews.filter((item) => item.id !== 'mandates').map((item) => (
-                <button
-                  type="button"
-                  key={item.id}
-                  className={enachView === item.id ? 'selected' : ''}
-                  onClick={() => setEnachView(item.id)}
-                >
-                  {item.label}
-                </button>
-              ))}
+              {mandateViews
+                .filter((item) => item.id !== 'mandates')
+                .map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className={enachView === item.id ? 'selected' : ''}
+                    onClick={() => setEnachView(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
               <a href="#enach-custom-fields">Custom fields</a>
               <a href="#enach-reports">Reports</a>
               <Link href="/admin/fees/">Payers & fee schedules ↗</Link>
               <Link href="/admin/fees/reconciliation/">Reconciliation & evidence ↗</Link>
-              <Link href="/admin/">← Dodo Studio</Link>
+              <Link href="/admin/">← Dodo Finance</Link>
             </nav>
           ) : (
-          <nav className="admin-nav" aria-label="Owner navigation">
-            {sections
-              .filter(([key]) => canViewAdminArea(session.tenant.role, key!))
-              .map(([key, title]) => (
-                <button
-                  className={activeArea === key ? 'selected' : ''}
-                  key={key}
-                  onClick={() => {
-                    setFeeTarget(null);
-                    setArea(key!);
-                    if (window.location.pathname !== '/admin/') {
-                      window.history.replaceState(null, '', '/admin/');
-                    }
-                  }}
-                >
-                  {title}
-                </button>
-              ))}
-            <Link href="/" target="_blank">
-              Open public website ↗
-            </Link>
-          </nav>
+            <nav className="admin-nav" aria-label="Finance navigation">
+              {sections
+                .filter(([key]) =>
+                  canViewAdminArea(session.tenant.role, key!, session.tenant.permissions),
+                )
+                .map(([key, title]) => (
+                  <button
+                    className={activeArea === key ? 'selected' : ''}
+                    key={key}
+                    onClick={() => {
+                      if (key === 'academic') {
+                        window.location.assign('/admin/students/');
+                        return;
+                      }
+                      setFeeTarget(null);
+                      setArea(key!);
+                      if (window.location.pathname !== '/admin/') {
+                        window.history.replaceState(null, '', '/admin/');
+                      }
+                    }}
+                  >
+                    {title}
+                  </button>
+                ))}
+            </nav>
           )}
         </aside>
         <main id="main" className="admin-main">
@@ -297,7 +343,7 @@ export function AdminShell({
               <h1>
                 {standaloneEnach
                   ? 'eNACH operations'
-                  : sections.find((item) => item[0] === activeArea)?.[1]}
+                  : sections.find((item) => item[0] === activeArea)?.[1] || 'Finance workspace'}
               </h1>
               <p>
                 {session.user.email} · {session.tenant.name} · {session.tenant.role}
@@ -348,11 +394,6 @@ export function AdminShell({
               </button>
             </div>
           </div>
-          <div className="admin-notice">
-            Production-gated build. Fee schedules and external payment evidence are supported; live
-            payment, lending and advertising providers remain disabled until separately configured
-            and verified.
-          </div>
           {session.tenant.readOnly && (
             <div role="status" className="admin-notice">
               <strong>Read-only institution.</strong>
@@ -369,9 +410,11 @@ export function AdminShell({
             <div className="admin-panel" role="alert">
               <h2>Owner access required</h2>
               <p>This financial workspace is restricted to authorized institution owners.</p>
-              <Link href="/admin/">Return to Dodo Studio</Link>
+              <Link href="/admin/">Return to Dodo Finance</Link>
             </div>
-          ) : render()}
+          ) : (
+            render()
+          )}
         </main>
       </div>
     </AdminContext.Provider>

@@ -1,8 +1,13 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useAdminApi } from './context';
-import { mandateAccount, mandateViews, type MandateDashboardData, type MandateView } from './mandate-view-model';
+import {
+  mandateAccount,
+  mandateViews,
+  type MandateDashboardData,
+  type MandateView,
+} from './mandate-view-model';
 
 type CustomField = {
   id: string;
@@ -22,15 +27,22 @@ type Props = {
 };
 
 const help: Record<string, string> = {
-  fields: 'Create optional operational fields for existing records. They are stored separately from bank data, cannot change mandate or debit status, and never affect payment instructions.',
+  fields:
+    'Create optional operational fields for existing records. They are stored separately from bank data, cannot change mandate or debit status, and never affect payment instructions.',
   type: 'Choose the type of records these values belong to: mandates, setup attempts, automatic debits, settlements, or checkouts.',
-  fieldKey: 'Choose a stable internal name starting with a lowercase letter, such as campus_code. Spaces are not allowed.',
+  fieldKey:
+    'Choose a stable internal name starting with a lowercase letter, such as campus_code. Spaces are not allowed.',
   fieldLabel: 'This is the human-readable label colleagues will see, such as Campus code.',
-  fieldKind: 'Text accepts short notes; Number accepts digits; Date uses a calendar; Choice restricts entries to approved options.',
-  fieldOptions: 'For Choice fields, enter permitted values separated by commas, such as North, South, East.',
-  record: 'Select an existing financial record. Custom values annotate it; they do not create a mandate or a transaction.',
-  value: 'Enter an optional operational note or value. Never enter bank credentials, OTPs, PINs, or other sensitive account details.',
-  report: 'Download a CSV of the currently loaded records for the selected record type. Filters and selected columns apply; the export is not a full-ledger audit report.',
+  fieldKind:
+    'Text accepts short notes; Number accepts digits; Date uses a calendar; Choice restricts entries to approved options.',
+  fieldOptions:
+    'For Choice fields, enter permitted values separated by commas, such as North, South, East.',
+  record:
+    'Select an existing financial record. Custom values annotate it; they do not create a mandate or a transaction.',
+  value:
+    'Enter an optional operational note or value. Never enter bank credentials, OTPs, PINs, or other sensitive account details.',
+  report:
+    'Download a CSV of the currently loaded records for the selected record type. Filters and selected columns apply; the export is not a full-ledger audit report.',
   status: 'Filter by the status returned by the payment backend. No status is inferred or changed.',
   date: 'Filter records using their recorded creation timestamp. Missing timestamps will not pass a date filter.',
 };
@@ -39,11 +51,23 @@ export function EnachInfo({ topic, label = 'Show help' }: { topic: string; label
   const [open, setOpen] = useState(false);
   return (
     <span className="enach-help">
-      <button type="button" title={label} aria-label={label} aria-expanded={open}
-        onClick={() => setOpen((previous) => !previous)}>
-        ⓘ <span className="enach-help-eye" aria-hidden="true">👁</span>
+      <button
+        type="button"
+        title={label}
+        aria-label={label}
+        aria-expanded={open}
+        onClick={() => setOpen((previous) => !previous)}
+      >
+        ⓘ{' '}
+        <span className="enach-help-eye" aria-hidden="true">
+          👁
+        </span>
       </button>
-      {open && <span className="enach-help-note" role="note">{help[topic] || topic}</span>}
+      {open && (
+        <span className="enach-help-note" role="note">
+          {help[topic] || topic}
+        </span>
+      )}
     </span>
   );
 }
@@ -82,7 +106,11 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [included, setIncluded] = useState<string[]>([
-    'account_reference', 'status', 'rail', 'provider_reference', 'created_at',
+    'account_reference',
+    'status',
+    'rail',
+    'provider_reference',
+    'created_at',
   ]);
 
   const recordTypes = mandateViews.map((item) => ({ value: item.id, title: item.label }));
@@ -146,9 +174,13 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
     const form = event.currentTarget;
     const inputs = new FormData(form);
     const rawOptions = String(inputs.get('options') || '');
-    const options = fieldType === 'choice'
-      ? rawOptions.split(',').map((part) => part.trim()).filter(Boolean)
-      : [];
+    const options =
+      fieldType === 'choice'
+        ? rawOptions
+            .split(',')
+            .map((part) => part.trim())
+            .filter(Boolean)
+        : [];
     setBusy(true);
     setFieldError('');
     setFieldMessage('');
@@ -193,10 +225,14 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
     }
   }
 
-  const exportFields = useMemo(() => fields.map((field) => ({
-    key: 'field_' + field.id,
-    title: field.label,
-  })), [fields]);
+  const exportFields = useMemo(
+    () =>
+      fields.map((field) => ({
+        key: 'field_' + field.id,
+        title: field.label,
+      })),
+    [fields],
+  );
   const standardColumns = [
     { key: 'account_reference', title: 'Account reference' },
     { key: 'status', title: 'Status' },
@@ -213,8 +249,11 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
   const reportRows = data[reportType] as RecordRow[];
   const reportFailed = failedResources.includes(reportType);
   const filtered = reportRows.filter((row) => {
-    const text = [row.account_reference, row.provider_reference, row.status]
-      .some((value) => String(value ?? '').toLowerCase().includes(search.toLowerCase()));
+    const text = [row.account_reference, row.provider_reference, row.status].some((value) =>
+      String(value ?? '')
+        .toLowerCase()
+        .includes(search.toLowerCase()),
+    );
     if (!text) return false;
     if (status && String(row.status ?? '') !== status) return false;
     if (from || to) {
@@ -223,21 +262,34 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
     }
     return true;
   });
-  const reportStatuses = [...new Set(reportRows.map((row) => String(row.status || '')).filter(Boolean))];
+  const reportStatuses = [
+    ...new Set(reportRows.map((row) => String(row.status || '')).filter(Boolean)),
+  ];
 
   function exportCsv() {
-    if (!loaded || reportFailed || reportValuesLoadedFor !== reportType || reportError || included.length === 0) return;
+    if (
+      !loaded ||
+      reportFailed ||
+      reportValuesLoadedFor !== reportType ||
+      reportError ||
+      included.length === 0
+    )
+      return;
     const reportValues = valuesForType;
     const report = filtered.map((row) => {
       const result: RecordRow = { ...row };
       for (const field of fields) {
-        result['field_' + field.id] = reportValues.find(
-          (value) => value.record_id === String(row.id) && value.field_id === field.id,
-        )?.value || '';
+        result['field_' + field.id] =
+          reportValues.find(
+            (value) => value.record_id === String(row.id) && value.field_id === field.id,
+          )?.value || '';
       }
       return result;
     });
-    const csv = makeEnachCsv(report, allColumns.filter((column) => included.includes(column.key)));
+    const csv = makeEnachCsv(
+      report,
+      allColumns.filter((column) => included.includes(column.key)),
+    );
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -259,37 +311,73 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
     setReportError('');
     let cancelled = false;
     void request<CustomValue[]>('admin/enach/values/' + reportType)
-      .then((result) => { if (!cancelled) { setReportValues(result); setReportValuesLoadedFor(reportType); } })
-      .catch((error) => { if (!cancelled) setReportError((error as Error).message); });
-    return () => { cancelled = true; };
+      .then((result) => {
+        if (!cancelled) {
+          setReportValues(result);
+          setReportValuesLoadedFor(reportType);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) setReportError((error as Error).message);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [session.tenant.id, reportType, reportRevision]);
   const valuesForType = reportValues;
 
   return (
     <>
-      <section id="enach-custom-fields" className="admin-panel enach-extras" aria-label="eNACH custom fields">
+      <section
+        id="enach-custom-fields"
+        className="admin-panel enach-extras"
+        aria-label="eNACH custom fields"
+      >
         <div className="enach-section-heading">
           <h2>Custom fields</h2>
           <EnachInfo topic="fields" label="Explain custom eNACH fields" />
         </div>
-        <p>Create optional fields such as campus, internal team, follow-up date or department.
-          They apply only inside the eNACH console and never change mandate/payment outcomes.</p>
+        <p>
+          Create optional fields such as campus, internal team, follow-up date or department. They
+          apply only inside the eNACH console and never change mandate/payment outcomes.
+        </p>
         <form className="enach-form" onSubmit={(event) => void addField(event)}>
           <div className="enach-form-grid">
             <label className="field">
-              <span>Field key <EnachInfo topic="fieldKey" label="Explain field key" /></span>
-              <input name="key" pattern="[a-z][a-z0-9_]{1,39}" maxLength={40}
-                placeholder="campus_code" required disabled={busy || readOnly} />
+              <span>
+                Field key <EnachInfo topic="fieldKey" label="Explain field key" />
+              </span>
+              <input
+                name="key"
+                pattern="[a-z][a-z0-9_]{1,39}"
+                maxLength={40}
+                placeholder="campus_code"
+                required
+                disabled={busy || readOnly}
+              />
             </label>
             <label className="field">
-              <span>Field label <EnachInfo topic="fieldLabel" label="Explain field label" /></span>
-              <input name="label" minLength={2} maxLength={80}
-                placeholder="Campus code" required disabled={busy || readOnly} />
+              <span>
+                Field label <EnachInfo topic="fieldLabel" label="Explain field label" />
+              </span>
+              <input
+                name="label"
+                minLength={2}
+                maxLength={80}
+                placeholder="Campus code"
+                required
+                disabled={busy || readOnly}
+              />
             </label>
             <label className="field">
-              <span>Field type <EnachInfo topic="fieldKind" label="Explain field type" /></span>
-              <select value={fieldType} onChange={(event) =>
-                setFieldType(event.target.value as CustomField['kind'])} disabled={busy || readOnly}>
+              <span>
+                Field type <EnachInfo topic="fieldKind" label="Explain field type" />
+              </span>
+              <select
+                value={fieldType}
+                onChange={(event) => setFieldType(event.target.value as CustomField['kind'])}
+                disabled={busy || readOnly}
+              >
                 <option value="text">Short text</option>
                 <option value="number">Number</option>
                 <option value="date">Date</option>
@@ -298,134 +386,276 @@ export function EnachExtras({ data, view, onViewChange, loaded, failedResources 
             </label>
             {fieldType === 'choice' && (
               <label className="field">
-                <span>Allowed choices <EnachInfo topic="fieldOptions" label="Explain allowed choices" /></span>
-                <input name="options" placeholder="North, South, East" required
-                  maxLength={600} disabled={busy || readOnly} />
+                <span>
+                  Allowed choices <EnachInfo topic="fieldOptions" label="Explain allowed choices" />
+                </span>
+                <input
+                  name="options"
+                  placeholder="North, South, East"
+                  required
+                  maxLength={600}
+                  disabled={busy || readOnly}
+                />
               </label>
             )}
           </div>
-          <button className="button primary" type="submit" disabled={busy || readOnly || fields.length >= 30}>
+          <button
+            className="button primary"
+            type="submit"
+            disabled={busy || readOnly || fields.length >= 30}
+          >
             Add custom field
           </button>
         </form>
-        <p className="small">Saved fields ({fields.length}/30): {fields.length
-          ? fields.map((field) => field.label).join(', ') : 'None yet'}</p>
-        {fieldMessage && <p role="status" className="admin-feedback">{fieldMessage}</p>}
-        {fieldError && <p role="alert" className="error-card">{fieldError}</p>}
+        <p className="small">
+          Saved fields ({fields.length}/30):{' '}
+          {fields.length ? fields.map((field) => field.label).join(', ') : 'None yet'}
+        </p>
+        {fieldMessage && (
+          <p role="status" className="admin-feedback">
+            {fieldMessage}
+          </p>
+        )}
+        {fieldError && (
+          <p role="alert" className="error-card">
+            {fieldError}
+          </p>
+        )}
         <h3>Attach a custom value to a record</h3>
-        <p className="small">Select a record type using the eNACH sidebar above, then pick an existing record.</p>
+        <p className="small">
+          Select a record type using the eNACH sidebar above, then pick an existing record.
+        </p>
         <form className="enach-form" onSubmit={(event) => void saveValue(event)}>
           <div className="enach-form-grid">
             <label className="field">
-              <span>Record type <EnachInfo topic="type" label="Explain record type" /></span>
-              <select value={view} onChange={(event) => onViewChange(event.target.value as MandateView)}>
-                {recordTypes.map((type) => <option key={type.value} value={type.value}>{type.title}</option>)}
+              <span>
+                Record type <EnachInfo topic="type" label="Explain record type" />
+              </span>
+              <select
+                value={view}
+                onChange={(event) => onViewChange(event.target.value as MandateView)}
+              >
+                {recordTypes.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.title}
+                  </option>
+                ))}
               </select>
             </label>
             <label className="field">
-              <span>Existing record <EnachInfo topic="record" label="Explain record selection" /></span>
-              <select value={chosenRecord} onChange={(event) => setChosenRecord(event.target.value)}
-                required disabled={rows.length === 0}>
+              <span>
+                Existing record <EnachInfo topic="record" label="Explain record selection" />
+              </span>
+              <select
+                value={chosenRecord}
+                onChange={(event) => setChosenRecord(event.target.value)}
+                required
+                disabled={rows.length === 0}
+              >
                 <option value="">Select a record…</option>
-                {rows.filter((row) => typeof row.id === 'string').slice(0, 100).map((row) =>
-                  <option key={String(row.id)} value={String(row.id)}>
-                    {mandateAccount(row)} · {String(row.status || '')}
-                  </option>)}
+                {rows
+                  .filter((row) => typeof row.id === 'string')
+                  .slice(0, 100)
+                  .map((row) => (
+                    <option key={String(row.id)} value={String(row.id)}>
+                      {mandateAccount(row)} · {String(row.status || '')}
+                    </option>
+                  ))}
               </select>
             </label>
             <label className="field">
-              <span>Custom field <EnachInfo topic="fieldLabel" label="Explain custom field selection" /></span>
-              <select value={chosenField} onChange={(event) => setChosenField(event.target.value)}
-                required disabled={fields.length === 0}>
+              <span>
+                Custom field <EnachInfo topic="fieldLabel" label="Explain custom field selection" />
+              </span>
+              <select
+                value={chosenField}
+                onChange={(event) => setChosenField(event.target.value)}
+                required
+                disabled={fields.length === 0}
+              >
                 <option value="">Select a field…</option>
-                {fields.map((field) => <option key={field.id} value={field.id}>{field.label}</option>)}
+                {fields.map((field) => (
+                  <option key={field.id} value={field.id}>
+                    {field.label}
+                  </option>
+                ))}
               </select>
             </label>
             {activeField && (
               <label className="field">
-                <span>Custom value <EnachInfo topic="value" label="Explain custom value" /></span>
+                <span>
+                  Custom value <EnachInfo topic="value" label="Explain custom value" />
+                </span>
                 {activeField.kind === 'choice' ? (
-                  <select value={entry} onChange={(event) => setEntry(event.target.value)}
-                    disabled={busy || readOnly}>
+                  <select
+                    value={entry}
+                    onChange={(event) => setEntry(event.target.value)}
+                    disabled={busy || readOnly}
+                  >
                     <option value="">Clear value</option>
-                    {activeField.options.map((option) =>
-                      <option key={option} value={option}>{option}</option>)}
+                    {activeField.options.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
                   </select>
                 ) : (
-                  <input type={activeField.kind === 'date' ? 'date' :
-                    activeField.kind === 'number' ? 'number' : 'text'}
+                  <input
+                    type={
+                      activeField.kind === 'date'
+                        ? 'date'
+                        : activeField.kind === 'number'
+                          ? 'number'
+                          : 'text'
+                    }
                     step={activeField.kind === 'number' ? '0.0001' : undefined}
-                    value={entry} onChange={(event) => setEntry(event.target.value)}
-                    maxLength={160} disabled={busy || readOnly}
-                    placeholder="Enter value (or clear to remove)" />
+                    value={entry}
+                    onChange={(event) => setEntry(event.target.value)}
+                    maxLength={160}
+                    disabled={busy || readOnly}
+                    placeholder="Enter value (or clear to remove)"
+                  />
                 )}
               </label>
             )}
           </div>
-          <button type="submit" className="button outline" disabled={
-            busy || readOnly || !chosenRecord || !activeField
-          }>Save custom value</button>
+          <button
+            type="submit"
+            className="button outline"
+            disabled={busy || readOnly || !chosenRecord || !activeField}
+          >
+            Save custom value
+          </button>
           {currentValue && <p className="small">Saved value: {currentValue.value}</p>}
         </form>
-        {valueMessage && <p className="admin-feedback" role="status">{valueMessage}</p>}
-        {valueError && <p className="error-card" role="alert">{valueError}</p>}
+        {valueMessage && (
+          <p className="admin-feedback" role="status">
+            {valueMessage}
+          </p>
+        )}
+        {valueError && (
+          <p className="error-card" role="alert">
+            {valueError}
+          </p>
+        )}
       </section>
 
-      <section id="enach-reports" className="admin-panel enach-extras" aria-label="eNACH report builder">
+      <section
+        id="enach-reports"
+        className="admin-panel enach-extras"
+        aria-label="eNACH report builder"
+      >
         <div className="enach-section-heading">
           <h2>Report builder</h2>
           <EnachInfo topic="report" label="Explain eNACH report builder" />
         </div>
-        <p>Choose a record type, filter the loaded records, select columns and download a CSV report.
-          Empty results are exported with headers only. Reports do not change financial records.</p>
+        <p>
+          Choose a record type, filter the loaded records, select columns and download a CSV report.
+          Empty results are exported with headers only. Reports do not change financial records.
+        </p>
         <div className="enach-form-grid">
           <label className="field">
             Record type
-            <select value={reportType} onChange={(event) => setReportType(event.target.value as MandateView)}>
-              {recordTypes.map((type) => <option value={type.value} key={type.value}>{type.title}</option>)}
+            <select
+              value={reportType}
+              onChange={(event) => setReportType(event.target.value as MandateView)}
+            >
+              {recordTypes.map((type) => (
+                <option value={type.value} key={type.value}>
+                  {type.title}
+                </option>
+              ))}
             </select>
           </label>
           <label className="field">
             Search account, provider or status
-            <input value={search} maxLength={120}
-              onChange={(event) => setSearch(event.target.value)} placeholder="Optional search" />
+            <input
+              value={search}
+              maxLength={120}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Optional search"
+            />
           </label>
           <label className="field">
-            <span>Status <EnachInfo topic="status" label="Explain status filter" /></span>
+            <span>
+              Status <EnachInfo topic="status" label="Explain status filter" />
+            </span>
             <select value={status} onChange={(event) => setStatus(event.target.value)}>
               <option value="">All statuses</option>
-              {reportStatuses.map((item) => <option key={item} value={item}>{item}</option>)}
+              {reportStatuses.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
             </select>
           </label>
           <label className="field">
-            <span>From date <EnachInfo topic="date" label="Explain date filter" /></span>
+            <span>
+              From date <EnachInfo topic="date" label="Explain date filter" />
+            </span>
             <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
           </label>
           <label className="field">
             To date
-            <input type="date" min={from || undefined} value={to}
-              onChange={(event) => setTo(event.target.value)} />
+            <input
+              type="date"
+              min={from || undefined}
+              value={to}
+              onChange={(event) => setTo(event.target.value)}
+            />
           </label>
         </div>
         <fieldset className="enach-column-chooser">
           <legend>Columns to include</legend>
-          {allColumns.map((column) =>
+          {allColumns.map((column) => (
             <label key={column.key}>
-              <input type="checkbox" checked={included.includes(column.key)}
-                onChange={(event) => setIncluded((prev) => event.target.checked
-                  ? [...prev, column.key] : prev.filter((key) => key !== column.key))} />
+              <input
+                type="checkbox"
+                checked={included.includes(column.key)}
+                onChange={(event) =>
+                  setIncluded((prev) =>
+                    event.target.checked
+                      ? [...prev, column.key]
+                      : prev.filter((key) => key !== column.key),
+                  )
+                }
+              />
               {column.title}
-            </label>)}
+            </label>
+          ))}
         </fieldset>
-        <p role="status" className="small">Matched {filtered.length} of {reportRows.length} loaded {reportType} records.</p>
-        {reportFailed && <p role="alert" className="error-card">This record type could not load. Retry records before exporting.</p>}
-        {reportError && <p role="alert" className="error-card">Custom field values could not load: {reportError}</p>}
-        <button type="button" className="button primary"
-          disabled={!loaded || reportFailed || reportValuesLoadedFor !== reportType || !!reportError || included.length === 0 ||
-            !!(from && to && to < from)}
-          onClick={exportCsv}>Download CSV report</button>
-        <p className="small">This report includes only records loaded in your current session, not an exhaustive
-          ledger export. Handle downloaded financial data according to your institution's privacy policy.</p>
+        <p role="status" className="small">
+          Matched {filtered.length} of {reportRows.length} loaded {reportType} records.
+        </p>
+        {reportFailed && (
+          <p role="alert" className="error-card">
+            This record type could not load. Retry records before exporting.
+          </p>
+        )}
+        {reportError && (
+          <p role="alert" className="error-card">
+            Custom field values could not load: {reportError}
+          </p>
+        )}
+        <button
+          type="button"
+          className="button primary"
+          disabled={
+            !loaded ||
+            reportFailed ||
+            reportValuesLoadedFor !== reportType ||
+            !!reportError ||
+            included.length === 0 ||
+            !!(from && to && to < from)
+          }
+          onClick={exportCsv}
+        >
+          Download CSV report
+        </button>
+        <p className="small">
+          This report includes only records loaded in your current session, not an exhaustive ledger
+          export. Handle downloaded financial data according to your institution's privacy policy.
+        </p>
       </section>
     </>
   );
