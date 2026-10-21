@@ -1,3 +1,4 @@
+import { receiptContact } from './receipt-contact';
 import {
   Body,
   Controller,
@@ -20,6 +21,7 @@ import { AuthGuard, AuthedRequest, Roles } from './auth';
 import { paymentProviderEventSchema } from '../../../packages/core/src/contracts';
 import { isNewerMandateEvent } from '../../../packages/core/src/mandate-events';
 import { hasMatchedPaymentFailure } from '../../../packages/core/src/payment-failure';
+import { decrypt } from '../../../packages/core/src/security';
 
 function safeEqualHex(a: string, b: string) {
   if (!/^[a-f0-9]{64}$/i.test(a) || !/^[a-f0-9]{64}$/i.test(b)) return false;
@@ -116,7 +118,8 @@ export class PaymentProviderController {
     bodyHash: string,
     expectedTenantId?: string,
   ) {
-    return this.db.tx(async (c) => {
+    let capturedTenantId = expectedTenantId || '';
+    const txResult: any = await this.db.tx(async (c) => {
       const tenant =
         event.type === 'mandate_status'
           ? (await c.query('SELECT tenant_id FROM fee_schedules WHERE id=$1', [event.scheduleId]))
@@ -133,6 +136,7 @@ export class PaymentProviderController {
       if (!tenant)
         throw new ForbiddenException('Provider event references an unknown financial record');
       const tenantId = tenant.tenant_id;
+      capturedTenantId = tenantId;
       if (expectedTenantId && tenantId !== expectedTenantId)
         throw new ForbiddenException('Provider tenant mismatch');
 
@@ -816,6 +820,10 @@ export class PaymentProviderController {
           [installment.schedule_id],
         );
 
+      Object.assign(
+        installment,
+        await receiptContact(c, this.db, tenantId, installment.schedule_id, 'provider:' + provider),
+      );
       const receiptNumber = 'RCP-' + randomUUID().replaceAll('-', '').toUpperCase();
       const receipt = (
         await c.query(
@@ -826,6 +834,20 @@ export class PaymentProviderController {
             payment.id,
             receiptNumber,
             {
+              receiptConfig:
+                (
+                  await c.query(
+                    'SELECT receipt_config FROM receipt_email_configs WHERE tenant_id=$1',
+                    [capturedTenantId],
+                  )
+                ).rows[0]?.receipt_config || {},
+              emailConfig:
+                (
+                  await c.query(
+                    'SELECT email_config FROM receipt_email_configs WHERE tenant_id=$1',
+                    [capturedTenantId],
+                  )
+                ).rows[0]?.email_config || {},
               studentName: installment.student_name || null,
               instituteName: installment.institute_name || null,
               scheduleId: installment.schedule_id,
@@ -903,14 +925,18 @@ export class PaymentProviderController {
         },
       );
 
-      return {
+      const result = {
         accepted: true,
         duplicate: false,
         status: 'applied',
         paymentId: payment.id,
+        receiptId: receipt.id,
         receiptNumber: receipt.receipt_number,
       };
+      return result;
     });
+
+    return txResult;
   }
 }
 

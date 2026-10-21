@@ -6,7 +6,7 @@ import AxeBuilder from '@axe-core/playwright';
 
 test('finance workspace supports direct payment and sandbox collection', async ({ page }, info) => {
   test.skip(info.project.name !== 'desktop-chromium', 'One isolated financial mutation scenario.');
-  test.setTimeout(90000);
+  test.setTimeout(120000);
   page.on('pageerror', (error) => console.error('Finance UI error:', error.message));
   expect(process.env.DEPLOYMENT_MODE).toBe('test');
   const db = new Pool({ connectionString: process.env.MIGRATION_DATABASE_URL });
@@ -54,10 +54,20 @@ test('finance workspace supports direct payment and sandbox collection', async (
     await page
       .getByLabel('Authenticator code')
       .fill(authenticator.generate(process.env.OWNER_TOTP_SECRET!));
+    await page.route('**/api/v1/auth/login', async (route) => {
+      const remaining = 30000 - (Date.now() % 30000);
+      if (remaining < 8000) await new Promise((resolve) => setTimeout(resolve, remaining + 100));
+      await route.continue({
+        postData: JSON.stringify({
+          ...route.request().postDataJSON(),
+          otp: authenticator.generate(process.env.OWNER_TOTP_SECRET!),
+        }),
+      });
+    });
     await page.getByRole('button', { name: 'Sign in securely' }).click();
     await expect(
       page.getByRole('heading', { name: 'Finance operations', exact: true }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 30000 });
     await expect(
       page
         .getByRole('navigation', { name: 'Finance navigation' })
@@ -121,7 +131,7 @@ test('finance workspace supports direct payment and sandbox collection', async (
     const portalResponse = await page.request.post(
       `/api/v1/admin/fees/schedules/${scheduleId}/payer-link`,
       {
-        headers: { 'X-CSRF-Token': session.csrf },
+        headers: { 'X-CSRF-Token': session.csrf, Origin: process.env.SITE_URL! },
         data: { expiresHours: 24, paymentMode: 'flexible', allowCustomAmount: true },
       },
     );

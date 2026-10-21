@@ -12,6 +12,10 @@ import { AuthGuard } from '../../apps/api/src/auth';
 import { Reflector } from '@nestjs/core';
 import { digest, keyed } from '../../packages/core/src/security';
 import { FinanceBulkController } from '../../apps/api/src/finance-bulk';
+import { StudentPortalController } from '../../apps/api/src/portal';
+import { AcademicOperationsController } from '../../apps/api/src/academic';
+import { FeePlanController } from '../../apps/api/src/fee-plans';
+import { encrypt, token } from '../../packages/core/src/security';
 
 const db = new Db();
 const owner = new Pool({ connectionString: process.env.MIGRATION_DATABASE_URL });
@@ -63,6 +67,45 @@ before(async () => {
 after(async () => {
   await db.onModuleDestroy();
   await owner.end();
+});
+
+test('student portal requires a revocable schedule-bound credential and scopes receipts to that student', async () => {
+  const portal = new StudentPortalController(db);
+  await assert.rejects(
+    portal.login({ studentReference: 'ANANT-TEST', identifier: 'x'.repeat(40) }, {
+      cookie() {},
+    } as any),
+    /Invalid or expired/,
+  );
+  const payerId = randomUUID(),
+    accessToken = token();
+  await owner.query(
+    `INSERT INTO fee_payers(id,tenant_id,account_reference,encrypted_profile,preferred_channel,created_by) VALUES($1,$2,$3,$4,'email',$5)`,
+    [
+      payerId,
+      tenantId,
+      'ANANT-TEST',
+      encrypt({ displayName: 'Synthetic Parent', email: 'parent@example.invalid' }),
+      actorId,
+    ],
+  );
+  await owner.query('UPDATE fee_schedules SET payer_id=$1 WHERE id=$2', [payerId, scheduleId]);
+  await owner.query(
+    `INSERT INTO payer_access_tokens(tenant_id,schedule_id,token_hash,expires_at,created_by) VALUES($1,$2,$3,now()+interval '1 day',$4)`,
+    [tenantId, scheduleId, digest(accessToken), actorId],
+  );
+  const login = await portal.login({ studentReference: 'ANANT-TEST', identifier: accessToken }, {
+    cookie() {},
+  } as any);
+  const request = { headers: { authorization: 'Bearer ' + login.token } } as any;
+  const profile = await portal.me(request);
+  assert.equal(profile.student.id, studentId);
+  assert.equal(profile.summary.outstandingMinor, '9000500');
+  await assert.rejects(portal.getReceipt(request, 'RCP-NOT-OWNED'), /Receipt not found/);
+  await owner.query('UPDATE payer_access_tokens SET revoked_at=now() WHERE token_hash=$1', [
+    digest(accessToken),
+  ]);
+  await assert.rejects(portal.me(request), /expired or invalid/);
 });
 
 test('dashboard and student summary share net payable, paid and outstanding', async () => {
@@ -700,38 +743,408 @@ test('untargeted advance payments allocate oldest first, replay safely and roll 
   );
 });
 
-test('bulk finance previews, applies once and rolls back every row when a later schedule changed',async()=>{
-  const bulk=new FinanceBulkController(db),admin={actor:{...req.actor,tenantRole:'owner'}} as AuthedRequest;
-  const plan=randomUUID(),key='bulk-'+randomUUID(),students=[];
-  await owner.query(`INSERT INTO fee_plan_versions(id,tenant_id,plan_key,version,name,status,created_by) VALUES($1,$2,$3,1,'Synthetic Bulk Master','effective',$4)`,[plan,tenantId,key,actorId]);
-  await owner.query(`INSERT INTO fee_plan_components(tenant_id,plan_id,code,label,amount_minor) VALUES($1,$2,'tuition','Tuition',100000)`,[tenantId,plan]);
-  await owner.query(`INSERT INTO fee_plan_installments(tenant_id,plan_id,sequence,due_date,amount_minor) VALUES($1,$2,1,current_date+30,100000)`,[tenantId,plan]);
-  for(let index=0;index<2;index++){const student=randomUUID(),reference='BULK-'+randomUUID();await owner.query(`INSERT INTO academic_students(id,tenant_id,student_reference,full_name,created_by) VALUES($1,$2,$3,'Synthetic Bulk Student',$4)`,[student,tenantId,reference,actorId]);students.push({id:student,reference});}
-  const before=(await owner.query('SELECT count(*)::int AS count FROM fee_schedules WHERE tenant_id=$1',[tenantId])).rows[0].count;
-  const preview=await bulk.preview(admin,{operation:'assign_plan',reason:'Synthetic fee assignment batch',rows:students.map(student=>({studentReference:student.reference,planKey:key,accountReference:''}))});
-  assert.equal(preview.canApply,true);
-  assert.equal((await owner.query('SELECT count(*)::int AS count FROM fee_schedules WHERE tenant_id=$1',[tenantId])).rows[0].count,before);
-  assert.equal((await bulk.apply(admin,{runId:preview.id})).status,'applied');
-  assert.equal((await bulk.apply(admin,{runId:preview.id})).replayed,true);
-  assert.equal((await owner.query('SELECT count(*)::int AS count FROM fee_schedules WHERE tenant_id=$1',[tenantId])).rows[0].count,before+2);
-  const schedules=await Promise.all(students.map(async student=>(await owner.query('SELECT schedule_id FROM student_fee_plan_assignments WHERE student_id=$1 AND plan_id=$2',[student.id,plan])).rows[0].schedule_id));
-  const dates=(await owner.query(`SELECT (current_date+n)::text AS day FROM generate_series(35,95) n`)).rows;
-  const change=await bulk.preview(admin,{operation:'update_due_date',reason:'Synthetic due date batch',rows:students.map(student=>({studentReference:student.reference,installmentSequence:1,dueDate:dates[5].day}))});
-  assert.equal(change.canApply,true);
-  const firstBefore=await finance.flexSchedule(req,schedules[0]);
-  await finance.editFlex(req,schedules[1],{version:1,reason:'Concurrent synthetic finance edit',installments:[{dueDate:dates[0].day,amountMinor:100000}]});
-  const failed=await bulk.apply(admin,{runId:change.id});
-  assert.equal(failed.status,'failed');
-  assert.deepEqual(await finance.flexSchedule(req,schedules[0]),firstBefore);
-  assert.equal(failed.rows[0].status,'not_applied');assert.equal(failed.rows[1].status,'failed');
-  assert.equal((await bulk.apply(admin,{runId:change.id})).replayed,true);
-  const flex=await bulk.preview(admin,{operation:'update_flex',reason:'Synthetic custom future installments',rows:[{studentReference:students[0]!.reference,installments:[{dueDate:dates[25].day,amountMinor:50000},{dueDate:dates[55].day,amountMinor:50000}]}]});
-  assert.equal(flex.canApply,true);assert.equal((await bulk.apply(admin,{runId:flex.id})).status,'applied');
-  assert.equal((await finance.flexSchedule(req,schedules[0])).installments.length,2);
-  const mandatesBefore=(await owner.query('SELECT count(*)::int AS count FROM payment_mandates WHERE tenant_id=$1',[tenantId])).rows[0].count;
-  const prepare=await bulk.preview(admin,{operation:'prepare_enach',reason:'Prepare synthetic registrations',rows:students.map(student=>({studentReference:student.reference,accountReference:''}))});
-  assert.equal(prepare.canApply,true);assert.equal((await bulk.apply(admin,{runId:prepare.id})).rows[0].status,'ready');
-  assert.equal((await owner.query('SELECT count(*)::int AS count FROM payment_mandates WHERE tenant_id=$1',[tenantId])).rows[0].count,mandatesBefore);
-  const invalid=await bulk.preview(admin,{operation:'assign_plan',reason:'Validate unknown enrollment',rows:[{studentReference:'NOT-A-STUDENT',planKey:key}]});assert.equal(invalid.canApply,false);
-  await assert.rejects(bulk.preview({actor:{...req.actor,tenantRole:'viewer',permissions:['fee.read']}} as AuthedRequest,{operation:'assign_plan',reason:'Viewer cannot assign fees',rows:[{studentReference:students[0]!.reference,planKey:key}]}),/cannot perform/);
+test('bulk finance previews, applies once and rolls back every row when a later schedule changed', async () => {
+  const bulk = new FinanceBulkController(db),
+    admin = { actor: { ...req.actor, tenantRole: 'owner' } } as AuthedRequest;
+  const plan = randomUUID(),
+    key = 'bulk-' + randomUUID(),
+    students = [];
+  await owner.query(
+    `INSERT INTO fee_plan_versions(id,tenant_id,plan_key,version,name,status,created_by) VALUES($1,$2,$3,1,'Synthetic Bulk Master','effective',$4)`,
+    [plan, tenantId, key, actorId],
+  );
+  await owner.query(
+    `INSERT INTO fee_plan_components(tenant_id,plan_id,code,label,amount_minor) VALUES($1,$2,'tuition','Tuition',100000)`,
+    [tenantId, plan],
+  );
+  await owner.query(
+    `INSERT INTO fee_plan_installments(tenant_id,plan_id,sequence,due_date,amount_minor) VALUES($1,$2,1,current_date+30,100000)`,
+    [tenantId, plan],
+  );
+  for (let index = 0; index < 2; index++) {
+    const student = randomUUID(),
+      reference = 'BULK-' + randomUUID();
+    await owner.query(
+      `INSERT INTO academic_students(id,tenant_id,student_reference,full_name,created_by) VALUES($1,$2,$3,'Synthetic Bulk Student',$4)`,
+      [student, tenantId, reference, actorId],
+    );
+    students.push({ id: student, reference });
+  }
+  const before = (
+    await owner.query('SELECT count(*)::int AS count FROM fee_schedules WHERE tenant_id=$1', [
+      tenantId,
+    ])
+  ).rows[0].count;
+  const preview = await bulk.preview(admin, {
+    operation: 'assign_plan',
+    reason: 'Synthetic fee assignment batch',
+    rows: students.map((student) => ({
+      studentReference: student.reference,
+      planKey: key,
+      accountReference: '',
+    })),
+  });
+  assert.equal(preview.canApply, true);
+  assert.equal(
+    (
+      await owner.query('SELECT count(*)::int AS count FROM fee_schedules WHERE tenant_id=$1', [
+        tenantId,
+      ])
+    ).rows[0].count,
+    before,
+  );
+  assert.equal((await bulk.apply(admin, { runId: preview.id })).status, 'applied');
+  assert.equal((await bulk.apply(admin, { runId: preview.id })).replayed, true);
+  assert.equal(
+    (
+      await owner.query('SELECT count(*)::int AS count FROM fee_schedules WHERE tenant_id=$1', [
+        tenantId,
+      ])
+    ).rows[0].count,
+    before + 2,
+  );
+  const schedules = await Promise.all(
+    students.map(
+      async (student) =>
+        (
+          await owner.query(
+            'SELECT schedule_id FROM student_fee_plan_assignments WHERE student_id=$1 AND plan_id=$2',
+            [student.id, plan],
+          )
+        ).rows[0].schedule_id,
+    ),
+  );
+  const dates = (
+    await owner.query(`SELECT (current_date+n)::text AS day FROM generate_series(35,95) n`)
+  ).rows;
+  const change = await bulk.preview(admin, {
+    operation: 'update_due_date',
+    reason: 'Synthetic due date batch',
+    rows: students.map((student) => ({
+      studentReference: student.reference,
+      installmentSequence: 1,
+      dueDate: dates[5].day,
+    })),
+  });
+  assert.equal(change.canApply, true);
+  const firstBefore = await finance.flexSchedule(req, schedules[0]);
+  await finance.editFlex(req, schedules[1], {
+    version: (await finance.flexSchedule(req, schedules[1])).version,
+    reason: 'Concurrent synthetic finance edit',
+    installments: [{ dueDate: dates[0].day, amountMinor: 100000 }],
+  });
+  const failed = await bulk.apply(admin, { runId: change.id });
+  assert.equal(failed.status, 'failed');
+  assert.deepEqual(await finance.flexSchedule(req, schedules[0]), firstBefore);
+  assert.equal(failed.rows[0].status, 'not_applied');
+  assert.equal(failed.rows[1].status, 'failed');
+  assert.equal((await bulk.apply(admin, { runId: change.id })).replayed, true);
+  const flex = await bulk.preview(admin, {
+    operation: 'update_flex',
+    reason: 'Synthetic custom future installments',
+    rows: [
+      {
+        studentReference: students[0]!.reference,
+        installments: [
+          { dueDate: dates[25].day, amountMinor: 50000 },
+          { dueDate: dates[55].day, amountMinor: 50000 },
+        ],
+      },
+    ],
+  });
+  assert.equal(flex.canApply, true);
+  assert.equal((await bulk.apply(admin, { runId: flex.id })).status, 'applied');
+  assert.equal((await finance.flexSchedule(req, schedules[0])).installments.length, 2);
+  const mandatesBefore = (
+    await owner.query('SELECT count(*)::int AS count FROM payment_mandates WHERE tenant_id=$1', [
+      tenantId,
+    ])
+  ).rows[0].count;
+  const prepare = await bulk.preview(admin, {
+    operation: 'prepare_enach',
+    reason: 'Prepare synthetic registrations',
+    rows: students.map((student) => ({
+      studentReference: student.reference,
+      accountReference: '',
+    })),
+  });
+  assert.equal(prepare.canApply, true);
+  assert.equal((await bulk.apply(admin, { runId: prepare.id })).rows[0].status, 'ready');
+  assert.equal(
+    (
+      await owner.query('SELECT count(*)::int AS count FROM payment_mandates WHERE tenant_id=$1', [
+        tenantId,
+      ])
+    ).rows[0].count,
+    mandatesBefore,
+  );
+  const invalid = await bulk.preview(admin, {
+    operation: 'assign_plan',
+    reason: 'Validate unknown enrollment',
+    rows: [{ studentReference: 'NOT-A-STUDENT', planKey: key }],
+  });
+  assert.equal(invalid.canApply, false);
+  await assert.rejects(
+    bulk.preview(
+      { actor: { ...req.actor, tenantRole: 'viewer', permissions: ['fee.read'] } } as AuthedRequest,
+      {
+        operation: 'assign_plan',
+        reason: 'Viewer cannot assign fees',
+        rows: [{ studentReference: students[0]!.reference, planKey: key }],
+      },
+    ),
+    /cannot perform/,
+  );
+});
+
+test('parent registration is replay-safe and only confirmed remaining balance becomes Payment Complete', async () => {
+  const student = randomUUID(),
+    schedule = randomUUID(),
+    payer = randomUUID(),
+    installment = randomUUID(),
+    ref = 'PORTAL-' + randomUUID(),
+    code = token();
+  const plan = (
+    await owner.query(
+      "SELECT id FROM fee_plan_versions WHERE tenant_id=$1 AND status='effective' LIMIT 1",
+      [tenantId],
+    )
+  ).rows[0].id;
+  await owner.query(
+    "INSERT INTO academic_students(id,tenant_id,student_reference,full_name,created_by) VALUES($1,$2,$3,'Synthetic Portal Student',$4)",
+    [student, tenantId, ref, actorId],
+  );
+  await owner.query(
+    "INSERT INTO fee_payers(id,tenant_id,account_reference,encrypted_profile,preferred_channel,created_by) VALUES($1,$2,$3,$4,'email',$5)",
+    [
+      payer,
+      tenantId,
+      ref,
+      encrypt({
+        displayName: 'Synthetic Parent',
+        email: 'parent@example.invalid',
+        phone: '+919999999998',
+      }),
+      actorId,
+    ],
+  );
+  await owner.query(
+    "INSERT INTO fee_schedules(id,tenant_id,account_reference,total_amount_minor,status,payer_id,created_by) VALUES($1,$2,$3,2200000,'active',$4,$5)",
+    [schedule, tenantId, ref, payer, actorId],
+  );
+  await owner.query(
+    'INSERT INTO fee_installments(id,tenant_id,schedule_id,sequence,due_date,amount_minor) VALUES($1,$2,$3,1,current_date+1,2200000)',
+    [installment, tenantId, schedule],
+  );
+  await owner.query(
+    'INSERT INTO student_fee_plan_assignments(tenant_id,student_id,plan_id,schedule_id,created_by) VALUES($1,$2,$3,$4,$5)',
+    [tenantId, student, plan, schedule, actorId],
+  );
+  await owner.query(
+    "INSERT INTO payer_access_tokens(tenant_id,schedule_id,token_hash,expires_at,created_by) VALUES($1,$2,$3,now()+interval '1 day',$4)",
+    [tenantId, schedule, digest(code), actorId],
+  );
+  const portal = new StudentPortalController(db),
+    login = await portal.login({ studentReference: ref, identifier: code }, { cookie() {} } as any),
+    request = { headers: { authorization: 'Bearer ' + login.token } } as any;
+  const input = {
+    payerName: 'Synthetic Parent',
+    payerEmail: 'parent@example.invalid',
+    payerPhone: '+919999999998',
+    bankName: 'Sandbox Bank',
+    accountNumber: '000000000001',
+    ifsc: 'SBIN0001234',
+    consent: true,
+  };
+  const registration = await Promise.all([
+    portal.registerEnach(request, input),
+    portal.registerEnach(request, input),
+  ]);
+  assert.ok(registration.every((r) => r.status === 'active'));
+  await finance.savePaymentFormConfig(req, {
+    fields: [
+      {
+        key: 'payer_name',
+        label: 'Payer Name',
+        visible: true,
+        required: true,
+        editable: false,
+        order: 1,
+      },
+      {
+        key: 'payer_email',
+        label: 'Payer Email',
+        visible: true,
+        required: false,
+        editable: true,
+        order: 2,
+      },
+      {
+        key: 'payer_phone',
+        label: 'Payer Phone',
+        visible: true,
+        required: false,
+        editable: true,
+        order: 3,
+      },
+    ],
+    components: [],
+    rules: { enable_enach: true, allow_payer_contact_editing: true },
+    instructions: 'Synthetic test instructions',
+  });
+  await assert.rejects(
+    portal.registerEnach(request, { ...input, payerName: 'Changed Payer' }),
+    /read-only/,
+  );
+  assert.equal(
+    (await portal.registerEnach(request, { ...input, payerEmail: '', payerPhone: '' })).status,
+    'active',
+  );
+
+  assert.equal(
+    (
+      await owner.query('SELECT count(*)::int AS n FROM payment_mandates WHERE schedule_id=$1', [
+        schedule,
+      ])
+    ).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await owner.query('SELECT count(*)::int AS n FROM payment_records WHERE schedule_id=$1', [
+        schedule,
+      ])
+    ).rows[0].n,
+    0,
+  );
+  await finance.saveReceiptEmailConfig(req, {
+    receipt_config: { receipt_heading: 'Original Receipt' },
+    email_config: { subject_line: 'Original {{receipt_number}}' },
+  });
+  for (const amount of [1000000, 200000])
+    await finance.recordPayment(
+      {
+        installmentId: installment,
+        idempotencyKey: randomUUID(),
+        providerReference: 'CASH-' + randomUUID(),
+        amountMinor: amount,
+        currency: 'INR',
+        evidenceNote: 'Synthetic cash record',
+        directPayment: { mode: 'cash', transactionDate: '2026-10-21' },
+      },
+      req,
+    );
+  const result = await portal.simulateDebit(request, { outcome: 'successful' });
+  assert.equal(result.status, 'payment_complete');
+  assert.equal(result.paymentComplete?.amountMinor, 1000000);
+  const receipt = await portal.getReceipt(request, result.paymentComplete!.receiptNumber);
+  assert.equal(receipt.snapshot.receiptConfig.receipt_heading, 'Original Receipt');
+  await finance.saveReceiptEmailConfig(req, {
+    receipt_config: { receipt_heading: 'Changed Receipt' },
+    email_config: { subject_line: 'Changed' },
+  });
+  assert.equal(
+    (await portal.getReceipt(request, result.paymentComplete!.receiptNumber)).snapshot.receiptConfig
+      .receipt_heading,
+    'Original Receipt',
+  );
+  await assert.rejects(
+    portal.simulateDebit(request, { outcome: 'successful' }),
+    /Active fee schedule|No payable/,
+  );
+  const otherPayment = (
+    await owner.query(
+      'SELECT r.receipt_number FROM fee_receipts r JOIN payment_records p ON p.id=r.payment_id WHERE p.schedule_id=$1 LIMIT 1',
+      [scheduleId],
+    )
+  ).rows[0];
+  await assert.rejects(
+    portal.getReceipt(request, otherPayment.receipt_number),
+    /Receipt not found/,
+  );
+  await portal.logout(request, { clearCookie() {} } as any);
+  await assert.rejects(portal.me(request), /expired or invalid/);
+});
+
+test('student onboarding explicitly reuses a linked parent and existing payer during Master assignment', async () => {
+  const academic = new AcademicOperationsController(db),
+    plans = new FeePlanController(db),
+    reference = 'LINK-' + randomUUID();
+  const first = await academic.createStudent(req, {
+    studentReference: reference,
+    fullName: 'Synthetic First Child',
+    guardianName: 'Synthetic Linked Parent',
+    guardianEmail: 'linked@example.invalid',
+  });
+  const guardian = (
+    await owner.query('SELECT guardian_id FROM academic_guardian_links WHERE student_id=$1', [
+      first.id,
+    ])
+  ).rows[0].guardian_id;
+  const second = await academic.createStudent(req, {
+    studentReference: reference + 'B',
+    fullName: 'Synthetic Second Child',
+    guardianId: guardian,
+  });
+  assert.equal(
+    (
+      await owner.query('SELECT guardian_id FROM academic_guardian_links WHERE student_id=$1', [
+        second.id,
+      ])
+    ).rows[0].guardian_id,
+    guardian,
+  );
+  const payer = (
+    await owner.query('SELECT id FROM fee_payers WHERE tenant_id=$1 AND account_reference=$2', [
+      tenantId,
+      reference + 'B',
+    ])
+  ).rows[0].id;
+  const plan = randomUUID();
+  await owner.query(
+    "INSERT INTO fee_plan_versions(id,tenant_id,plan_key,version,name,status,created_by) VALUES($1,$2,$3,1,'Synthetic Onboarding Plan','effective',$4)",
+    [plan, tenantId, 'PLAN-' + plan, actorId],
+  );
+  await owner.query(
+    "INSERT INTO fee_plan_components(tenant_id,plan_id,code,label,amount_minor) VALUES($1,$2,'tuition','Tuition',100000)",
+    [tenantId, plan],
+  );
+  await owner.query(
+    'INSERT INTO fee_plan_installments(tenant_id,plan_id,sequence,due_date,amount_minor) VALUES($1,$2,1,current_date+30,100000)',
+    [tenantId, plan],
+  );
+  const assignment = await plans.assign(req, plan, { studentId: second.id });
+  assert.equal(assignment.schedule.account_reference, reference + 'B');
+  assert.equal(assignment.schedule.payer_id, payer);
+  const installment = (
+    await owner.query('SELECT id FROM fee_installments WHERE schedule_id=$1', [
+      assignment.schedule.id,
+    ])
+  ).rows[0].id;
+  const payment = await finance.recordPayment(
+    {
+      installmentId: installment,
+      idempotencyKey: randomUUID(),
+      providerReference: 'CONTACT-' + randomUUID(),
+      amountMinor: 10000,
+      currency: 'INR',
+      evidenceNote: 'Synthetic transactional email receipt',
+    },
+    req,
+  );
+  const delivery = (
+    await owner.query(
+      'SELECT l.channel,l.kind,l.status FROM fee_communication_log l JOIN outbox o ON o.event_id=l.event_id WHERE o.aggregate_id=$1',
+      [payment.id],
+    )
+  ).rows[0];
+  assert.deepEqual(delivery, { channel: 'email', kind: 'receipt', status: 'pending' });
+  await assert.rejects(
+    academic.createStudent(req, {
+      studentReference: 'OTHER-' + randomUUID(),
+      fullName: 'Synthetic Other Child',
+      guardianId: randomUUID(),
+    }),
+    /Linked parent is unavailable/,
+  );
 });

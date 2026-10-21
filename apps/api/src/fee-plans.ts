@@ -81,7 +81,8 @@ const assignSchema = z
     accountReference: z
       .string()
       .trim()
-      .regex(/^[A-Za-z0-9_-]{2,80}$/),
+      .regex(/^[A-Za-z0-9_-]{2,80}$/)
+      .optional(),
     payerId: z.uuid().optional(),
   })
   .strict();
@@ -439,6 +440,15 @@ export class FeePlanController {
         if (!payer) throw new ConflictException('Payer is outside this workspace or inactive');
       }
 
+      const accountReference = input.accountReference || student.student_reference;
+      const linkedPayer =
+        input.payerId ||
+        (
+          await c.query(
+            'SELECT id FROM fee_payers WHERE tenant_id=$1 AND account_reference=$2 AND active=true',
+            [req.actor.tenantId, input.accountReference || student.student_reference],
+          )
+        ).rows[0]?.id;
       const components = (
         await c.query('SELECT * FROM fee_plan_components WHERE plan_id=$1 ORDER BY code', [planId])
       ).rows;
@@ -457,8 +467,8 @@ export class FeePlanController {
            RETURNING *`,
           [
             req.actor.tenantId,
-            input.accountReference,
-            input.payerId || null,
+            accountReference,
+            linkedPayer || null,
             student.student_reference,
             total,
             'Assigned from fee plan ' + plan.plan_key + ' v' + plan.version,

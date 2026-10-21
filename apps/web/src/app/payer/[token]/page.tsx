@@ -256,8 +256,9 @@ export default async function PayerPortal({ params, searchParams }: Props) {
           <p>
             Automatic collection is active through{' '}
             <strong>
-              {data.mandates.find((m: any) => m.status === 'active')?.rail === 'upi_autopay'
-                ? 'UPI AutoPay'
+              {data.mandates.find((m: any) => m.status === 'active')?.rail ===
+              'unsupported_legacy_rail'
+                ? 'eNACH'
                 : 'eNACH'}
             </strong>
             . Due installments can be submitted automatically to the configured provider. Final
@@ -265,15 +266,15 @@ export default async function PayerPortal({ params, searchParams }: Props) {
           </p>
         ) : pendingMandateSetup ? (
           <p role="status">
-            A {pendingMandateSetup.rail === 'enach' ? 'eNACH' : 'UPI AutoPay'} registration is
-            already in progress ({pendingMandateSetup.status}). Wait for the verified provider
-            result. If the bank outcome is unknown, contact the institute for reconciliation instead
-            of requesting a second mandate.
+            A {pendingMandateSetup.rail === 'enach' ? 'eNACH' : 'eNACH'} registration is already in
+            progress ({pendingMandateSetup.status}). Wait for the verified provider result. If the
+            bank outcome is unknown, contact the institute for reconciliation instead of requesting
+            a second mandate.
           </p>
         ) : data.autopayProviderConnected ? (
           <>
             <p>
-              Authorize the full fee schedule once with the approved provider. Bank credentials, UPI
+              Authorize the full fee schedule once with the approved provider. Bank credentials,
               PINs and OTPs stay on the provider-hosted authorization page.
             </p>
             <div className="admin-toolbar">
@@ -297,7 +298,7 @@ export default async function PayerPortal({ params, searchParams }: Props) {
             {data.mandateSetups.slice(0, 5).map((setup: any) => (
               <article key={setup.id}>
                 <div>
-                  <strong>{setup.rail === 'upi_autopay' ? 'UPI AutoPay' : 'eNACH'}</strong>
+                  <strong>{setup.rail === 'unsupported_legacy_rail' ? 'eNACH' : 'eNACH'}</strong>
                   <p>Started {new Date(setup.created_at).toLocaleString('en-IN')}</p>
                 </div>
                 <span className="status-pill">{setup.status}</span>
@@ -396,8 +397,8 @@ export default async function PayerPortal({ params, searchParams }: Props) {
         <strong>Security note</strong>
         <p>
           {data.providerConnected
-            ? 'Payment actions redirect to the approved hosted provider. This portal never asks for card numbers, bank credentials, UPI PINs or OTPs.'
-            : 'This page never asks for card, bank, UPI PIN or OTP credentials. Payment actions remain disabled until the platform owner connects and verifies an approved payment provider.'}
+            ? 'Payment actions redirect to the approved hosted provider. This portal never asks for bank credentials or OTPs.'
+            : 'This page never asks for bank credentials or OTPs. Payment actions remain disabled until the platform owner connects and verifies an approved payment provider.'}
         </p>
       </aside>
     </main>

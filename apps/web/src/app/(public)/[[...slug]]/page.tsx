@@ -1,3 +1,4 @@
+import { FinanceIntroduction } from '@/components/finance-introduction';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import Link from 'next/link';
@@ -65,6 +66,8 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 export default async function Page({ params, searchParams }: Props) {
   const { slug } = await params;
   const path = pathFor(slug);
+  if (['/cred/', '/products/cred/', '/pay/', '/products/pay/'].includes(path)) notFound();
+  if (path === '/' || path === '/products/') return <FinanceIntroduction />;
   const all = await pages();
   const config = await site();
   const search = await searchParams;
@@ -203,26 +206,20 @@ export default async function Page({ params, searchParams }: Props) {
       {path === '/login/' && !config.tenantSite && (
         <section className="wrap portal-grid">
           {[
-            ['Students and parents', process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL || '/contact-us/'],
             [
-              'Educational institutes',
-              process.env.NEXT_PUBLIC_INSTITUTE_PORTAL_URL || '/contact-us/',
+              'Student / Parent Login',
+              '/portal/',
+              'Access student fee details, payment schedules, receipts, and eNACH registration.',
             ],
-            ['Businesses', process.env.NEXT_PUBLIC_BUSINESS_PORTAL_URL || '/contact-us/'],
-            ['Owner console', '/admin/'],
-            ['Dodo eNACH Dashboard', '/enach/'],
-          ].map(([name, href]) => (
+            [
+              'Institution Login',
+              '/admin/',
+              'Operational finance dashboard for fee management, collections, flex schedules, and reconciliation.',
+            ],
+          ].map(([name, href, desc]) => (
             <article key={name}>
               <h2>{name}</h2>
-              <p>
-                {href!.startsWith('https')
-                  ? 'Configured secure external portal'
-                  : name === 'Owner console'
-                    ? 'Local staff authentication with MFA'
-                    : name === 'Dodo eNACH Dashboard'
-                      ? 'Dedicated eNACH console; requires an authorized institution owner session'
-                      : 'Portal integration is not configured yet; continue to contact.'}
-              </p>
+              <p>{desc}</p>
               <SmartLink className="button primary" href={href!}>
                 Continue
               </SmartLink>

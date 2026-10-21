@@ -394,7 +394,7 @@ export class PayerPortalController {
       mandates,
       mandateSetups,
       pendingAutopayInstallments: pendingAutopay.map((attempt) => attempt.installment_id),
-      providerConnected: checkoutProviderEnabled(),
+      providerConnected: false,
       autopayProviderConnected: autopayProviderEnabled(),
       note: checkoutProviderEnabled()
         ? 'Hosted checkout is activated. The selected provider collects payment credentials; this platform records only validated payment outcomes.'

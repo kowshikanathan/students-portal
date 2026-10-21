@@ -73,7 +73,7 @@ export function Chat() {
           {!capture ? (
             <>
               <div className="topic-buttons">
-                {['Flex', 'Cred', 'Pay', 'Demo', 'Official support'].map((t) => (
+                {['Flex', 'Demo', 'Official support'].map((t) => (
                   <button
                     disabled={busy || !!error}
                     className="button outline"

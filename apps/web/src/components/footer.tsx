@@ -56,7 +56,7 @@ export function Footer({ name = 'Dodo' }: { name?: string }) {
           <SmartLink href="/privacy-policy/">Privacy notice</SmartLink>
           <SmartLink href="/terms-and-conditions/">Terms</SmartLink>
           <SmartLink href="/cookie-preferences/">Cookie preferences</SmartLink>
-          <SmartLink href="/admin/">Owner console</SmartLink>
+          <SmartLink href="/admin/">Institution Login</SmartLink>
           <p className="small">
             Production claims, logos, customer stories and provider integrations must be owned,
             licensed and verified before activation.

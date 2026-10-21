@@ -1,7 +1,7 @@
 import { AdminShell } from '@/components/admin/shell';
 
 export const metadata = {
-  title: 'Dodo | Owner Console',
+  title: 'Dodo | Institution Console',
   robots: { index: false, follow: false },
 };
 

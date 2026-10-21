@@ -38,8 +38,7 @@ export default async function MandateReturnPage({ params }: Props) {
         <p className="eyebrow">Recurring payment setup</p>
         <h1>{message}</h1>
         <p>
-          Fee account <strong>{data.account_reference}</strong> ·{' '}
-          {data.rail === 'upi_autopay' ? 'UPI AutoPay' : 'eNACH'}
+          Fee account <strong>{data.account_reference}</strong> · eNACH
         </p>
         <span className="status-pill">{data.status}</span>
         <p className="small">

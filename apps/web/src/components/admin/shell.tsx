@@ -1,5 +1,7 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { FinanceIcon } from './finance-icon';
 import Link from 'next/link';
 import { api } from '@/lib/client';
 import { AdminContext, Session } from './context';
@@ -50,6 +52,11 @@ export function AdminShell({
   initialFeeTarget?: 'payer' | 'schedule' | 'reconciliation' | null;
   studentId?: string;
 } = {}) {
+  const router = useRouter();
+  const [showPassword, setShowPassword] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [session, setSession] = useState<Session | null>(null),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
@@ -59,6 +66,46 @@ export function AdminShell({
   const [feeTarget, setFeeTarget] = useState<'payer' | 'schedule' | 'reconciliation' | null>(
     initialFeeTarget,
   );
+  useEffect(() => {
+    setArea(initialArea);
+    setFeeTarget(initialFeeTarget);
+    setMenuOpen(false);
+  }, [initialArea, initialFeeTarget, studentId]);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    sidebarRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+      if (event.key === 'Tab') {
+        const items = Array.from(
+          sidebarRef.current?.querySelectorAll<HTMLElement>('a[href],button:not([disabled])') || [],
+        ).filter((el) => el.getClientRects().length);
+        const first = items[0],
+          last = items[items.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    const media = window.matchMedia('(min-width: 851px)');
+    const resize = () => {
+      if (media.matches) setMenuOpen(false);
+    };
+    document.addEventListener('keydown', keydown);
+    media.addEventListener('change', resize);
+    return () => {
+      document.body.style.overflow = previous;
+      document.removeEventListener('keydown', keydown);
+      media.removeEventListener('change', resize);
+      menuButtonRef.current?.focus();
+    };
+  }, [menuOpen]);
   async function sync() {
     try {
       setSession(await api<Session>('/v1/auth/me'));
@@ -109,13 +156,13 @@ export function AdminShell({
   }
   if (loading)
     return (
-      <main id="main" className="admin-login">
+      <main id="main" className="admin-login institution-login">
         <p role="status">Checking the staff session…</p>
       </main>
     );
   if (!session)
     return (
-      <main id="main" className="admin-login">
+      <main id="main" className="admin-login institution-login">
         <form
           className="login-card"
           onSubmit={async (e) => {
@@ -137,13 +184,13 @@ export function AdminShell({
             }
           }}
         >
-          <div className="brand brand-wordmark" aria-label="Owner workspace">
+          <div className="brand brand-wordmark" aria-label="Institution workspace">
             <span className="brand-mark" aria-hidden="true">
               ◆
             </span>
-            <strong>Dodo owner workspace</strong>
+            <strong>Dodo institution workspace</strong>
           </div>
-          <h1>Your owner workspace.</h1>
+          <h1>Your institution workspace.</h1>
           <p>Manage students, fees and collections for your institute.</p>
           <label className="field">
             Staff email
@@ -151,8 +198,11 @@ export function AdminShell({
           </label>
           <label className="field">
             Password
-            <input type="password" name="password" autoComplete="current-password" required />
+            <input type={showPassword ? 'text' : 'password'} name="password" autoComplete="current-password" required />
           </label>
+          <button type="button" className="institution-password-toggle" aria-pressed={showPassword} onClick={() => setShowPassword((value) => !value)}>
+            {showPassword ? 'Hide password' : 'Show password'}
+          </button>
           <label className="field">
             Authenticator code
             <input
@@ -173,8 +223,7 @@ export function AdminShell({
             {busy ? 'Verifying…' : 'Sign in securely'}
           </button>
           <p className="small" style={{ marginTop: 20 }}>
-            No default password is included. Provision your owner with{' '}
-            <code>npm run create:owner</code>.
+            Use your institution-issued staff account and the current six-digit code from your authenticator app. Contact your institution administrator if you need access.
           </p>
           <Link href="/" className="small">
             ← Back to the website
@@ -247,9 +296,7 @@ export function AdminShell({
               if (standaloneEnach) {
                 window.location.assign('/admin/fees/' + target + '/');
               } else {
-                setFeeTarget(target);
-                setArea('fees');
-                window.history.replaceState(null, '', '/admin/');
+                router.push('/admin/fees/' + target + '/');
               }
             }}
           />
@@ -275,8 +322,22 @@ export function AdminShell({
   };
   return (
     <AdminContext.Provider value={session}>
-      <div className="admin-root admin-shell">
-        <aside className="admin-sidebar">
+      <div className="admin-root admin-shell finance-shell">
+        {menuOpen && (
+          <button
+            className="finance-nav-scrim"
+            aria-label="Close navigation"
+            onClick={() => setMenuOpen(false)}
+          />
+        )}
+        <aside id="finance-sidebar" className="admin-sidebar" data-open={menuOpen} ref={sidebarRef}>
+          <button
+            className="finance-nav-close"
+            onClick={() => setMenuOpen(false)}
+            aria-label="Close finance navigation"
+          >
+            Close <span aria-hidden="true">×</span>
+          </button>
           <Link href={standaloneEnach ? '/enach/' : '/admin/'} className="admin-logo">
             Dodo<span className="yellow-dot">.</span>
             {standaloneEnach ? ' eNACH' : ' finance'}
@@ -317,21 +378,23 @@ export function AdminShell({
                 )
                 .map(([key, title]) => (
                   <button
+                    type="button"
                     className={activeArea === key ? 'selected' : ''}
+                    aria-current={activeArea === key ? 'page' : undefined}
                     key={key}
                     onClick={() => {
-                      if (key === 'academic') {
-                        window.location.assign('/admin/students/');
-                        return;
-                      }
-                      setFeeTarget(null);
-                      setArea(key!);
-                      if (window.location.pathname !== '/admin/') {
-                        window.history.replaceState(null, '', '/admin/');
-                      }
+                      setMenuOpen(false);
+                      router.push(
+                        key === 'overview'
+                          ? '/admin/'
+                          : key === 'academic'
+                            ? '/admin/students/'
+                            : '/admin/' + key + '/',
+                      );
                     }}
                   >
-                    {title}
+                    <FinanceIcon name={key!} />
+                    <span>{title}</span>
                   </button>
                 ))}
             </nav>
@@ -339,6 +402,16 @@ export function AdminShell({
         </aside>
         <main id="main" className="admin-main">
           <div className="admin-topbar">
+            <button
+              ref={menuButtonRef}
+              className="finance-nav-toggle"
+              aria-label="Open finance navigation"
+              aria-controls="finance-sidebar"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen(true)}
+            >
+              <span aria-hidden="true">☰</span>
+            </button>
             <div>
               <h1>
                 {standaloneEnach
@@ -346,52 +419,83 @@ export function AdminShell({
                   : sections.find((item) => item[0] === activeArea)?.[1] || 'Finance workspace'}
               </h1>
               <p>
-                {session.user.email} · {session.tenant.name} · {session.tenant.role}
+                {session.tenant.name} <span aria-hidden="true"> / </span>
+                <span className="finance-role">{session.tenant.role.replaceAll('_', ' ')}</span>
               </p>
             </div>
             <div className="admin-top-actions">
-              {session.workspaces.length > 1 && (
-                <label className="small">
-                  Workspace
-                  <select
-                    aria-label="Active workspace"
-                    value={session.tenant.id}
-                    onChange={async (event) => {
-                      try {
-                        await api('/v1/auth/switch-tenant', {
-                          method: 'POST',
-                          headers: { 'X-CSRF-Token': session.csrf },
-                          body: JSON.stringify({ tenantId: event.target.value }),
-                        });
-                        setArea('overview');
-                        setLoading(true);
-                        await sync();
-                      } catch (error) {
-                        setError((error as Error).message);
-                      }
-                    }}
-                  >
-                    {session.workspaces.map((workspace) => (
-                      <option value={workspace.id} key={workspace.id}>
-                        {workspace.name} · {workspace.role}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
               <span className="status-pill">MFA session</span>
               <button disabled={busy} onClick={() => void signOut(false)}>
                 Sign out
               </button>
-              <button
-                disabled={busy}
-                onClick={() => {
-                  if (window.confirm('Sign out every session on all devices and workspaces?'))
-                    void signOut(true);
+              <details
+                className="finance-session-menu"
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') event.currentTarget.open = false;
+                }}
+                onBlur={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node))
+                    event.currentTarget.open = false;
                 }}
               >
-                Sign out everywhere
-              </button>
+                <summary aria-label="Account and session options">
+                  <span className="finance-avatar" aria-hidden="true">
+                    {session.user.email.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="finance-account-label">Account</span>
+                  <span aria-hidden="true">⌄</span>
+                </summary>
+                <div>
+                  <strong>{session.user.email}</strong>{' '}
+                  {session.workspaces.length > 1 && (
+                    <label className="small">
+                      Workspace
+                      <select
+                        aria-label="Active workspace"
+                        value={session.tenant.id}
+                        onChange={async (event) => {
+                          try {
+                            await api('/v1/auth/switch-tenant', {
+                              method: 'POST',
+                              headers: { 'X-CSRF-Token': session.csrf },
+                              body: JSON.stringify({ tenantId: event.target.value }),
+                            });
+                            setArea('overview');
+                            router.push('/admin/');
+                            setLoading(true);
+                            await sync();
+                          } catch (error) {
+                            setError((error as Error).message);
+                          }
+                        }}
+                      >
+                        {session.workspaces.map((workspace) => (
+                          <option value={workspace.id} key={workspace.id}>
+                            {workspace.name} · {workspace.role}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  <p>Signed in with authenticator MFA</p>
+                  <button
+                    className="finance-mobile-signout"
+                    disabled={busy}
+                    onClick={() => void signOut(false)}
+                  >
+                    Sign out
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      if (window.confirm('Sign out every session on all devices and workspaces?'))
+                        void signOut(true);
+                    }}
+                  >
+                    Sign out everywhere
+                  </button>
+                </div>
+              </details>
             </div>
           </div>
           {session.tenant.readOnly && (

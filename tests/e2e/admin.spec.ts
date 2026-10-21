@@ -24,6 +24,16 @@ test('owner creates, autosaves, reviews, publishes, trashes and restores content
   await page
     .getByLabel('Authenticator code')
     .fill(authenticator.generate(process.env.OWNER_TOTP_SECRET!));
+  await page.route('**/api/v1/auth/login', async (route) => {
+    const remaining = 30000 - (Date.now() % 30000);
+    if (remaining < 8000) await new Promise((resolve) => setTimeout(resolve, remaining + 100));
+    await route.continue({
+      postData: JSON.stringify({
+        ...route.request().postDataJSON(),
+        otp: authenticator.generate(process.env.OWNER_TOTP_SECRET!),
+      }),
+    });
+  });
   await page.getByRole('button', { name: 'Sign in securely' }).click();
   await expect(page.getByRole('heading', { name: 'Dashboard', exact: true })).toBeVisible();
   const a = await new AxeBuilder({ page })

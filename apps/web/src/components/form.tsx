@@ -166,7 +166,7 @@ export function LeadForm({ source = 'form' }: { source?: 'form' | 'chat' }) {
         <label className="field">
           <span>Interested in</span>
           <select name="interest" defaultValue="Not sure">
-            {['Not sure', 'Flex', 'Cred', 'Pay'].map((v) => (
+            {['Not sure', 'Flex'].map((v) => (
               <option key={v}>{v}</option>
             ))}
           </select>

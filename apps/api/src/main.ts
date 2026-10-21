@@ -45,6 +45,7 @@ import { FeePlanController } from './fee-plans';
 import { FinanceBulkController } from './finance-bulk';
 import { AcademicOperationsController } from './academic';
 import { SandboxEnachController } from './sandbox-enach';
+import { StudentPortalController } from './portal';
 import { keyed } from '../../../packages/core/src/security';
 @Catch()
 class SafeErrors implements ExceptionFilter {
@@ -109,8 +110,6 @@ class Health {
     PayerPortalController,
     PaymentProviderController,
     PaymentProviderAdminController,
-    PayerCheckoutController,
-    PaymentReturnController,
     PayerMandateController,
     MandateReturnController,
     AutopayAdminController,
@@ -118,6 +117,7 @@ class Health {
     AcademicOperationsController,
     FeePlanController,
     FinanceBulkController,
+    StudentPortalController,
   ],
   providers: [Db, AuthGuard, LeadsService],
 })

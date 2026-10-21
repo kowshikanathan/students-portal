@@ -50,8 +50,8 @@ export function Header({
                 <div>
                   <SmartLink href="/products/">For educational institutes</SmartLink>
                   <SmartLink href="/products/#flex">AutoCollect · Recurring collections</SmartLink>
-                  <SmartLink href="/products/#cred">Advance · Monthly payments</SmartLink>
-                  <SmartLink href="/products/#pay">Checkout · Payment methods</SmartLink>
+
+                  <SmartLink href="/products/#fees">Fee Management</SmartLink>
                   <SmartLink href="/contact-us/">For businesses</SmartLink>
                 </div>
               </details>
@@ -66,9 +66,8 @@ export function Header({
               Login <span aria-hidden="true">⌄</span>
             </summary>
             <div>
-              <SmartLink href="/admin/">Dodo Studio — Owner Dashboard</SmartLink>
-              <SmartLink href="/enach/">Dodo eNACH Dashboard</SmartLink>
-              <SmartLink href="/login/">All login options</SmartLink>
+              <SmartLink href="/portal/">Student / Parent Login</SmartLink>
+              <SmartLink href="/admin/">Institution Login</SmartLink>
             </div>
           </details>
           <SmartLink href="/contact-us/" className="button primary">

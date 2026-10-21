@@ -548,18 +548,128 @@ export function TenancyStudio() {
 
       <section className="admin-panel">
         <p className="eyebrow">TEN-06 · Workspace memberships</p>
-        <h2>Team access</h2>
+        <h2>Team Access & Finance RBAC</h2>
         <p>
-          Authentication is global; authorisation is attached to an explicit workspace membership.
+          Authorisation is strictly bounded to the workspace. Invite staff with tailored finance
+          roles.
         </p>
-        {data.members.map((member) => (
-          <div className="record-row" key={member.id}>
-            <strong>{member.email}</strong>
-            <span>{member.role_key}</span>
-            <span>{member.branch_id ? 'branch-scoped' : 'workspace scope'}</span>
-            <span className="status-pill">{member.status}</span>
-          </div>
-        ))}
+
+        {owner && (
+          <form
+            className="admin-form"
+            style={{
+              background: '#f8fafc',
+              padding: '1.25rem',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
+              marginBottom: '1.5rem',
+            }}
+            onSubmit={async (event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              try {
+                await request('admin/tenant/members', 'POST', {
+                  email: String(form.get('email') || ''),
+                  roleKey: String(form.get('roleKey') || 'viewer'),
+                  ...(form.get('branchId') ? { branchId: String(form.get('branchId')) } : {}),
+                });
+                setMessage('Team member invited and assigned role.');
+                await load();
+                (event.target as HTMLFormElement).reset();
+              } catch (error) {
+                setMessage((error as Error).message);
+              }
+            }}
+          >
+            <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '1.1rem' }}>+ Add Team Member</h3>
+            <div className="row">
+              <label className="field">
+                Staff Email *
+                <input name="email" type="email" required placeholder="colleague@institution.edu" />
+              </label>
+              <label className="field">
+                Assigned Role *
+                <select name="roleKey" defaultValue="finance_manager">
+                  <option value="institute_admin">Institution Admin</option>
+                  <option value="finance_manager">Finance Manager</option>
+                  <option value="accountant">Accountant</option>
+                  <option value="collection_executive">Collection Executive</option>
+                  <option value="viewer">Viewer (Read-Only)</option>
+                </select>
+              </label>
+              <label className="field">
+                Campus Scope (Optional)
+                <select name="branchId" defaultValue="">
+                  <option value="">All Campuses (Workspace-wide)</option>
+                  {data.branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name} ({b.code})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div style={{ marginTop: '0.75rem' }}>
+              <button className="button primary">Add / Invite User</button>
+            </div>
+          </form>
+        )}
+
+        <div className="admin-table-wrap">
+          <table className="admin-table" style={{ width: '100%' }}>
+            <thead>
+              <tr>
+                <th>Member Email</th>
+                <th>Role</th>
+                <th>Scope</th>
+                <th>Status</th>
+                {owner && <th>Action</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {data.members.map((member) => (
+                <tr key={member.id}>
+                  <td>
+                    <strong>{member.email}</strong>
+                  </td>
+                  <td>
+                    <span style={{ textTransform: 'capitalize' }}>
+                      {member.role_key.replaceAll('_', ' ')}
+                    </span>
+                  </td>
+                  <td>{member.branch_id ? 'Campus-scoped' : 'Workspace-wide'}</td>
+                  <td>
+                    <span className="status-pill">{member.status}</span>
+                  </td>
+                  {owner && (
+                    <td>
+                      {member.user_id !== session.user.id && member.status === 'active' ? (
+                        <button
+                          type="button"
+                          className="button outline"
+                          style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
+                          onClick={async () => {
+                            try {
+                              await request(`admin/tenant/members/${member.id}/revoke`, 'POST', {});
+                              setMessage('Member access revoked.');
+                              await load();
+                            } catch (error) {
+                              setMessage((error as Error).message);
+                            }
+                          }}
+                        >
+                          Revoke Access
+                        </button>
+                      ) : (
+                        <span>—</span>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="admin-grid">

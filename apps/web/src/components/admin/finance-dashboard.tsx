@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useAdminApi } from './context';
+import { FinanceIcon } from './finance-icon';
+import { canViewAdminArea } from './access';
 
 type Dashboard = {
   students: number;
@@ -53,7 +55,7 @@ const date = (value: string) =>
   }).format(new Date(value));
 
 export function FinanceDashboard({ cashflow = false }: { cashflow?: boolean } = {}) {
-  const { request, session } = useAdminApi();
+  const { request, session, can } = useAdminApi();
   const [result, setResult] = useState<{ tenantId: string; data: Dashboard } | null>(null);
   const [error, setError] = useState(false);
   const [refresh, setRefresh] = useState(0);
@@ -134,6 +136,76 @@ export function FinanceDashboard({ cashflow = false }: { cashflow?: boolean } = 
         ['Pending settlements', formatMoney(data.pending_settlements_minor)],
         ['Reconciliation to review', data.reconciliation_review],
       ];
+  const destinations = cashflow
+    ? [
+        'installments',
+        'installments',
+        'installments',
+        'payments',
+        'enach',
+        'installments',
+        'overdue',
+        'failed-debits',
+      ]
+    : [
+        'academic',
+        'installments',
+        'payments',
+        'installments',
+        'reports',
+        'installments',
+        'installments',
+        'overdue',
+        'enach',
+        'failed-debits',
+        'settlements',
+        'fees',
+      ];
+  const metric = ([label, value]: (string | number)[], index: number) => {
+    const target = destinations[index]!;
+    const href =
+      target === 'academic'
+        ? '/admin/students/'
+        : target === 'fees'
+          ? '/admin/fees/reconciliation/'
+          : '/admin/' + target + '/';
+    const content = (
+      <>
+        <span className="finance-metric-label">
+          {label}
+          <FinanceIcon name={target} />
+        </span>
+        <strong>{value}</strong>
+        <span className="finance-metric-hint">
+          {target === 'academic'
+            ? 'Student directory'
+            : target === 'fees'
+              ? 'Review reconciliation'
+              : 'View ' +
+                (target === 'enach'
+                  ? 'mandates'
+                  : target === 'failed-debits'
+                    ? 'failed debits'
+                    : target)}
+        </span>
+      </>
+    );
+    return canViewAdminArea(session.tenant.role, target, session.tenant.permissions) ? (
+      <Link
+        className={
+          'dashboard-stat finance-metric' + (index === 3 ? ' finance-metric-emphasis' : '')
+        }
+        href={href}
+        key={label}
+      >
+        {content}
+      </Link>
+    ) : (
+      <div className="dashboard-stat finance-metric" key={label}>
+        {content}
+      </div>
+    );
+  };
   return (
     <div className="finance-dashboard">
       <div className="admin-toolbar">
@@ -142,18 +214,54 @@ export function FinanceDashboard({ cashflow = false }: { cashflow?: boolean } = 
           <h2>{cashflow ? 'Cashflow' : 'Finance operations'}</h2>
           <p>{session.tenant.name} · Current receivables</p>
         </div>
-        <button className="button secondary" onClick={() => setRefresh((n) => n + 1)}>
-          Refresh
-        </button>
+        <div className="finance-page-actions">
+          {can('fee.plan.manage') && (
+            <Link className="button secondary" href="/admin/fee-plans/">
+              Fee structures
+            </Link>
+          )}
+          {can('customer.create') && (
+            <Link className="button primary" href="/admin/students/?new=1">
+              + New Student
+            </Link>
+          )}
+          <button
+            className="button secondary"
+            aria-label="Refresh finance dashboard"
+            onClick={() => setRefresh((n) => n + 1)}
+          >
+            Refresh
+          </button>
+        </div>
       </div>
-      <div className="dashboard-stats">
-        {metrics.map(([label, value]) => (
-          <div className="dashboard-stat" key={label}>
-            <span>{label}</span>
-            <strong>{value}</strong>
+      {!cashflow && data.students === 0 && (
+        <section className="finance-getting-started" aria-label="Get started with fee management">
+          <div className="finance-getting-started-icon">
+            <FinanceIcon name="academic" />
           </div>
-        ))}
+          <div>
+            <h3>Start with your first student</h3>
+            <p>
+              Add a student and link their payer, assign a fee structure, then review their Flex
+              schedule and enable Sandbox eNACH.
+            </p>
+          </div>
+          {can('customer.create') && (
+            <Link className="button primary" href="/admin/students/?new=1">
+              Add student
+            </Link>
+          )}
+        </section>
+      )}
+      <div className="dashboard-stats finance-metrics-primary">
+        {metrics.slice(0, 4).map(metric)}
       </div>
+      <section className="finance-operations-summary" aria-label="Collection activity">
+        <h3>{cashflow ? 'Upcoming cashflow' : 'Collection activity'}</h3>
+        <div className="dashboard-stats finance-metrics-secondary">
+          {metrics.slice(4).map((item, index) => metric(item, index + 4))}
+        </div>
+      </section>
       <section className="admin-panel">
         <h3>Expected vs collected</h3>
         <p className="small">Monthly net fee obligations and recorded net receipts</p>

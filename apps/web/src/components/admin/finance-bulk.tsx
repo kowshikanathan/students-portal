@@ -6,6 +6,7 @@ import { useAdminApi } from './context';
 import { financialStatusClass } from './financial-status';
 
 const actions = [
+  ['import_students', 'Bulk student registration & import', 'customer.create'],
   ['assign_plan', 'Bulk fee assignment', 'fee.plan.manage'],
   ['update_flex', 'Bulk installment update', 'fee.schedule.edit'],
   ['update_due_date', 'Bulk due date update', 'fee.schedule.edit'],
@@ -34,11 +35,13 @@ export function FinanceBulk() {
             null,
             2,
           )
-        : operation === 'assign_plan'
-          ? 'studentReference,planKey,accountReference\r\n'
-          : operation === 'update_due_date'
-            ? 'studentReference,accountReference,installmentSequence,dueDate\r\n'
-            : 'studentReference,accountReference\r\n';
+        : operation === 'import_students'
+          ? 'studentReference,fullName,email,phone,course,grade,groupName,academicYear,guardianName,guardianEmail,guardianPhone\r\nSTU-2026-001,Rahul Sharma,rahul@example.com,+91 9876543210,B.Tech,Year 1,Batch A,2026-2027,Ramesh Sharma,parent@example.com,+91 9876500000\r\n'
+          : operation === 'assign_plan'
+            ? 'studentReference,planKey,accountReference\r\n'
+            : operation === 'update_due_date'
+              ? 'studentReference,accountReference,installmentSequence,dueDate\r\n'
+              : 'studentReference,accountReference\r\n';
     const url = URL.createObjectURL(
       new Blob([text], { type: operation === 'update_flex' ? 'application/json' : 'text/csv' }),
     );
@@ -54,19 +57,41 @@ export function FinanceBulk() {
         <div className="admin-toolbar">
           <div>
             <p className="eyebrow">FINANCE OPERATIONS</p>
-            <h2>Bulk Actions</h2>
+            <h2>Bulk Actions & Data Management</h2>
             <p>Validate the complete batch before applying. Financial updates commit together.</p>
           </div>
-          <div className="row">
-            {can('customer.import') && (
-              <Link className="button secondary" href="/admin/academic-tools/">
-                Student import
-              </Link>
-            )}
+          <div className="row" style={{ flexWrap: 'wrap', gap: '0.5rem' }}>
             {can('report.read') && (
-              <Link className="button secondary" href="/admin/reports/">
-                Bulk exports
-              </Link>
+              <>
+                <a
+                  className="button secondary"
+                  href="/api/v1/admin/fees/bulk/export/students"
+                  download="students.csv"
+                >
+                  Export Students
+                </a>
+                <a
+                  className="button secondary"
+                  href="/api/v1/admin/fees/bulk/export/payments"
+                  download="payments.csv"
+                >
+                  Export Payments
+                </a>
+                <a
+                  className="button secondary"
+                  href="/api/v1/admin/fees/bulk/export/installments"
+                  download="installments.csv"
+                >
+                  Export Installments
+                </a>
+                <a
+                  className="button secondary"
+                  href="/api/v1/admin/fees/bulk/export/mandates"
+                  download="mandates.csv"
+                >
+                  Export Mandates
+                </a>
+              </>
             )}
           </div>
         </div>

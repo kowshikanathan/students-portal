@@ -174,6 +174,9 @@ export function MandateWorkspace({
           )}
         </span>
         <input
+          aria-label={
+            'Search ' + mandateViews.find((item) => item.id === view)?.label.toLowerCase()
+          }
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Account, provider reference or status"

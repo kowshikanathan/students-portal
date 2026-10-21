@@ -1,38 +1,18 @@
-# Dodo — Education Payments Platform
+# Dodo - Fee Management, Flex and eNACH
 
-A working, independently implemented education-payments website platform inspired by the feature class of modern fee-management products, with an owned CMS, secure staff console, enquiry management and a durable background worker. Built against **Website Master Blueprint v1.3, 7 October 2026**.
+The current canonical project is Website_jodo-main (9)/Website_jodo-main. It continues the existing Codex and Antigravity implementation, using one PostgreSQL fee ledger, immutable receipt snapshots and the existing mandate/debit/event/outbox architecture.
 
-**Delivery status:** working development/demo implementation; **not approved for production**, not a claim that every requirement in the 273-page blueprint is complete. See [release status](docs/acceptance/RELEASE.md), the 120-capability [register](docs/acceptance/blueprint-register.json), and [test evidence](docs/evidence/README.md).
+Public access offers Student / Parent Login and Institution Login. The parent portal accepts an enrollment reference and an institution-issued secure payer access code; an email address or phone number alone is not an authentication credential. Staff use the existing password and authenticator MFA flow. Platform-owner privileges remain protected institution administration permissions.
 
-**Product identity:** Dodo. The GitHub repository, existing database roles,
-migrations, signing-key configuration and legacy storage identifiers retain
-their current technical names for compatibility. Dodo now has two separate authenticated dashboard experiences:
-**Studio** at `/admin/` for general institution management, and **Dodo eNACH**
-at `/enach/` with its own sidebar for mandate registration, recurring debit,
-settlement and checkout records. The eNACH app reuses the existing fee operation
-APIs, payer portal, tenant permissions and audited financial records; it does
-not create a second payment ledger.
-Historical source citations to Jodo remain attributed to Jodo and must not be
-presented as Dodo customer or compliance claims. Existing published CMS copy
-may still require an owner-reviewed rebrand.
+Institution operations include students and parent links, approved fee structures, Master and student-specific Flex schedules, installments, staff-recorded cash and bank payments, receipts, sandbox mandates/debits/recovery, settlements, reconciliation, cashflow, overdue records, reports, bulk actions and tenant roles. Student setup reuses linked academic, payer and schedule records. Institution settings configure payer fields and receipt/email templates.
 
-## Included
+Generic hosted checkout routes are disabled. New mandate contracts accept eNACH only. No lending, CRED, UPI AutoPay, QR, card, wallet, netbanking, Stripe, WhatsApp or real bank/NPCI integration is enabled. Existing source content and historical financial records are retained.
 
-- Next.js / React / strict TypeScript / Tailwind CSS, responsive original teal-and-coral branding, configurable company identity, and locally controlled media.
-- Home; Flex / Cred / Pay product sections; about; demo contact; calculator; searchable/paginated blog and case-study libraries; article overviews; careers/support/partner/legal/accessibility utility pages; explicit external login choices.
-- **42 seeded content records** plus dynamic listing, category, search, consent, sitemap, RSS and administration routes. Original article overviews link to the source publications; original full articles are not republished.
-- Owned block editor: edit, reorder, preview, autosave, undo/redo, conflict protection, review, owner approval, publish, schedule, rollback, manual trash and restore. No source-content expiry or permanent-delete API.
-- Authenticator MFA; Argon2id password hashes; HttpOnly sessions; role checks; CSRF and origin checks; encrypted submitted contacts; protected audit records.
-- Tenant foundation: explicit workspace memberships, safe workspace switching, legal entities, campuses/branches, academic years, resumable onboarding drafts, versioned tenant brand drafts, DNS ownership challenges, cloneable role templates and maker-checker role publishing with explicit-deny simulation.
-- Financial tenant isolation: fee schedules, payers, installments, payments, refunds, mandates, settlement/reconciliation records, checkout sessions, provider events and recurring-debit records carry tenant ownership. Admin fee/payer/payment views and mutations are scoped to the active workspace, provider callbacks resolve the owning tenant from the referenced financial record, and database triggers reject cross-tenant financial parent/child relationships.
-- Academic/customer context: tenant-scoped students, guardians and explicit payer relationships; course/grade/batch/transport/hostel catalogue; student assignments; non-destructive catalogue retirement; dry-run imports with duplicate detection and row-level outcomes; ERP external-ID mappings and an explicit conflict queue. Shared email/phone values never create cross-student or cross-tenant access automatically.\n- Fee-plan and receivables lifecycle: versioned plan drafts, validation, maker-checker approval, effective/superseded states, student assignment into active receivable schedules, ageing buckets, student/family statements, separately approved concessions/scholarships/waivers/write-offs, advance/unapplied credits with controlled allocation, and withdrawal/transfer/plan-change requests that refuse unsafe execution while debit attempts are pending or unknown.
-- Database-committed enquiries, idempotency, staff tasks, stages and explainable declared-fit scores; consent-gated first-party observations; safe campaign links; guided product chat and handoff requests.
-- Audited fee-operations core: draft/active schedules, installments, course/batch/year/student fee scopes, multi-head fee components, concessions/scholarships, capped late-fee policies, optional logical bank-route keys, collection analytics, externally confirmed payment evidence, refunds, UPI AutoPay/eNACH mandate states, settlement allocation and reconciliation. Live payment/lending providers remain separately gated.
-- Encrypted payer profiles, expiring/revocable secure payer portal links, installment/payment/refund views, immutable receipt snapshots, and durable upcoming/due/overdue reminder jobs. Email delivery can be activated through SMTP; WhatsApp remains provider-gated.
-- Provider-gated hosted checkout sessions with idempotent creation, allowlisted redirect endpoints, opaque return-status tokens, fee-head allocation metadata and payer-portal payment actions. Owner-generated smart collection links can require the full outstanding balance or allow server-enforced custom/partial and fee-head payments. Hosted UPI AutoPay/eNACH mandate setup is also provider-gated: the payer authorizes on the provider page, active mandates drive due-date debit jobs with bounded retries, and replay-safe signed callbacks remain authoritative for mandate/payment outcomes. A real provider endpoint, credentials and acceptance evidence are still deployment-specific.
-- Durable task-workflow timers and simulations; delivery queue; optional SMTP staff notification adapter; local signed audit checkpoints; image validation/re-encoding; exports; SQL migrations; backup/isolated restore tools.
+Use AUTOPAY_PROVIDER_MODE=sandbox in a test/demo deployment. Sandbox is rejected in production mode. Simulated debits use the existing financial event handler, recalculate the remaining balance when executed and never move money. An active mandate is not a successful payment.
 
-This repository includes a fee-operations ledger and provider adapter boundaries but is **not a payment or lending provider by itself**. Money moves only when an approved external provider is actually configured and accepts a hosted checkout or recurring debit request. Student, parent, institute and business portal URLs are explicit deployment configuration. The local admin login is solely for this installation. No Jodo passwords, card data, bank credentials or KYC documents are collected.
+Receipt branding and email templates are captured in each new immutable receipt snapshot. The existing durable worker delivers payment confirmations using SMTP when configured; email acceptance is separate from payment success. Older receipts retain their original snapshots.
+
+See [current implementation and validation](docs/implementation/finance-platform.md). This is a development/demo implementation; real-provider readiness and deployment approval are not implied by a passing production build.
 
 ## Fast visual preview — no database
 

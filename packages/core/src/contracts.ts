@@ -106,7 +106,7 @@ export const leadSchema = z
     role: z.enum(['Owner', 'Principal', 'Finance', 'Administrator', 'Other']),
     students: z.number().int().min(1).max(10000000),
     city: z.string().trim().min(2).max(100),
-    interest: z.enum(['Flex', 'Cred', 'Pay', 'Not sure']),
+    interest: z.enum(['Flex', 'eNACH', 'Fee management', 'Not sure']),
     message: z.string().max(1500).default(''),
     noticeAccepted: z.literal(true),
     marketingOptIn: z.boolean().default(false),
@@ -236,7 +236,7 @@ export const feeScheduleActivationSchema = z
   .strict();
 export const directPaymentDetailsSchema = z
   .object({
-    mode: z.enum(['cash', 'neft', 'rtgs', 'imps', 'cheque', 'dd', 'bank_transfer', 'other']),
+    mode: z.enum(['cash', 'neft', 'rtgs', 'imps', 'cheque', 'dd', 'bank_transfer']),
     transactionDate: z.iso.date(),
     bankName: z.string().trim().min(2).max(120).optional(),
     instrumentNumber: z.string().trim().min(3).max(80).optional(),
@@ -333,7 +333,7 @@ export const paymentProviderEventSchema = z.discriminatedUnion('type', [
       // Optional for legacy callbacks, required to correlate an unknown create response.
       merchantSetupId: z.uuid().optional(),
       scheduleId: z.uuid(),
-      rail: z.enum(['upi_autopay', 'enach']),
+      rail: z.enum(['enach']),
       providerReference: z
         .string()
         .trim()
@@ -392,7 +392,7 @@ export const refundRecordSchema = z
 export const mandateRecordSchema = z
   .object({
     scheduleId: z.uuid(),
-    rail: z.enum(['upi_autopay', 'enach']),
+    rail: z.enum(['enach']),
     providerReference: z
       .string()
       .trim()
@@ -403,7 +403,7 @@ export const mandateRecordSchema = z
 
 export const payerMandateSetupSchema = z
   .object({
-    rail: z.enum(['upi_autopay', 'enach']),
+    rail: z.enum(['enach']),
     idempotencyKey: z.uuid(),
   })
   .strict();

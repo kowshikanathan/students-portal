@@ -450,10 +450,10 @@ test('full-balance collection link cannot silently enable partial-payment option
 test('payer mandate setup accepts supported recurring rails', () => {
   assert.equal(
     payerMandateSetupSchema.parse({
-      rail: 'upi_autopay',
+      rail: 'enach',
       idempotencyKey: crypto.randomUUID(),
     }).rail,
-    'upi_autopay',
+    'enach',
   );
   assert.equal(
     payerMandateSetupSchema.parse({

@@ -12,9 +12,11 @@ import {
 } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { promises as dns } from 'node:dns';
+import * as argon2 from 'argon2';
 import { z } from 'zod';
 import { Db } from './db';
 import { AuthGuard, AuthedRequest, Roles } from './auth';
+import { encrypt } from '../../../packages/core/src/security';
 
 const permissionCatalogue = new Set([
   'tenant.read',
@@ -702,5 +704,101 @@ export class TenancyController {
       allowed: granted && !denied,
       reasons: denied ? ['explicit_deny'] : granted ? ['explicit_grant'] : ['no_matching_grant'],
     };
+  }
+
+  @Post('members')
+  async addMember(@Req() req: AuthedRequest, @Body() body: unknown) {
+    if (
+      req.actor.tenantRole !== 'owner' &&
+      req.actor.tenantRole !== 'institute_admin' &&
+      !req.actor.permissions?.includes('membership.assign')
+    ) {
+      throw new ForbiddenException('User management permission is required for this action');
+    }
+    const input = z
+      .object({
+        email: z.string().trim().email().max(200),
+        roleKey: z.string().trim().min(2).max(80),
+        branchId: z.uuid().optional(),
+        password: z.string().min(6).max(200).optional(),
+      })
+      .parse(body);
+
+    return this.db.tx(async (c) => {
+      let user = (
+        await c.query(`SELECT id, email, active FROM users WHERE lower(email)=$1`, [
+          input.email.toLowerCase(),
+        ])
+      ).rows[0];
+
+      if (!user) {
+        const password = input.password || 'TemporaryPass123!';
+        const hash = await argon2.hash(password);
+        const totpSecret = encrypt(randomBytes(20).toString('hex'));
+        user = (
+          await c.query(
+            `INSERT INTO users(email, password_hash, totp_secret, role, active)
+             VALUES($1, $2, $3, 'staff', true)
+             RETURNING id, email, active`,
+            [input.email.toLowerCase(), hash, totpSecret],
+          )
+        ).rows[0];
+      }
+
+      const membership = (
+        await c.query(
+          `INSERT INTO memberships(tenant_id, user_id, role_key, status, branch_id)
+           VALUES($1, $2, $3, 'active', $4)
+           ON CONFLICT(tenant_id, user_id) DO UPDATE SET
+             role_key=EXCLUDED.role_key,
+             status='active',
+             branch_id=EXCLUDED.branch_id,
+             updated_at=now()
+           RETURNING id, tenant_id, user_id, role_key, status, branch_id, created_at, updated_at`,
+          [req.actor.tenantId, user.id, input.roleKey, input.branchId || null],
+        )
+      ).rows[0];
+
+      await this.db.audit(c, req.actor.id, 'tenant.membership.assign', membership.id, {
+        tenantId: req.actor.tenantId,
+        userId: user.id,
+        email: input.email,
+        roleKey: input.roleKey,
+      });
+
+      return {
+        ...membership,
+        email: user.email,
+      };
+    });
+  }
+
+  @Post('members/:id/revoke')
+  async revokeMember(@Req() req: AuthedRequest, @Param('id') id: string) {
+    if (
+      req.actor.tenantRole !== 'owner' &&
+      req.actor.tenantRole !== 'institute_admin' &&
+      !req.actor.permissions?.includes('membership.revoke')
+    ) {
+      throw new ForbiddenException('User management permission is required for this action');
+    }
+    const membershipId = z.uuid().parse(id);
+    return this.db.tx(async (c) => {
+      const membership = (
+        await c.query(
+          `UPDATE memberships SET status='revoked', updated_at=now()
+           WHERE tenant_id=$1 AND id=$2
+           RETURNING id, user_id, role_key, status`,
+          [req.actor.tenantId, membershipId],
+        )
+      ).rows[0];
+      if (!membership) throw new ConflictException('Membership not found');
+      await this.db.audit(c, req.actor.id, 'tenant.membership.revoke', membership.id, {
+        tenantId: req.actor.tenantId,
+        userId: membership.user_id,
+        roleKey: membership.role_key,
+      });
+      return membership;
+    });
   }
 }

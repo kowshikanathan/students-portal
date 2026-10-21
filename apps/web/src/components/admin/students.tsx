@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAdminApi } from './context';
 import { formatMoney } from './finance-dashboard';
@@ -23,6 +24,7 @@ type Student = {
 type Page = { rows: Student[]; total: number; page: number; pageSize: number };
 
 export function Students() {
+  const router = useRouter();
   const { request, session, can } = useAdminApi();
   const [result, setResult] = useState<{ tenantId: string; value: Page } | null>(null);
   const [search, setSearch] = useState('');
@@ -34,8 +36,26 @@ export function Students() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
+  useEffect(() => {
+    setAdding(new URLSearchParams(window.location.search).get('new') === '1');
+  }, []);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
+  const [guardians, setGuardians] = useState<Array<{ id: string; display_name: string }>>([]);
+  useEffect(() => {
+    if (!adding) return;
+    let active = true;
+    request<typeof guardians>('admin/academic/guardians')
+      .then((rows) => {
+        if (active) setGuardians(rows);
+      })
+      .catch(() => {
+        if (active) setGuardians([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [adding, session.tenant.id]);
   const data = result?.tenantId === session.tenant.id ? result.value : null;
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -89,7 +109,7 @@ export function Students() {
               setNotice('');
             }}
           >
-            + Add Student
+            + New Student
           </button>
         </div>
       </div>
@@ -103,36 +123,167 @@ export function Students() {
               setNotice('');
               const form = new FormData(event.currentTarget);
               try {
-                await request('admin/academic/students', 'POST', {
+                const payload: Record<string, any> = {
                   studentReference: form.get('studentReference'),
                   fullName: form.get('fullName'),
-                });
+                };
+                for (const key of [
+                  'email',
+                  'phone',
+                  'campus',
+                  'course',
+                  'grade',
+                  'groupName',
+                  'academicYear',
+                  'guardianId',
+                  'guardianName',
+                  'guardianEmail',
+                  'guardianPhone',
+                  'status',
+                ]) {
+                  const val = form.get(key);
+                  if (val && typeof val === 'string' && val.trim().length > 0) {
+                    payload[key] = val.trim();
+                  }
+                }
+                const created: any = await request('admin/academic/students', 'POST', payload);
+                router.push('/admin/students/' + created.id + '/');
                 setAdding(false);
                 setRefresh((n) => n + 1);
-                setNotice('Student created.');
-              } catch {
                 setNotice(
-                  'Student could not be created. Check the enrollment number and try again.',
+                  `Student created successfully (${payload.studentReference}). Next steps: Assign Fee Structure → Configure Components → Assign Master Schedule → Flex Schedule → Enable eNACH.`,
+                );
+              } catch (err: any) {
+                setNotice(
+                  err?.message ||
+                    'Student could not be created. Please verify enrollment number format and try again.',
                 );
               } finally {
                 setBusy(false);
               }
             }}
           >
-            <h3>Add Student</h3>
+            <h3>+ New Student Registration</h3>
+            <p className="small">
+              Enter academic and guardian details. Guardians will be linked as fee payers for eNACH
+              and portal access.
+            </p>
+
+            <h4 style={{ marginTop: '1rem', marginBottom: '0.5rem' }}>Student Academic Profile</h4>
             <div className="row">
               <label className="field">
-                Full name
-                <input name="fullName" required minLength={2} maxLength={160} autoFocus />
+                Student Name *
+                <input
+                  name="fullName"
+                  required
+                  minLength={2}
+                  maxLength={160}
+                  placeholder="e.g. Rahul Sharma"
+                  autoFocus
+                />
               </label>
               <label className="field">
-                Enrollment number
-                <input name="studentReference" required pattern="[A-Za-z0-9._/-]{2,80}" />
+                Enrollment / Student ID *
+                <input
+                  name="studentReference"
+                  required
+                  pattern="[A-Za-z0-9._/-]{2,80}"
+                  placeholder="e.g. STU-2026-001"
+                />
               </label>
             </div>
             <div className="row">
+              <label className="field">
+                Student Email
+                <input
+                  name="email"
+                  type="email"
+                  placeholder="student@institution.edu"
+                  maxLength={200}
+                />
+              </label>
+              <label className="field">
+                Student Phone
+                <input name="phone" type="tel" placeholder="+91 98765 43210" />
+              </label>
+            </div>
+            <div className="row">
+              <label className="field">
+                Institute
+                <input value={session.tenant.name} disabled readOnly />
+              </label>
+              <label className="field">
+                Campus / Branch
+                <input name="campus" placeholder="e.g. Main Campus / South Wing" maxLength={160} />
+              </label>
+            </div>
+            <div className="row">
+              <label className="field">
+                Course / Program
+                <input name="course" placeholder="e.g. B.Tech Computer Science" maxLength={160} />
+              </label>
+              <label className="field">
+                Grade / Class
+                <input name="grade" placeholder="e.g. Year 2 / Grade 11" maxLength={160} />
+              </label>
+            </div>
+            <div className="row">
+              <label className="field">
+                Group / Batch
+                <input name="groupName" placeholder="e.g. Batch 2026-A" maxLength={160} />
+              </label>
+              <label className="field">
+                Academic Year
+                <input name="academicYear" placeholder="e.g. 2026-2027" maxLength={160} />
+              </label>
+              <label className="field">
+                Admission Status
+                <select name="status" defaultValue="active">
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                  <option value="withdrawn">Withdrawn</option>
+                  <option value="graduated">Graduated</option>
+                </select>
+              </label>
+            </div>
+
+            <h4 style={{ marginTop: '1.25rem', marginBottom: '0.5rem' }}>
+              Parent / Guardian Details (Fee Payer)
+            </h4>
+            <label className="field">
+              Link Existing Parent / Payer
+              <select name="guardianId" defaultValue="">
+                <option value="">Create parent from details below</option>
+                {guardians.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.display_name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="row">
+              <label className="field">
+                Parent / Guardian Name
+                <input name="guardianName" placeholder="e.g. Ramesh Sharma" maxLength={160} />
+              </label>
+              <label className="field">
+                Parent Email
+                <input
+                  name="guardianEmail"
+                  type="email"
+                  placeholder="parent@example.com"
+                  maxLength={200}
+                />
+              </label>
+              <label className="field">
+                Parent Phone
+                <input name="guardianPhone" type="tel" placeholder="+91 98765 00000" />
+              </label>
+            </div>
+
+            <div className="row" style={{ marginTop: '1.5rem' }}>
               <button className="button primary" disabled={busy}>
-                {busy ? 'Saving…' : 'Create Student'}
+                {busy ? 'Saving…' : 'Create & Register Student'}
               </button>
               <button
                 type="button"

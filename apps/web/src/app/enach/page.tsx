@@ -1,10 +1,4 @@
-import { AdminShell } from '@/components/admin/shell';
-
-export const metadata = {
-  title: 'Dodo eNACH | Mandates & AutoPay',
-  robots: { index: false, follow: false },
-};
-
+import { redirect } from 'next/navigation';
 export default function EnachApp() {
-  return <AdminShell standaloneEnach initialArea="enach" />;
+  redirect('/admin/enach/');
 }

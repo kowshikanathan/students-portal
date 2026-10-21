@@ -67,6 +67,8 @@ export default async function Receipt({
       <section className="payer-card">
         <p className="eyebrow">FEE ACCOUNT RECORD</p>
         <h1>Payment receipt</h1>
+        <h2>{snapshot.receiptConfig?.receipt_heading || snapshot.receiptConfig?.heading}</h2>
+        <p>{snapshot.receiptConfig?.header_note || snapshot.receiptConfig?.header_text}</p>
         {snapshot.provider === 'sandbox_enach' && (
           <p className="status-pill warn">Sandbox receipt · no money movement</p>
         )}
@@ -80,6 +82,11 @@ export default async function Receipt({
             ))}
           </tbody>
         </table>
+        <p>{snapshot.receiptConfig?.footer_note || snapshot.receiptConfig?.footer_text}</p>
+        <p>{snapshot.receiptConfig?.contact_email || snapshot.receiptConfig?.support_info}</p>
+        <small>
+          {snapshot.receiptConfig?.terms_and_conditions || snapshot.receiptConfig?.terms}
+        </small>
       </section>
       <Link className="no-print" href={'/payer/' + encodeURIComponent(token) + '/'}>
         Back to fee account

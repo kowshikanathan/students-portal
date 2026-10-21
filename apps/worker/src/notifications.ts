@@ -1,3 +1,4 @@
+import { renderReceiptEmail } from '../../api/src/email';
 import nodemailer from 'nodemailer';
 import { Db } from '../../api/src/db';
 export async function notifyStaff(
@@ -86,7 +87,7 @@ export async function notifyFeePayer(
   eventId: string,
 ): Promise<'provider_accepted' | 'disabled' | 'uncertain' | 'failed'> {
   const rows = await db.query(
-    `SELECT l.*,p.encrypted_profile,i.due_date,i.amount_minor,i.paid_amount_minor,
+    `SELECT l.*,p.encrypted_profile,i.due_date,i.amount_minor,i.paid_amount_minor,i.adjustment_amount_minor,
             s.account_reference
      FROM fee_communication_log l
      JOIN fee_payers p ON p.id=l.payer_id
@@ -160,10 +161,45 @@ export async function notifyFeePayer(
   });
 
   const due = new Date(log.due_date).toLocaleDateString('en-IN');
-  const outstanding = Math.max(0, Number(log.amount_minor) - Number(log.paid_amount_minor));
+  const outstanding = Math.max(
+    0,
+    Number(log.amount_minor) -
+      Number(log.adjustment_amount_minor || 0) -
+      Number(log.paid_amount_minor),
+  );
   const amount = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(
     outstanding / 100,
   );
+  const receipt =
+    log.kind === 'receipt'
+      ? (
+          await db.query(
+            `SELECT r.id,r.receipt_number,r.snapshot,p.amount_minor,p.recorded_at FROM outbox o JOIN fee_receipts r ON r.id=(o.payload->>'receiptId')::uuid JOIN payment_records p ON p.id=r.payment_id WHERE o.event_id=$1 AND p.tenant_id=$2`,
+            [eventId, log.tenant_id],
+          )
+        )[0]
+      : null;
+  const snap = receipt?.snapshot || {};
+  const paymentAmount = new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+  }).format(Number(receipt?.amount_minor || 0) / 100);
+  const rendered = receipt
+    ? renderReceiptEmail(snap.emailConfig || {}, {
+        payer_name: profile.displayName,
+        parent_name: profile.displayName,
+        student_name: snap.studentName || log.account_reference,
+        institution_name: snap.instituteName || '',
+        receipt_number: receipt.receipt_number,
+        amount: paymentAmount,
+        payment_date: new Date(receipt.recorded_at).toLocaleDateString('en-IN'),
+        date: new Date(receipt.recorded_at).toLocaleDateString('en-IN'),
+        transaction_id: snap.providerReference || '',
+        outstanding_balance: amount,
+        course: snap.course || '',
+        payment_status: 'confirmed',
+      })
+    : null;
   const kindText: Record<string, string> = {
     upcoming_3d: `An installment of ${amount} is due on ${due}.`,
     due_today: `An installment of ${amount} is due today (${due}).`,
@@ -172,17 +208,21 @@ export async function notifyFeePayer(
   };
   try {
     const result = await transport.sendMail({
-      from: process.env.SMTP_FROM,
+      from: rendered?.senderName
+        ? { name: rendered.senderName, address: process.env.SMTP_FROM! }
+        : process.env.SMTP_FROM,
       to: profile.email,
       subject:
-        log.kind === 'receipt'
+        rendered?.subject ||
+        (log.kind === 'receipt'
           ? 'Payment receipt available'
-          : 'Fee payment reminder — ' + log.account_reference,
+          : 'Fee payment reminder — ' + log.account_reference),
       text:
+        rendered?.text ||
         `Hello ${profile.displayName},\n\n` +
-        (kindText[log.kind] || 'There is an update to your fee schedule.') +
-        '\n\nUse the secure payer portal link provided by your institute to review your schedule and receipts.' +
-        '\n\nThis message never asks for card, bank or UPI credentials.',
+          (kindText[log.kind] || 'There is an update to your fee schedule.') +
+          '\n\nUse the secure payer portal link provided by your institute to review your schedule and receipts.' +
+          '\n\nThis message never asks for card, bank or UPI credentials.',
       messageId,
       disableFileAccess: true,
       disableUrlAccess: true,
@@ -197,6 +237,17 @@ export async function notifyFeePayer(
           accepted ? null : 'NO_RECIPIENT_ACCEPTED',
         ],
       );
+      if (receipt)
+        await c.query(
+          'INSERT INTO receipt_email_logs(tenant_id,receipt_id,recipient_email,subject,status) VALUES($1,$2,$3,$4,$5)',
+          [
+            log.tenant_id,
+            receipt.id,
+            profile.email,
+            rendered!.subject,
+            accepted ? 'sent' : 'failed',
+          ],
+        );
       await c.query(
         `UPDATE fee_communication_log
          SET status=$2,provider_reference=$3,last_error=$4,updated_at=now()

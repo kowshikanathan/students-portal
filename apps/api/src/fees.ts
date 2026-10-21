@@ -1,3 +1,4 @@
+import { receiptContact } from './receipt-contact';
 import {
   Body,
   ConflictException,
@@ -20,6 +21,7 @@ import { Db } from './db';
 import { syncQueuedDebitBalances, assertNoProcessingCollections } from './fee-balances';
 import { AuthGuard, AuthedRequest, Roles } from './auth';
 import { uuid } from './content';
+import { decrypt } from '../../../packages/core/src/security';
 import {
   externalPaymentRecordSchema,
   feeScheduleActivationSchema,
@@ -293,6 +295,9 @@ export class FeeOperationsController {
           (SELECT string_agg(c.label,', ' ORDER BY c.label) FROM student_catalogue_assignments ca JOIN academic_catalogue c ON c.id=ca.catalogue_id AND c.tenant_id=ca.tenant_id WHERE ca.tenant_id=s.tenant_id AND ca.student_id=s.id AND ca.ended_on IS NULL AND ca.effective_on<=current_date AND c.kind='course') AS course,
           (SELECT string_agg(c.label,', ' ORDER BY c.label) FROM student_catalogue_assignments ca JOIN academic_catalogue c ON c.id=ca.catalogue_id AND c.tenant_id=ca.tenant_id WHERE ca.tenant_id=s.tenant_id AND ca.student_id=s.id AND ca.ended_on IS NULL AND ca.effective_on<=current_date AND c.kind='batch') AS group_name,
           (SELECT string_agg(c.label,', ' ORDER BY c.label) FROM student_catalogue_assignments ca JOIN academic_catalogue c ON c.id=ca.catalogue_id AND c.tenant_id=ca.tenant_id WHERE ca.tenant_id=s.tenant_id AND ca.student_id=s.id AND ca.ended_on IS NULL AND ca.effective_on<=current_date AND c.kind='grade') AS grade,
+          (SELECT g.display_name FROM academic_guardian_links gl JOIN academic_guardians g ON g.id=gl.guardian_id WHERE gl.tenant_id=s.tenant_id AND gl.student_id=s.id ORDER BY gl.created_at ASC LIMIT 1) AS guardian_name,
+          (SELECT g.email FROM academic_guardian_links gl JOIN academic_guardians g ON g.id=gl.guardian_id WHERE gl.tenant_id=s.tenant_id AND gl.student_id=s.id ORDER BY gl.created_at ASC LIMIT 1) AS guardian_email,
+          (SELECT g.phone FROM academic_guardian_links gl JOIN academic_guardians g ON g.id=gl.guardian_id WHERE gl.tenant_id=s.tenant_id AND gl.student_id=s.id ORDER BY gl.created_at ASC LIMIT 1) AS guardian_phone,
           coalesce((SELECT m.status FROM payment_mandates m WHERE m.tenant_id=s.tenant_id AND m.rail='enach' AND EXISTS(SELECT 1 FROM student_fee_plan_assignments fa WHERE fa.tenant_id=s.tenant_id AND fa.student_id=s.id AND fa.schedule_id=m.schedule_id) ORDER BY CASE WHEN m.status='active' THEN 0 ELSE 1 END,m.last_event_at DESC LIMIT 1),'not_registered') AS enach_status,
           coalesce(b.net_payable_minor,0)::bigint AS net_payable_minor,
           coalesce(b.paid_minor,0)::bigint AS paid_minor,
@@ -334,12 +339,15 @@ export class FeeOperationsController {
         SELECT b.* FROM finance_schedule_balances b WHERE b.tenant_id=$2 AND EXISTS (
           SELECT 1 FROM student_fee_plan_assignments a WHERE a.student_id=$1 AND a.tenant_id=$2 AND a.schedule_id=b.schedule_id
         )
-      ) SELECT s.id,s.full_name,s.student_reference,s.status,t.display_name AS institute,
+      ) SELECT s.id,s.full_name,s.student_reference,s.email,s.phone,s.status,t.display_name AS institute,
           (SELECT label FROM academic_years ay WHERE ay.tenant_id=s.tenant_id AND ay.id=s.academic_year_id) AS academic_year,
           (SELECT name FROM branches br WHERE br.tenant_id=s.tenant_id AND br.id=s.branch_id) AS campus,
           (SELECT string_agg(c.label,', ' ORDER BY c.label) FROM student_catalogue_assignments ca JOIN academic_catalogue c ON c.id=ca.catalogue_id AND c.tenant_id=ca.tenant_id WHERE ca.tenant_id=s.tenant_id AND ca.student_id=s.id AND ca.ended_on IS NULL AND ca.effective_on<=current_date AND c.kind='course') AS course,
           (SELECT string_agg(c.label,', ' ORDER BY c.label) FROM student_catalogue_assignments ca JOIN academic_catalogue c ON c.id=ca.catalogue_id AND c.tenant_id=ca.tenant_id WHERE ca.tenant_id=s.tenant_id AND ca.student_id=s.id AND ca.ended_on IS NULL AND ca.effective_on<=current_date AND c.kind='batch') AS group_name,
           (SELECT string_agg(c.label,', ' ORDER BY c.label) FROM student_catalogue_assignments ca JOIN academic_catalogue c ON c.id=ca.catalogue_id AND c.tenant_id=ca.tenant_id WHERE ca.tenant_id=s.tenant_id AND ca.student_id=s.id AND ca.ended_on IS NULL AND ca.effective_on<=current_date AND c.kind='grade') AS grade,
+          (SELECT g.display_name FROM academic_guardian_links gl JOIN academic_guardians g ON g.id=gl.guardian_id WHERE gl.tenant_id=s.tenant_id AND gl.student_id=s.id ORDER BY gl.created_at ASC LIMIT 1) AS guardian_name,
+          (SELECT g.email FROM academic_guardian_links gl JOIN academic_guardians g ON g.id=gl.guardian_id WHERE gl.tenant_id=s.tenant_id AND gl.student_id=s.id ORDER BY gl.created_at ASC LIMIT 1) AS guardian_email,
+          (SELECT g.phone FROM academic_guardian_links gl JOIN academic_guardians g ON g.id=gl.guardian_id WHERE gl.tenant_id=s.tenant_id AND gl.student_id=s.id ORDER BY gl.created_at ASC LIMIT 1) AS guardian_phone,
           coalesce((SELECT m.status FROM payment_mandates m WHERE m.tenant_id=s.tenant_id AND m.rail='enach' AND EXISTS(SELECT 1 FROM student_fee_plan_assignments fa WHERE fa.tenant_id=s.tenant_id AND fa.student_id=s.id AND fa.schedule_id=m.schedule_id) ORDER BY CASE WHEN m.status='active' THEN 0 ELSE 1 END,m.last_event_at DESC LIMIT 1),'not_registered') AS enach_status,
         coalesce((SELECT json_agg(b) FROM balances b),'[]'::json) AS balances,
         (SELECT json_build_object('net_payable_minor',coalesce(sum(net_payable_minor),0),
@@ -367,6 +375,7 @@ export class FeeOperationsController {
           'payments',
           'mandates',
           'receipts',
+          'bank',
         ]),
         page: z.coerce.number().int().min(1).max(100000).default(1),
         pageSize: z.coerce.number().int().min(1).max(100).default(25),
@@ -379,6 +388,7 @@ export class FeeOperationsController {
       payments: `SELECT p.id,coalesce(p.collection_reference,p.provider_reference) AS provider_reference,p.amount_minor,p.refunded_amount_minor,p.recorded_at,p.status FROM payment_records p WHERE p.tenant_id=$1 AND EXISTS (SELECT 1 FROM student_fee_plan_assignments a WHERE a.tenant_id=$1 AND a.student_id=$2 AND a.schedule_id=p.schedule_id)`,
       mandates: `SELECT m.id,m.provider,m.provider_reference,m.status,m.last_event_at,m.rail FROM payment_mandates m WHERE m.tenant_id=$1 AND m.rail='enach' AND EXISTS (SELECT 1 FROM student_fee_plan_assignments a WHERE a.tenant_id=$1 AND a.student_id=$2 AND a.schedule_id=m.schedule_id)`,
       receipts: `SELECT r.id,r.receipt_number,r.issued_at,r.payment_id FROM fee_receipts r JOIN payment_records p ON p.id=r.payment_id AND p.tenant_id=r.tenant_id WHERE r.tenant_id=$1 AND EXISTS (SELECT 1 FROM student_fee_plan_assignments a WHERE a.tenant_id=$1 AND a.student_id=$2 AND a.schedule_id=p.schedule_id)`,
+      bank: `SELECT p.id,coalesce(p.collection_reference,p.provider_reference) AS provider_reference,p.amount_minor,p.refunded_amount_minor,p.recorded_at,p.status,coalesce(p.evidence_note,'Direct payment') AS evidence_note FROM payment_records p WHERE p.tenant_id=$1 AND (p.provider='manual' OR p.provider_reference LIKE 'CASH-%' OR p.evidence_note IS NOT NULL) AND EXISTS (SELECT 1 FROM student_fee_plan_assignments a WHERE a.tenant_id=$1 AND a.student_id=$2 AND a.schedule_id=p.schedule_id)`,
     };
     const order = {
       master: 'due_date,id',
@@ -387,6 +397,7 @@ export class FeeOperationsController {
       payments: 'recorded_at DESC,id',
       mandates: 'last_event_at DESC,id',
       receipts: 'issued_at DESC,id',
+      bank: 'recorded_at DESC,id',
     };
     const result = await this.db.query(
       `WITH records AS (${sources[input.section]})
@@ -783,17 +794,292 @@ export class FeeOperationsController {
     );
   }
 
+  @Get('settings/payment-form')
+  async getPaymentFormConfig(@Req() req: AuthedRequest) {
+    const rows = await this.db.query(
+      `SELECT fields, components, rules, instructions FROM student_payment_form_configs WHERE tenant_id=$1`,
+      [req.actor.tenantId],
+    );
+    if (!rows[0]) {
+      return {
+        fields: [
+          {
+            key: 'payer_name',
+            label: 'Payer Name',
+            visible: true,
+            required: true,
+            editable: true,
+            order: 1,
+          },
+          {
+            key: 'payer_email',
+            label: 'Payer Email',
+            visible: true,
+            required: true,
+            editable: true,
+            order: 2,
+          },
+          {
+            key: 'payer_phone',
+            label: 'Payer Phone',
+            visible: true,
+            required: true,
+            editable: true,
+            order: 3,
+          },
+          {
+            key: 'student_name',
+            label: 'Student Name',
+            visible: true,
+            required: true,
+            editable: false,
+            order: 4,
+          },
+          {
+            key: 'course',
+            label: 'Course',
+            visible: true,
+            required: false,
+            editable: false,
+            order: 5,
+          },
+          {
+            key: 'grade',
+            label: 'Grade / Class',
+            visible: true,
+            required: false,
+            editable: false,
+            order: 6,
+          },
+        ],
+        components: [
+          {
+            code: 'REG',
+            label: 'Registration Fee',
+            visible: true,
+            required: true,
+            selectable: false,
+            fixed: true,
+          },
+          {
+            code: 'CRS',
+            label: 'Course Fee',
+            visible: true,
+            required: true,
+            selectable: false,
+            fixed: true,
+          },
+          {
+            code: 'TUI',
+            label: 'Tuition Fee',
+            visible: true,
+            required: false,
+            selectable: true,
+            fixed: false,
+          },
+          {
+            code: 'HST',
+            label: 'Hostel Fee',
+            visible: true,
+            required: false,
+            selectable: true,
+            fixed: false,
+          },
+          {
+            code: 'TRN',
+            label: 'Transport Fee',
+            visible: true,
+            required: false,
+            selectable: true,
+            fixed: false,
+          },
+          {
+            code: 'EXM',
+            label: 'Exam Fee',
+            visible: true,
+            required: false,
+            selectable: true,
+            fixed: false,
+          },
+        ],
+        rules: {
+          allow_full_payment: true,
+          allow_partial_payment: true,
+          allow_advance_payment: true,
+          min_partial_amount_minor: 100000,
+          max_partial_amount_minor: null,
+          require_down_payment: false,
+          enable_enach: true,
+          allow_payer_contact_editing: true,
+          allow_fee_component_selection: true,
+        },
+        instructions:
+          'Review your fee schedule and submit payer details to complete eNACH registration.',
+      };
+    }
+    return rows[0];
+  }
+
+  @Post('settings/payment-form')
+  async savePaymentFormConfig(@Req() req: AuthedRequest, @Body() body: unknown) {
+    const input = z
+      .object({
+        fields: z.array(
+          z.object({
+            key: z.enum([
+              'payer_name',
+              'payer_email',
+              'payer_phone',
+              'student_name',
+              'course',
+              'grade',
+            ]),
+            label: z.string().trim().min(1).max(100),
+            visible: z.boolean(),
+            required: z.boolean(),
+            editable: z.boolean(),
+            order: z.number().int().optional(),
+          }),
+        ),
+        components: z.array(
+          z.object({
+            code: z.string(),
+            label: z.string(),
+            visible: z.boolean(),
+            required: z.boolean(),
+            selectable: z.boolean().optional(),
+            fixed: z.boolean().optional(),
+          }),
+        ),
+        rules: z.object({
+          terms_text: z.string().max(2000).optional(),
+          allow_full_payment: z.boolean().optional(),
+          allow_partial_payment: z.boolean().optional(),
+          allow_advance_payment: z.boolean().optional(),
+          min_partial_amount_minor: z.number().nullable().optional(),
+          max_partial_amount_minor: z.number().nullable().optional(),
+          require_down_payment: z.boolean().optional(),
+          enable_enach: z.boolean().optional(),
+          allow_payer_contact_editing: z.boolean().optional(),
+          allow_fee_component_selection: z.boolean().optional(),
+        }),
+        instructions: z.string().max(2000).optional(),
+      })
+      .parse(body);
+
+    await this.db.tx(async (c) => {
+      await c.query(
+        `INSERT INTO student_payment_form_configs(tenant_id, fields, components, rules, instructions, updated_at, updated_by)
+       VALUES($1, $2, $3, $4, $5, now(), $6)
+       ON CONFLICT(tenant_id) DO UPDATE SET
+         fields=EXCLUDED.fields,
+         components=EXCLUDED.components,
+         rules=EXCLUDED.rules,
+         instructions=EXCLUDED.instructions,
+         updated_at=now(),
+         updated_by=EXCLUDED.updated_by`,
+        [
+          req.actor.tenantId,
+          JSON.stringify(input.fields),
+          JSON.stringify(input.components),
+          JSON.stringify(input.rules),
+          input.instructions || '',
+          req.actor.id,
+        ],
+      );
+      await this.db.audit(
+        c,
+        req.actor.id,
+        'fees.settings.savePaymentFormConfig',
+        req.actor.tenantId,
+        { tenantId: req.actor.tenantId },
+      );
+    });
+    return { status: 'saved' };
+  }
+
+  @Get('settings/receipt-email')
+  async getReceiptEmailConfig(@Req() req: AuthedRequest) {
+    const rows = await this.db.query(
+      `SELECT receipt_config, email_config FROM receipt_email_configs WHERE tenant_id=$1`,
+      [req.actor.tenantId],
+    );
+    if (!rows[0]) {
+      return {
+        receipt_config: {
+          heading: 'FEE PAYMENT RECEIPT',
+          header_text: 'Official student fee payment acknowledgement',
+          footer_text:
+            'This is a computer-generated receipt issued by the institution. No physical signature is required.',
+          support_info: 'For fee queries, contact your institution accounts department.',
+          terms: 'Fees once paid are subject to institutional refund policies.',
+          show_logo: true,
+        },
+        email_config: {
+          subject: 'Payment Receipt — {{receipt_number}} — {{institution_name}}',
+          greeting: 'Dear {{payer_name}},',
+          intro_message:
+            'We have received your payment of {{amount}} for {{student_name}} (Course: {{course}}).',
+          confirmation_message:
+            'Your transaction ID is {{transaction_id}} recorded on {{payment_date}}.',
+          footer: 'Thank you for using the institution digital fee collection portal.',
+          support_details: 'For assistance, reply to this email or contact the accounts desk.',
+          sender_display_name: '{{institution_name}} Finance Desk',
+        },
+      };
+    }
+    return rows[0];
+  }
+
+  @Post('settings/receipt-email')
+  async saveReceiptEmailConfig(@Req() req: AuthedRequest, @Body() body: unknown) {
+    const input = z
+      .object({
+        receipt_config: z.record(z.string().max(80), z.union([z.string().max(4000), z.boolean()])),
+        email_config: z.record(z.string().max(80), z.string().max(8000)),
+      })
+      .parse(body);
+
+    await this.db.tx(async (c) => {
+      await c.query(
+        `INSERT INTO receipt_email_configs(tenant_id, receipt_config, email_config, updated_at, updated_by)
+       VALUES($1, $2, $3, now(), $4)
+       ON CONFLICT(tenant_id) DO UPDATE SET
+         receipt_config=EXCLUDED.receipt_config,
+         email_config=EXCLUDED.email_config,
+         updated_at=now(),
+         updated_by=EXCLUDED.updated_by`,
+        [
+          req.actor.tenantId,
+          JSON.stringify(input.receipt_config),
+          JSON.stringify(input.email_config),
+          req.actor.id,
+        ],
+      );
+      await this.db.audit(
+        c,
+        req.actor.id,
+        'fees.settings.saveReceiptEmailConfig',
+        req.actor.tenantId,
+        { tenantId: req.actor.tenantId },
+      );
+    });
+    return { status: 'saved' };
+  }
+
   @Post('payments/external-confirmation')
   async recordPayment(@Body() body: unknown, @Req() req: AuthedRequest) {
     const v = externalPaymentRecordSchema.parse(body);
-    return this.db.tx((c) => this.applyRecordedPayment(c, v, req));
+    const result = await this.db.tx((c) => this.applyRecordedPayment(c, v, req));
+
+    return result;
   }
 
   @Post('students/:id/payments')
   async recordAdvance(@Req() req: AuthedRequest, @Param('id') id: string, @Body() body: unknown) {
     const studentId = uuid(id),
       input = externalPaymentRecordSchema.omit({ installmentId: true }).parse(body);
-    return this.db.tx(async (c) => {
+    const result = await this.db.tx(async (c) => {
       await c.query('SELECT pg_advisory_xact_lock(hashtext($1))', [
         'collection:' + input.idempotencyKey,
       ]);
@@ -899,6 +1185,7 @@ export class FeeOperationsController {
       });
       return { payments, allocatedAmountMinor: input.amountMinor, replayed: false };
     });
+    return result;
   }
 
   private async applyRecordedPayment(
@@ -1021,6 +1308,10 @@ export class FeeOperationsController {
         `UPDATE fee_schedules SET status='completed',version=version+1,updated_at=now() WHERE id=$1`,
         [installment.schedule_id],
       );
+    Object.assign(
+      installment,
+      await receiptContact(c, this.db, req.actor.tenantId, installment.schedule_id, req.actor.id),
+    );
     const receiptNumber = 'RCP-' + randomUUID().replaceAll('-', '').toUpperCase();
     const receipt = (
       await c.query(
@@ -1030,6 +1321,19 @@ export class FeeOperationsController {
           payment.id,
           receiptNumber,
           {
+            receiptConfig:
+              (
+                await c.query(
+                  'SELECT receipt_config FROM receipt_email_configs WHERE tenant_id=$1',
+                  [req.actor.tenantId],
+                )
+              ).rows[0]?.receipt_config || {},
+            emailConfig:
+              (
+                await c.query('SELECT email_config FROM receipt_email_configs WHERE tenant_id=$1', [
+                  req.actor.tenantId,
+                ])
+              ).rows[0]?.email_config || {},
             studentName: installment.student_name || null,
             instituteName: installment.institute_name || null,
             scheduleId: installment.schedule_id,

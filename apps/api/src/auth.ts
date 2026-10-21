@@ -19,7 +19,7 @@ import { Reflector } from '@nestjs/core';
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import * as argon2 from 'argon2';
-import { authenticator } from 'otplib';
+import { authenticatorStep } from '../../../packages/core/src/totp';
 import { Db } from './db';
 import { decrypt, digest, equal, keyed, token } from '../../../packages/core/src/security';
 import {
@@ -148,6 +148,7 @@ export class AuthGuard implements CanActivate {
 export class AuthController {
   constructor(@Inject(Db) private db: Db) {}
   @Post('login') async login(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
+    const receivedAt = Date.now();
     const input = z
       .object({
         email: z.email().max(200),
@@ -168,12 +169,10 @@ export class AuthController {
         input.email.toLowerCase(),
       ])
     )[0];
-    let valid = false;
-    if (u)
-      valid =
-        (await argon2.verify(u.password_hash, input.password)) &&
-        authenticator.check(input.otp, decrypt<string>(u.totp_secret));
-    if (!u || !valid) {
+    let step: number | null = null;
+    if (u && (await argon2.verify(u.password_hash, input.password)))
+      step = authenticatorStep(input.otp, decrypt<string>(u.totp_secret), receivedAt);
+    if (!u || step === null) {
       await this.db.tx((c) =>
         this.db.audit(c, 'anonymous', 'auth.denied', 'login', { reason: 'credentials' }),
       );
@@ -193,7 +192,6 @@ export class AuthController {
     const activeMembership = memberships[0]!;
     const sid = token();
     const csrf = keyed('csrf:' + sid);
-    const step = Math.floor(Date.now() / 30000);
     await this.db.tx(async (c) => {
       const updated = await c.query(
         'UPDATE users SET last_totp_step=$2 WHERE id=$1 AND last_totp_step<$2 RETURNING id',

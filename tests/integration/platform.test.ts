@@ -2651,335 +2651,9 @@ test('flexible fee components, concessions, analytics and late-fee assessment re
   );
 });
 
-test('hosted checkout is idempotent, provider-gated and reconciles to the fee ledger', async () => {
-  let providerCalls = 0;
-  let providerReturnUrl = '';
-  const providerReference = 'checkout_' + randomUUID().replaceAll('-', '');
-  const providerServer = createHttpServer(async (req, res) => {
-    providerCalls++;
-    assert.equal(req.method, 'POST');
-    if (req.url === '/unavailable') {
-      res.writeHead(503).end('Synthetic bank timeout/unknown create outcome');
-      return;
-    }
-    assert.equal(req.headers.authorization, 'Bearer synthetic-checkout-api-key-123456789');
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) chunks.push(Buffer.from(chunk));
-    const body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    providerReturnUrl = body.returnUrl;
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(
-      JSON.stringify({
-        providerReference,
-        checkoutUrl: 'http://127.0.0.1:' + (providerServer.address() as any).port + '/checkout',
-        expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-      }),
-    );
-  });
-  await new Promise<void>((resolve) => providerServer.listen(0, '127.0.0.1', resolve));
-  const providerPort = (providerServer.address() as { port: number }).port;
-
-  const previous = {
-    checkoutMode: process.env.PAYMENT_CHECKOUT_MODE,
-    createUrl: process.env.PAYMENT_CHECKOUT_CREATE_URL,
-    allowedHosts: process.env.PAYMENT_CHECKOUT_ALLOWED_HOSTS,
-    checkoutKey: process.env.PAYMENT_CHECKOUT_API_KEY,
-    checkoutTimeout: process.env.PAYMENT_CHECKOUT_TIMEOUT_MS,
-    webhookMode: process.env.PAYMENT_PROVIDER_MODE,
-    providerName: process.env.PAYMENT_PROVIDER_NAME,
-    webhookSecret: process.env.PAYMENT_WEBHOOK_SECRET,
-  };
-  Object.assign(process.env, {
-    PAYMENT_CHECKOUT_MODE: 'redirect_api',
-    PAYMENT_CHECKOUT_CREATE_URL: 'http://127.0.0.1:' + providerPort + '/sessions',
-    PAYMENT_CHECKOUT_ALLOWED_HOSTS: '127.0.0.1',
-    PAYMENT_CHECKOUT_API_KEY: 'synthetic-checkout-api-key-123456789',
-    PAYMENT_CHECKOUT_TIMEOUT_MS: '5000',
-    PAYMENT_PROVIDER_MODE: 'signed_hmac',
-    PAYMENT_PROVIDER_NAME: 'qa_checkout_gateway',
-    PAYMENT_WEBHOOK_SECRET: 'checkout-webhook-secret-'.repeat(3),
-  });
-
-  try {
-    const reference = 'checkout_' + randomUUID().slice(0, 8);
-    const payer = await call(
-      '/v1/admin/payers',
-      'POST',
-      {
-        accountReference: reference,
-        displayName: 'Synthetic Checkout Parent',
-        email: 'checkout@example.invalid',
-        preferredChannel: 'email',
-        locale: 'en-IN',
-      },
-      {},
-      true,
-    );
-    assert.equal(payer.r.status, 201, JSON.stringify(payer.data));
-
-    const schedule = await call(
-      '/v1/admin/fees/schedules',
-      'POST',
-      {
-        accountReference: reference,
-        payerId: payer.data.id,
-        scopeType: 'student',
-        scopeReference: reference,
-        currency: 'INR',
-        components: [
-          { code: 'tuition', label: 'Tuition', amountMinor: 100000 },
-          { code: 'transport', label: 'Transport', amountMinor: 50000 },
-        ],
-        installments: [{ dueDate: '2027-09-10', amountMinor: 150000 }],
-        note: 'Synthetic hosted checkout schedule',
-      },
-      {},
-      true,
-    );
-    assert.equal(schedule.r.status, 201, JSON.stringify(schedule.data));
-    assert.equal(
-      (
-        await call(
-          '/v1/admin/fees/schedules/' + schedule.data.id + '/activate',
-          'POST',
-          { expectedVersion: 1 },
-          {},
-          true,
-        )
-      ).r.status,
-      201,
-    );
-
-    const list = (await call('/v1/admin/fees/schedules', 'GET', undefined, {}, true)).data;
-    const active = list.find((row: any) => row.id === schedule.data.id);
-    const installmentId = active.installments[0].id;
-    const fullBalanceLink = await call(
-      '/v1/admin/fees/schedules/' + schedule.data.id + '/payer-link',
-      'POST',
-      {
-        expiresHours: 1,
-        paymentMode: 'full_balance',
-        allowCustomAmount: false,
-        allowComponentSelection: false,
-      },
-      {},
-      true,
-    );
-    assert.equal(fullBalanceLink.r.status, 201, JSON.stringify(fullBalanceLink.data));
-    const fullBalanceToken = String(fullBalanceLink.data.path).split('/').filter(Boolean).pop()!;
-    const rejectedPartial = await call('/v1/payer/' + fullBalanceToken + '/checkout', 'POST', {
-      installmentId,
-      amountMinor: 50000,
-      idempotencyKey: randomUUID(),
-      allocations: [],
-    });
-    assert.equal(rejectedPartial.r.status, 409, JSON.stringify(rejectedPartial.data));
-    assert.equal(providerCalls, 0);
-
-    const link = await call(
-      '/v1/admin/fees/schedules/' + schedule.data.id + '/payer-link',
-      'POST',
-      {
-        expiresHours: 1,
-        paymentMode: 'flexible',
-        allowCustomAmount: true,
-        allowComponentSelection: true,
-        minAmountMinor: 100,
-      },
-      {},
-      true,
-    );
-    assert.equal(link.r.status, 201, JSON.stringify(link.data));
-    assert.equal(link.data.paymentPolicy.mode, 'flexible');
-    const payerToken = String(link.data.path).split('/').filter(Boolean).pop()!;
-
-    const portal = await call('/v1/payer/' + payerToken);
-    assert.equal(portal.r.status, 200, JSON.stringify(portal.data));
-    assert.equal(portal.data.paymentPolicy.mode, 'flexible');
-    assert.equal(portal.data.paymentPolicy.allowCustomAmount, true);
-    assert.equal(portal.data.paymentPolicy.allowComponentSelection, true);
-    assert.equal(portal.data.components.length, 2);
-
-    const idempotencyKey = randomUUID();
-    const checkoutBody = {
-      installmentId,
-      amountMinor: 150000,
-      idempotencyKey,
-      allocations: [
-        { componentCode: 'tuition', amountMinor: 100000 },
-        { componentCode: 'transport', amountMinor: 50000 },
-      ],
-    };
-
-    const checkout = await call('/v1/payer/' + payerToken + '/checkout', 'POST', checkoutBody);
-    assert.equal(checkout.r.status, 201, JSON.stringify(checkout.data));
-    assert.equal(checkout.data.status, 'created');
-    assert.equal(providerCalls, 1);
-    assert.match(checkout.data.checkoutUrl, /^http:\/\/127\.0\.0\.1:/);
-
-    const retry = await call('/v1/payer/' + payerToken + '/checkout', 'POST', checkoutBody);
-    assert.equal(retry.r.status, 201, JSON.stringify(retry.data));
-    assert.equal(retry.data.sessionId, checkout.data.sessionId);
-    assert.equal(providerCalls, 1);
-
-    const sessions = await db.query('SELECT * FROM payment_checkout_sessions WHERE id=$1', [
-      checkout.data.sessionId,
-    ]);
-    assert.equal(sessions.length, 1);
-    assert.equal(sessions[0]!.status, 'created');
-    assert.equal(
-      (
-        await db.query('SELECT * FROM payment_checkout_allocations WHERE session_id=$1', [
-          checkout.data.sessionId,
-        ])
-      ).length,
-      2,
-    );
-
-    const event = {
-      eventId: 'evt_' + randomUUID(),
-      type: 'payment_confirmed',
-      installmentId,
-      providerReference,
-      amountMinor: 150000,
-      currency: 'INR',
-      occurredAt: new Date().toISOString(),
-    };
-    const raw = JSON.stringify(event);
-    const timestamp = String(Math.floor(Date.now() / 1000));
-    const signature = createHmac('sha256', process.env.PAYMENT_WEBHOOK_SECRET!)
-      .update(timestamp)
-      .update('.')
-      .update(raw)
-      .digest('hex');
-    const webhook = await fetch(base + '/v1/provider/payments/webhook', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Payment-Timestamp': timestamp,
-        'X-Payment-Signature': signature,
-      },
-      body: raw,
-    });
-    assert.equal(webhook.status, 202, await webhook.text());
-
-    const completed = (
-      await db.query('SELECT * FROM payment_checkout_sessions WHERE id=$1', [
-        checkout.data.sessionId,
-      ])
-    )[0]!;
-    assert.equal(completed.status, 'completed');
-    assert.ok(completed.completed_payment_id);
-    assert.equal(
-      (
-        await db.query('SELECT * FROM payment_component_allocations WHERE payment_id=$1', [
-          completed.completed_payment_id,
-        ])
-      ).length,
-      2,
-    );
-
-    const returnToken = new URL(providerReturnUrl).pathname.split('/').filter(Boolean).pop()!;
-    const returned = await call('/v1/payment-return/' + returnToken);
-    assert.equal(returned.r.status, 200, JSON.stringify(returned.data));
-    assert.equal(returned.data.status, 'completed');
-    assert.ok(returned.data.receiptNumber);
-
-    // A failed create HTTP response is not evidence of bank-side cancellation.
-    // The existing checkout record must remain uncertain and block a second
-    // request even with an unrelated idempotency key.
-    const unknownSchedule = await call(
-      '/v1/admin/fees/schedules',
-      'POST',
-      {
-        accountReference: reference,
-        payerId: payer.data.id,
-        scopeType: 'student',
-        scopeReference: reference,
-        currency: 'INR',
-        components: [{ code: 'tuition', label: 'Tuition', amountMinor: 25000 }],
-        installments: [{ dueDate: '2027-09-10', amountMinor: 25000 }],
-        note: 'Synthetic uncertain hosted checkout',
-      },
-      {},
-      true,
-    );
-    assert.equal(unknownSchedule.r.status, 201, JSON.stringify(unknownSchedule.data));
-    const activatedUnknown = await call(
-      '/v1/admin/fees/schedules/' + unknownSchedule.data.id + '/activate',
-      'POST',
-      { expectedVersion: 1 },
-      {},
-      true,
-    );
-    assert.equal(activatedUnknown.r.status, 201);
-    const allSchedules = (await call('/v1/admin/fees/schedules', 'GET', undefined, {}, true)).data;
-    const unknownInstallment = allSchedules.find((row: any) => row.id === unknownSchedule.data.id)
-      .installments[0].id;
-    const unknownLink = await call(
-      '/v1/admin/fees/schedules/' + unknownSchedule.data.id + '/payer-link',
-      'POST',
-      { expiresHours: 1 },
-      {},
-      true,
-    );
-    assert.equal(unknownLink.r.status, 201);
-    const unknownToken = String(unknownLink.data.path).split('/').filter(Boolean).pop()!;
-    const unknownKey = randomUUID();
-    process.env.PAYMENT_CHECKOUT_CREATE_URL = 'http://127.0.0.1:' + providerPort + '/unavailable';
-    const beforeUnknown = providerCalls;
-    const unknownBody = {
-      installmentId: unknownInstallment,
-      amountMinor: 25000,
-      idempotencyKey: unknownKey,
-      allocations: [],
-    };
-    const unknownResponse = await call(
-      '/v1/payer/' + unknownToken + '/checkout',
-      'POST',
-      unknownBody,
-    );
-    assert.equal(unknownResponse.r.status, 502, JSON.stringify(unknownResponse.data));
-    assert.equal(providerCalls, beforeUnknown + 1);
-    const uncertainRecords = await db.query(
-      'SELECT status,failure_code FROM payment_checkout_sessions WHERE idempotency_key=$1',
-      [unknownKey],
-    );
-    assert.equal(uncertainRecords[0]?.status, 'uncertain');
-    assert.equal(uncertainRecords[0]?.failure_code, 'PROVIDER_CREATE_UNCERTAIN');
-    const ownerQueue = await call('/v1/admin/fees/checkout-sessions', 'GET', undefined, {}, true);
-    assert.equal(ownerQueue.r.status, 200);
-    const reviewItem = ownerQueue.data.find(
-      (row: any) => row.installment_id === unknownInstallment,
-    );
-    assert.equal(reviewItem?.status, 'uncertain');
-    assert.equal(reviewItem?.amount_minor, '25000');
-    assert.ok(!JSON.stringify(reviewItem).includes('checkoutUrl'));
-    const unsafeRetry = await call('/v1/payer/' + unknownToken + '/checkout', 'POST', {
-      ...unknownBody,
-      idempotencyKey: randomUUID(),
-    });
-    assert.equal(unsafeRetry.r.status, 409, JSON.stringify(unsafeRetry.data));
-    assert.equal(providerCalls, beforeUnknown + 1);
-    const uncertainPortal = await call('/v1/payer/' + unknownToken);
-    assert.equal(uncertainPortal.r.status, 200);
-    assert.ok(uncertainPortal.data.checkoutSessions.some((row: any) => row.status === 'uncertain'));
-  } finally {
-    for (const [key, value] of Object.entries({
-      PAYMENT_CHECKOUT_MODE: previous.checkoutMode,
-      PAYMENT_CHECKOUT_CREATE_URL: previous.createUrl,
-      PAYMENT_CHECKOUT_ALLOWED_HOSTS: previous.allowedHosts,
-      PAYMENT_CHECKOUT_API_KEY: previous.checkoutKey,
-      PAYMENT_CHECKOUT_TIMEOUT_MS: previous.checkoutTimeout,
-      PAYMENT_PROVIDER_MODE: previous.webhookMode,
-      PAYMENT_PROVIDER_NAME: previous.providerName,
-      PAYMENT_WEBHOOK_SECRET: previous.webhookSecret,
-    })) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-    await new Promise<void>((resolve) => providerServer.close(() => resolve()));
-  }
+test('generic hosted checkout is unavailable in the fee and eNACH product', async () => {
+  const response = await call('/v1/payer/' + token() + '/checkout', 'POST', {}, {}, true);
+  assert.equal(response.r.status, 404);
 });
 
 test('recurring mandate setup and due-date autopay reconcile through verified callbacks', async () => {
@@ -3134,7 +2808,7 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
     assert.equal(link.r.status, 201, JSON.stringify(link.data));
     const payerToken = String(link.data.path).split('/').filter(Boolean).pop()!;
 
-    const setupBody = { rail: 'upi_autopay', idempotencyKey: randomUUID() };
+    const setupBody = { rail: 'enach', idempotencyKey: randomUUID() };
     const competingBody = { ...setupBody, idempotencyKey: randomUUID() };
     const [first, second] = await Promise.all([
       call('/v1/payer/' + payerToken + '/mandates', 'POST', setupBody),
@@ -3186,7 +2860,7 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
       eventId: 'evt_' + randomUUID(),
       type: 'mandate_status',
       scheduleId: schedule.data.id,
-      rail: 'upi_autopay',
+      rail: 'enach',
       providerReference: mandateReference,
       status: 'active',
       occurredAt: new Date().toISOString(),
@@ -3237,7 +2911,7 @@ test('recurring mandate setup and due-date autopay reconcile through verified ca
         amountMinor: 90000,
         idempotencyKey: randomUUID(),
       });
-      assert.equal(blockedCheckout.r.status, 409, JSON.stringify(blockedCheckout.data));
+      assert.equal(blockedCheckout.r.status, 404, JSON.stringify(blockedCheckout.data));
     } finally {
       for (const [key, value] of Object.entries({
         PAYMENT_CHECKOUT_MODE: priorCheckout.mode,
@@ -3664,7 +3338,7 @@ test('signed eNACH status correlates an uncertain registration without a second 
       eventId: 'evt_' + randomUUID(),
       type: 'mandate_status',
       scheduleId: schedule.data.id,
-      rail: 'upi_autopay',
+      rail: 'enach',
       providerReference: 'upi_' + randomUUID().replaceAll('-', ''),
       status: 'active',
       occurredAt: new Date().toISOString(),
@@ -3796,7 +3470,7 @@ test('signed eNACH status correlates an uncertain registration without a second 
       owner.query(
         `INSERT INTO payment_mandates(
            schedule_id,rail,provider,provider_reference,status,recorded_by,recorded_via
-         ) VALUES($1,'upi_autopay','qa_enach_gateway',$2,'active',NULL,'provider')`,
+         ) VALUES($1,'enach','qa_enach_gateway',$2,'active',NULL,'provider')`,
         [schedule.data.id, 'db-duplicate-' + randomUUID()],
       ),
       /duplicate key|unique constraint/i,

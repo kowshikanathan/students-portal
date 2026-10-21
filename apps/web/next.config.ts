@@ -2,6 +2,7 @@ import type { NextConfig } from 'next';
 import path from 'node:path';
 const api = process.env.API_INTERNAL_URL || 'http://127.0.0.1:4000';
 const config: NextConfig = {
+  devIndicators: false,
   poweredByHeader: false,
   reactStrictMode: true,
   outputFileTracingRoot: path.resolve(__dirname, '../..'),

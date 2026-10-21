@@ -2,6 +2,7 @@
 export function financeRoutePermission(path: string, method: string): string | null {
   const read = ['GET', 'HEAD', 'OPTIONS'].includes(method.toUpperCase());
   if (/^\/v1\/admin\/fees(?:\/|$)/.test(path)) {
+    if (path.startsWith('/v1/admin/fees/bulk/export/')) return 'report.read';
     if (path.startsWith('/v1/admin/fees/bulk/')) return 'fee.read';
     if (read) return path.endsWith('/dashboard') ? 'dashboard.read' : 'fee.read';
     if (path.includes('/sandbox/') && /\/recovery$|\/resolve$/.test(path)) return 'enach.recover';
@@ -11,6 +12,7 @@ export function financeRoutePermission(path: string, method: string): string | n
     if (/\/schedules$|\/schedules\/[^/]+\/activate$/.test(path)) return 'fee.plan.manage';
     if (/\/payments(?:\/|$)/.test(path)) return 'payment.evidence.record';
     if (path.endsWith('/refunds')) return 'refund.approve';
+    if (path.includes('/settings/')) return read ? 'fee.read' : 'fee.plan.manage';
     if (path.includes('/settlements')) return 'settlement.manage';
     if (path.includes('/reconciliation')) return 'reconciliation.manage';
     return null;

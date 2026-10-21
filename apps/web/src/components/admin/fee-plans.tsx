@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { DataTable, useAdminApi } from './context';
 
 function toMinor(value: FormDataEntryValue | null) {
@@ -46,6 +46,94 @@ export function FeePlanStudio() {
   ]);
   const [installments, setInstallments] = useState([{ dueDate: '', amount: '50000' }]);
 
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [count, setCount] = useState('3');
+  const [firstDate, setFirstDate] = useState('');
+  const total = components.reduce(
+    (sum, row) => sum + (Number(row.amount.replace(/,/g, '')) || 0),
+    0,
+  );
+  const scheduled = installments.reduce(
+    (sum, row) => sum + (Number(row.amount.replace(/,/g, '')) || 0),
+    0,
+  );
+  useEffect(() => {
+    if (message && data) dialog.current?.showModal();
+  }, [message, data]);
+
+  function validateForm(event: FormEvent<HTMLDivElement>) {
+    const form = event.target as HTMLFormElement;
+    const issues: string[] = [];
+    let first: HTMLElement | undefined;
+    for (const field of Array.from(form.elements)) {
+      if (!(field instanceof HTMLInputElement || field instanceof HTMLSelectElement)) continue;
+      const invalid = !field.validity.valid || (field.required && !field.value.trim());
+      field.setAttribute('aria-invalid', String(invalid));
+      if (invalid) {
+        first ||= field;
+        issues.push(
+          (field.labels?.[0]?.textContent?.trim() || field.name) +
+            ': ' +
+            (field.validationMessage || 'This field is required.'),
+        );
+      }
+    }
+    if (form.dataset.feeDraft) {
+      if (Math.round(total * 100) !== Math.round(scheduled * 100))
+        issues.push('Installment total must equal fee component total.');
+      if (new Set(components.map((row) => row.code.trim())).size !== components.length)
+        issues.push('Fee component codes must be unique.');
+      if (new Set(installments.map((row) => row.dueDate)).size !== installments.length)
+        issues.push('Installment due dates must be unique.');
+    }
+    setErrors(issues);
+    if (issues.length) {
+      event.preventDefault();
+      event.stopPropagation();
+      first?.focus();
+      setMessage('Please correct the following errors:\n' + issues.join('\n'));
+    }
+  }
+
+  function generateInstallments() {
+    const number = Number(count);
+    if (
+      !Number.isInteger(number) ||
+      number < 1 ||
+      number > 60 ||
+      !firstDate ||
+      components.some((row) => !Number.isFinite(Number(row.amount)) || Number(row.amount) <= 0)
+    ) {
+      setMessage(
+        'Enter positive fee amounts, a first due date and an installment count from 1 to 60.',
+      );
+      return;
+    }
+    const minor = Math.round(total * 100);
+    if (minor < number) {
+      setMessage('Each installment must be at least one paisa.');
+      return;
+    }
+    const [year = 2000, month = 1, day = 1] = firstDate.split('-').map(Number);
+    setInstallments(
+      Array.from({ length: number }, (_, index) => {
+        const date = new Date(Date.UTC(year, month - 1 + index, 1));
+        const lastDay = new Date(
+          Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0),
+        ).getUTCDate();
+        date.setUTCDate(Math.min(day, lastDay));
+        return {
+          dueDate: date.toISOString().slice(0, 10),
+          amount: ((Math.floor(minor / number) + (index < minor % number ? 1 : 0)) / 100).toFixed(
+            2,
+          ),
+        };
+      }),
+    );
+    setErrors([]);
+  }
+
   async function load() {
     try {
       const [overview, academic, payerRows, scheduleRows] = await Promise.all([
@@ -58,7 +146,6 @@ export function FeePlanStudio() {
       setStudents(academic.students || []);
       setPayers(payerRows || []);
       setSchedules(scheduleRows || []);
-      setMessage('');
     } catch (error) {
       setMessage((error as Error).message);
     }
@@ -101,7 +188,36 @@ export function FeePlanStudio() {
     );
 
   return (
-    <>
+    <div className="fee-plan-workspace" onSubmitCapture={validateForm}>
+      <dialog
+        ref={dialog}
+        className="fee-plan-dialog"
+        aria-labelledby="fee-plan-feedback-title"
+        onClose={() => setMessage('')}
+      >
+        <h2 id="fee-plan-feedback-title">Fee plan update</h2>
+        <p style={{ whiteSpace: 'pre-line' }}>{message}</p>
+        <button
+          type="button"
+          className="button primary"
+          onClick={() => {
+            dialog.current?.close();
+            setMessage('');
+          }}
+        >
+          OK
+        </button>
+      </dialog>
+      {errors.length > 0 && (
+        <div className="admin-feedback" role="alert">
+          <strong>Please correct these errors</strong>
+          <ul>
+            {errors.map((error, index) => (
+              <li key={index}>{error}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {message && (
         <p className="admin-feedback" role="status">
           {message}
@@ -143,7 +259,9 @@ export function FeePlanStudio() {
       </section>
 
       <form
+        noValidate
         className="admin-panel admin-form"
+        data-fee-draft="true"
         onSubmit={async (event) => {
           event.preventDefault();
           const form = event.currentTarget;
@@ -197,10 +315,12 @@ export function FeePlanStudio() {
 
         <h3>Fee components</h3>
         {components.map((component, index) => (
-          <div className="row" key={'component-' + index}>
+          <div className="row fee-component-row" key={'component-' + index}>
             <label className="field">
               Code
               <input
+                required
+                pattern="[A-Za-z0-9_-]{2,40}"
                 value={component.code}
                 onChange={(e) =>
                   setComponents((rows) =>
@@ -212,6 +332,9 @@ export function FeePlanStudio() {
             <label className="field">
               Label
               <input
+                required
+                minLength={2}
+                maxLength={100}
                 value={component.label}
                 onChange={(e) =>
                   setComponents((rows) =>
@@ -223,6 +346,11 @@ export function FeePlanStudio() {
             <label className="field">
               Amount (INR)
               <input
+                required
+                type="number"
+                min="0.01"
+                max="10000000000"
+                step="0.01"
                 value={component.amount}
                 inputMode="decimal"
                 onChange={(e) =>
@@ -282,8 +410,40 @@ export function FeePlanStudio() {
         </button>
 
         <h3>Collection schedule</h3>
+        <div className="row fee-generator">
+          <label className="field">
+            Number of installments
+            <input
+              type="number"
+              min="1"
+              max="60"
+              value={count}
+              onChange={(event) => setCount(event.target.value)}
+            />
+          </label>
+          <label className="field">
+            First due date
+            <input
+              type="date"
+              value={firstDate}
+              onChange={(event) => setFirstDate(event.target.value)}
+            />
+          </label>
+          <button type="button" className="button outline" onClick={generateInstallments}>
+            Generate monthly installments
+          </button>
+        </div>
+        <p className="small">
+          Enter fee amounts, installment count and first due date to generate an editable monthly
+          schedule.
+        </p>
+        <p role="status">
+          Fee total: {rupees(Math.round(total * 100))} ? Installment total:{' '}
+          {rupees(Math.round(scheduled * 100))} ? Remaining:{' '}
+          {rupees(Math.round((total - scheduled) * 100))}
+        </p>
         {installments.map((installment, index) => (
-          <div className="row" key={'installment-' + index}>
+          <div className="row fee-installment-row" key={'installment-' + index}>
             <label className="field">
               Due date
               <input
@@ -300,6 +460,10 @@ export function FeePlanStudio() {
             <label className="field">
               Amount (INR)
               <input
+                type="number"
+                min="0.01"
+                max="10000000000"
+                step="0.01"
                 value={installment.amount}
                 inputMode="decimal"
                 onChange={(e) =>
@@ -433,6 +597,7 @@ export function FeePlanStudio() {
       </section>
 
       <form
+        noValidate
         className="admin-panel admin-form"
         onSubmit={(event) =>
           submit(
@@ -519,6 +684,7 @@ export function FeePlanStudio() {
 
       <section className="admin-grid">
         <form
+          noValidate
           className="admin-panel admin-form"
           onSubmit={(event) =>
             submit(
@@ -561,7 +727,15 @@ export function FeePlanStudio() {
             </label>
             <label className="field">
               Amount (INR)
-              <input name="amount" inputMode="decimal" required />
+              <input
+                name="amount"
+                type="number"
+                min="0.01"
+                max="10000000000"
+                step="0.01"
+                inputMode="decimal"
+                required
+              />
             </label>
           </div>
           <label className="field">
@@ -572,6 +746,7 @@ export function FeePlanStudio() {
         </form>
 
         <form
+          noValidate
           className="admin-panel admin-form"
           onSubmit={(event) =>
             submit(
@@ -610,7 +785,15 @@ export function FeePlanStudio() {
             </label>
             <label className="field">
               Amount (INR)
-              <input name="amount" inputMode="decimal" required />
+              <input
+                name="amount"
+                type="number"
+                min="0.01"
+                max="10000000000"
+                step="0.01"
+                inputMode="decimal"
+                required
+              />
             </label>
           </div>
           <label className="field">
@@ -637,6 +820,7 @@ export function FeePlanStudio() {
       </section>
 
       <form
+        noValidate
         className="admin-panel admin-form"
         onSubmit={(event) =>
           submit(
@@ -835,6 +1019,6 @@ export function FeePlanStudio() {
           ))}
         </section>
       </section>
-    </>
+    </div>
   );
 }

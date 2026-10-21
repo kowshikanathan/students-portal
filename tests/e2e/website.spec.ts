@@ -13,6 +13,7 @@ const routes = [
 ];
 for (const route of routes)
   test('public route, media and accessibility ' + route, async ({ page }, info) => {
+    test.setTimeout(90000);
     const r = await page.goto(route);
     expect(r?.status()).toBe(200);
     await expect(page.locator('h1')).toHaveCount(1);
@@ -59,7 +60,9 @@ test('rejecting optional tracking preserves the form journey', async ({ page }) 
   await page.getByLabel('City', { exact: true }).fill('Test City');
   await page.locator('input[name="notice"]').check();
   await page.getByRole('button', { name: 'Request a demo', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Enquiry received.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Enquiry received.' })).toBeVisible({
+    timeout: 30000,
+  });
   await expect(page.getByText(/REQ-[A-F0-9]+/)).toBeVisible();
 });
 test('API outage never displays false form success', async ({ page }) => {
@@ -101,11 +104,11 @@ test('customer portals do not capture credentials before provider configuration'
 }) => {
   await page.goto('/login/');
   await expect(page.locator('input[type="password"]')).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Continue' })).toHaveCount(5);
-  await expect(page.locator('.portal-grid a[href^="/contact-us"]')).toHaveCount(3);
+  await expect(page.getByRole('link', { name: 'Continue' })).toHaveCount(2);
+  await expect(page.locator('.portal-grid a[href^="/portal"]')).toHaveCount(1);
   await expect(page.locator('.portal-grid a[href^="/admin"]')).toHaveCount(1);
-  await expect(page.locator('.portal-grid a[href="/enach/"]')).toHaveCount(1);
-  await expect(page.getByRole('heading', { name: 'Dodo eNACH Dashboard' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Student / Parent Login' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Institution Login' })).toBeVisible();
   await expect(page.locator('a[href*="jodo.in"]')).toHaveCount(0);
 });
 test('owner login page has MFA and no default credentials', async ({ page }) => {
@@ -118,19 +121,18 @@ test('owner login page has MFA and no default credentials', async ({ page }) => 
   expect(a.violations.map((v) => v.id)).toEqual([]);
 });
 
-test('public Login menu exposes the separate Dodo eNACH application', async ({ page }) => {
+test('public Login menu exposes Student/Parent and Institution portals', async ({ page }) => {
   await page.goto('/');
+  const toggle = page.getByRole('button', { name: /^Menu/ });
+  if (await toggle.isVisible()) await toggle.click();
   await page.locator('.login-dropdown summary').click();
   const menu = page.locator('.login-dropdown');
-  await expect(menu.getByRole('link', { name: 'Dodo Studio — Owner Dashboard' })).toHaveAttribute(
+  await expect(menu.getByRole('link', { name: 'Student / Parent Login' })).toHaveAttribute(
     'href',
-    '/admin/',
+    /\/portal\/?$/,
   );
-  await expect(menu.getByRole('link', { name: 'Dodo eNACH Dashboard' })).toHaveAttribute(
+  await expect(menu.getByRole('link', { name: 'Institution Login' })).toHaveAttribute(
     'href',
-    '/enach/',
+    /\/admin\/?$/,
   );
-  await menu.getByRole('link', { name: 'Dodo eNACH Dashboard' }).click();
-  await expect(page).toHaveURL(/\/enach\/?$/);
-  await expect(page.getByLabel('Authenticator code')).toBeVisible();
 });

@@ -48,7 +48,7 @@ export class ChatController {
     return {
       status: current!.status,
       bot: 'Guided assistant — not a human or financial adviser',
-      topics: ['Flex', 'Cred', 'Pay', 'Demo', 'Official support'],
+      topics: ['Flex', 'eNACH', 'Fee management', 'Demo', 'Official support'],
     };
   }
   @Get('messages') async messages(@Req() req: Request) {
@@ -62,7 +62,7 @@ export class ChatController {
     const v = z
       .object({
         clientId: z.uuid(),
-        topic: z.enum(['Flex', 'Cred', 'Pay', 'Demo', 'Official support']),
+        topic: z.enum(['Flex', 'eNACH', 'Fee management', 'Demo', 'Official support']),
       })
       .strict()
       .parse(body);
@@ -81,7 +81,7 @@ export class ChatController {
     }
     let answer =
       'Use the demo form to submit an enquiry to this installation. Do not provide banking details or authentication codes.';
-    if (['Flex', 'Cred', 'Pay'].includes(v.topic)) {
+    if (v.topic === 'Flex') {
       const product = (
         await this.db.query(
           "SELECT r.body FROM content c JOIN revisions r ON r.id=c.published_revision WHERE c.slug='/products/' AND c.deleted_at IS NULL",
@@ -92,9 +92,13 @@ export class ChatController {
       );
       answer = block
         ? block.text +
-          ' Learn more on /products/. These are reference descriptions; no payment or loan application is processed here.'
+          ' Learn more on /products/. This installation uses sandbox eNACH for automated fee collection.'
         : 'That product’s approved information is unavailable. Please use the contact page.';
     }
+    if (v.topic === 'eNACH')
+      answer = 'Your institution assigns a Flex schedule and issues a secure registration link. After mandate authorization, eligible due installments are collected automatically. Sandbox debits do not move money.';
+    if (v.topic === 'Fee management')
+      answer = 'Institutions manage students, fee components, discounts, schedules, direct payment records and receipts in the institution console.';
     if (v.topic === 'Official support')
       answer =
         'This demo cannot access Jodo accounts. Use the official Jodo website or the external student/institute login links. Never send passwords or OTPs here.';

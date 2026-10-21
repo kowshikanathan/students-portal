@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { Db } from './db';
 import { AuthGuard, AuthedRequest, Roles } from './auth';
+import { encrypt } from '../../../packages/core/src/security';
 
 const studentSchema = z
   .object({
@@ -21,12 +22,32 @@ const studentSchema = z
       .trim()
       .regex(/^[A-Za-z0-9._/-]{2,80}$/),
     fullName: z.string().trim().min(2).max(160),
+    email: z.string().trim().email().max(200).optional(),
+    phone: z
+      .string()
+      .trim()
+      .regex(/^\+?[\d ()-]{8,20}$/)
+      .optional(),
     dateOfBirth: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
       .optional(),
     branchId: z.uuid().optional(),
     academicYearId: z.uuid().optional(),
+    status: z.enum(['active', 'inactive', 'withdrawn', 'graduated']).optional().default('active'),
+    course: z.string().trim().max(160).optional(),
+    grade: z.string().trim().max(160).optional(),
+    groupName: z.string().trim().max(160).optional(),
+    campus: z.string().trim().max(160).optional(),
+    academicYear: z.string().trim().max(160).optional(),
+    guardianId: z.uuid().optional(),
+    guardianName: z.string().trim().min(2).max(160).optional(),
+    guardianEmail: z.string().trim().email().max(200).optional(),
+    guardianPhone: z
+      .string()
+      .trim()
+      .regex(/^\+?[\d ()-]{8,20}$/)
+      .optional(),
   })
   .strict();
 
@@ -225,25 +246,144 @@ export class AcademicOperationsController {
   @Post('students')
   async createStudent(@Req() req: AuthedRequest, @Body() body: unknown) {
     const input = studentSchema.parse(body);
-    await this.validateStudentScope(req.actor.tenantId, input.branchId, input.academicYearId);
+    let branchId = input.branchId || null;
+    let academicYearId = input.academicYearId || null;
+
+    if (!branchId && input.campus) {
+      const b = (
+        await this.db.query(
+          `SELECT id FROM branches WHERE tenant_id=$1 AND (name=$2 OR code=$2) LIMIT 1`,
+          [req.actor.tenantId, input.campus],
+        )
+      )[0];
+      if (b) branchId = b.id;
+    }
+    if (!academicYearId && input.academicYear) {
+      const y = (
+        await this.db.query(
+          `SELECT id FROM academic_years WHERE tenant_id=$1 AND label=$2 LIMIT 1`,
+          [req.actor.tenantId, input.academicYear],
+        )
+      )[0];
+      if (y) academicYearId = y.id;
+    }
+
+    await this.validateStudentScope(
+      req.actor.tenantId,
+      branchId || undefined,
+      academicYearId || undefined,
+    );
     return this.db.tx(async (c) => {
       const row = (
         await c.query(
           `INSERT INTO academic_students(
-             tenant_id,branch_id,academic_year_id,student_reference,full_name,date_of_birth,created_by
-           ) VALUES($1,$2,$3,$4,$5,$6,$7)
+             tenant_id,branch_id,academic_year_id,student_reference,full_name,email,phone,status,date_of_birth,created_by
+           ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
            RETURNING *`,
           [
             req.actor.tenantId,
-            input.branchId || null,
-            input.academicYearId || null,
+            branchId,
+            academicYearId,
             input.studentReference,
             input.fullName,
+            input.email || null,
+            input.phone || null,
+            input.status || 'active',
             input.dateOfBirth || null,
             req.actor.id,
           ],
         )
       ).rows[0];
+
+      if (input.guardianId || input.guardianName || input.guardianEmail || input.guardianPhone) {
+        let guardianName = input.guardianName || input.fullName + ' Guardian';
+        const existingGuardian = input.guardianId
+          ? (
+              await c.query(
+                "SELECT id,display_name,email,phone FROM academic_guardians WHERE id=$1 AND tenant_id=$2 AND verification_status<>'revoked'",
+                [input.guardianId, req.actor.tenantId],
+              )
+            ).rows[0]
+          : null;
+        if (input.guardianId && !existingGuardian)
+          throw new ConflictException('Linked parent is unavailable in this institution');
+        if (existingGuardian) guardianName = existingGuardian.display_name;
+        const guardian =
+          existingGuardian ||
+          (
+            await c.query(
+              `INSERT INTO academic_guardians(tenant_id,display_name,email,phone,verification_status,created_by)
+             VALUES($1,$2,$3,$4,'unverified',$5)
+             RETURNING id`,
+              [
+                req.actor.tenantId,
+                guardianName,
+                input.guardianEmail || null,
+                input.guardianPhone || null,
+                req.actor.id,
+              ],
+            )
+          ).rows[0];
+
+        await c.query(
+          `INSERT INTO academic_guardian_links(tenant_id,student_id,guardian_id,relationship,payer_role,visibility_status,created_by)
+           VALUES($1,$2,$3,'guardian','primary','active',$4)
+           ON CONFLICT DO NOTHING`,
+          [req.actor.tenantId, row.id, guardian.id, req.actor.id],
+        );
+
+        await c.query(
+          `INSERT INTO fee_payers(tenant_id,account_reference,encrypted_profile,preferred_channel,created_by)
+           VALUES($1,$2,$3,'none',$4)
+           ON CONFLICT(tenant_id,account_reference) DO NOTHING`,
+          [
+            req.actor.tenantId,
+            input.studentReference,
+            encrypt({
+              displayName: guardianName,
+              email: existingGuardian?.email || input.guardianEmail,
+              phone: existingGuardian?.phone || input.guardianPhone,
+            }),
+            req.actor.id,
+          ],
+        );
+      }
+
+      const catalogueItems = [
+        { kind: 'course', label: input.course },
+        { kind: 'grade', label: input.grade },
+        { kind: 'batch', label: input.groupName },
+      ].filter((x): x is { kind: string; label: string } => Boolean(x.label));
+
+      for (const item of catalogueItems) {
+        const code = item.label
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, '_')
+          .slice(0, 30);
+        let cat = (
+          await c.query(
+            `SELECT id FROM academic_catalogue WHERE tenant_id=$1 AND kind=$2 AND (code=$3 OR label=$4) LIMIT 1`,
+            [req.actor.tenantId, item.kind, code, item.label],
+          )
+        ).rows[0];
+        if (!cat) {
+          cat = (
+            await c.query(
+              `INSERT INTO academic_catalogue(tenant_id,kind,code,label,status,created_by)
+               VALUES($1,$2,$3,$4,'active',$5)
+               RETURNING id`,
+              [req.actor.tenantId, item.kind, code, item.label, req.actor.id],
+            )
+          ).rows[0];
+        }
+        await c.query(
+          `INSERT INTO student_catalogue_assignments(tenant_id,student_id,catalogue_id,effective_on,created_by)
+           VALUES($1,$2,$3,current_date,$4)
+           ON CONFLICT DO NOTHING`,
+          [req.actor.tenantId, row.id, cat.id, req.actor.id],
+        );
+      }
+
       await this.db.audit(c, req.actor.id, 'academic.student.create', row.id, {
         tenantId: req.actor.tenantId,
         studentReference: input.studentReference,
@@ -303,6 +443,14 @@ export class AcademicOperationsController {
       ),
     ]);
     return { student, relationships, assignments, mappings, feeSchedules };
+  }
+
+  @Get('guardians')
+  guardians(@Req() req: AuthedRequest) {
+    return this.db.query(
+      "SELECT id,display_name FROM academic_guardians WHERE tenant_id=$1 AND verification_status<>'revoked' ORDER BY display_name LIMIT 100",
+      [req.actor.tenantId],
+    );
   }
 
   @Post('guardians')
