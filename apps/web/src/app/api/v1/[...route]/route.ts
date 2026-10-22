@@ -1953,6 +1953,155 @@ async function handle(req: NextRequest, { params }: { params: Promise<{ route: s
     });
   }
 
+  if (path === 'admin/fee-plans/overview') {
+    return NextResponse.json({
+      plans: [
+        {
+          id: 'plan-1',
+          plan_key: 'cbse_annual_2026',
+          version: 1,
+          name: 'Standard CBSE Annual 2026-27',
+          status: 'effective',
+          total_minor: '12000000',
+          component_count: 3,
+          installment_count: 4,
+          created_by: 'institution_owner',
+        },
+        {
+          id: 'plan-2',
+          plan_key: 'cbse_semi_annual_2026',
+          version: 1,
+          name: 'CBSE Semi-Annual Flex Plan',
+          status: 'effective',
+          total_minor: '12000000',
+          component_count: 3,
+          installment_count: 2,
+          created_by: 'institution_owner',
+        },
+        {
+          id: 'plan-3',
+          plan_key: 'cbse_quarterly_2026',
+          version: 1,
+          name: 'CBSE 10-Month Autopay Structure',
+          status: 'effective',
+          total_minor: '12000000',
+          component_count: 3,
+          installment_count: 10,
+          created_by: 'institution_owner',
+        },
+      ],
+      assignments: [
+        {
+          id: 'asgn-1',
+          student_id: 'stu-1',
+          student_name: 'Aarav Sharma',
+          plan_id: 'plan-1',
+          plan_name: 'Standard CBSE Annual 2026-27',
+          status: 'active',
+          assigned_at: new Date(Date.now() - 30 * 86400000).toISOString(),
+        },
+        {
+          id: 'asgn-2',
+          student_id: 'stu-2',
+          student_name: 'Ananya Verma',
+          plan_id: 'plan-1',
+          plan_name: 'Standard CBSE Annual 2026-27',
+          status: 'active',
+          assigned_at: new Date(Date.now() - 25 * 86400000).toISOString(),
+        },
+      ],
+      adjustments: [
+        {
+          id: 'adj-1',
+          student_name: 'Aarav Sharma',
+          type: 'scholarship',
+          amount_minor: '1000000',
+          status: 'approved',
+          reason: 'Academic Merit 10%',
+          requested_by: 'staff',
+        },
+      ],
+      credits: [],
+      changes: [],
+      ageing: [
+        { bucket: 'Current (Not due)', obligations: 142, outstanding_minor: '18500000' },
+        { bucket: '1-30 days overdue', obligations: 8, outstanding_minor: '2800000' },
+        { bucket: '31-60 days overdue', obligations: 3, outstanding_minor: '1200000' },
+        { bucket: '>60 days overdue', obligations: 1, outstanding_minor: '500000' },
+      ],
+    });
+  }
+
+  if (path === 'admin/payers') {
+    return NextResponse.json([
+      { id: 'payer-1', name: 'Rajesh Sharma', phone: '+91 98765 43210', email: 'rajesh.s@example.com', student_name: 'Aarav Sharma' },
+      { id: 'payer-2', name: 'Pooja Verma', phone: '+91 98111 22334', email: 'pooja.v@example.com', student_name: 'Ananya Verma' },
+      { id: 'payer-3', name: 'Vikram Rakesh', phone: '+91 98222 33445', email: 'vikram.r@example.com', student_name: 'V Rakesh' },
+    ]);
+  }
+
+  if (path === 'admin/fees/schedules') {
+    return NextResponse.json([
+      { id: 'sched-1', student_id: 'stu-1', student_name: 'Aarav Sharma', plan_name: 'Standard CBSE Annual', total_minor: 12000000, paid_minor: 8000000, remaining_minor: 4000000, status: 'active' },
+      { id: 'sched-2', student_id: 'stu-2', student_name: 'Ananya Verma', plan_name: 'Standard CBSE Annual', total_minor: 12000000, paid_minor: 12000000, remaining_minor: 0, status: 'completed' },
+      { id: 'sched-3', student_id: 'stu-3', student_name: 'V Rakesh', plan_name: 'CBSE Semi-Annual Flex Plan', total_minor: 8000000, paid_minor: 4000000, remaining_minor: 4000000, status: 'active' },
+    ]);
+  }
+
+  if (path === 'admin/fee-plans' && method === 'POST') {
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {}
+    return NextResponse.json({
+      ok: true,
+      message: 'Fee-plan draft created. Validate it before requesting approval.',
+      plan: {
+        id: 'plan-' + Date.now(),
+        plan_key: body.planKey || 'custom_plan',
+        version: 1,
+        name: body.name || 'Custom Plan',
+        status: 'draft',
+        total_minor: '12000000',
+        component_count: Array.isArray(body.components) ? body.components.length : 1,
+        installment_count: Array.isArray(body.installments) ? body.installments.length : 1,
+        created_by: 'institution_owner',
+      },
+    });
+  }
+
+  if (path.startsWith('admin/fee-plans/') && path.endsWith('/validate') && method === 'POST') {
+    return NextResponse.json({ ok: true, valid: true, message: 'Fee plan successfully validated.' });
+  }
+
+  if (path.startsWith('admin/fee-plans/') && path.endsWith('/request-approval') && method === 'POST') {
+    return NextResponse.json({ ok: true, status: 'approval_requested', message: 'Approval requested.' });
+  }
+
+  if (path.startsWith('admin/fee-plans/') && path.endsWith('/approve') && method === 'POST') {
+    return NextResponse.json({ ok: true, status: 'approved', message: 'Fee plan approved.' });
+  }
+
+  if (path.startsWith('admin/fee-plans/') && path.endsWith('/effective') && method === 'POST') {
+    return NextResponse.json({ ok: true, status: 'effective', message: 'Fee plan marked as effective.' });
+  }
+
+  if (path.startsWith('admin/fee-plans/') && path.endsWith('/assign') && method === 'POST') {
+    return NextResponse.json({ ok: true, assigned: true, message: 'Fee plan assigned to student.' });
+  }
+
+  if (path === 'admin/fee-plans/adjustments' && method === 'POST') {
+    return NextResponse.json({ ok: true, message: 'Adjustment request created.' });
+  }
+
+  if (path === 'admin/fee-plans/credits' && method === 'POST') {
+    return NextResponse.json({ ok: true, message: 'Credit record created.' });
+  }
+
+  if (path === 'admin/fee-plans/changes' && method === 'POST') {
+    return NextResponse.json({ ok: true, message: 'Receivable change request created.' });
+  }
+
   if (path === 'admin/fee-plans') {
     return NextResponse.json([
       {

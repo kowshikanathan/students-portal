@@ -337,6 +337,9 @@ export function AdminShell({
   return (
     <AdminContext.Provider value={session}>
       <div className="admin-root admin-shell finance-shell">
+        <div className="ambient-blob blob-1" aria-hidden="true" />
+        <div className="ambient-blob blob-2" aria-hidden="true" />
+        <div className="ambient-blob blob-3" aria-hidden="true" />
         {menuOpen && (
           <button
             className="finance-nav-scrim"
@@ -353,8 +356,17 @@ export function AdminShell({
             Close <span aria-hidden="true">×</span>
           </button>
           <Link href={standaloneEnach ? '/enach/' : '/admin/'} className="admin-logo">
-            Dodo<span className="yellow-dot">.</span>
-            {standaloneEnach ? ' eNACH' : ' finance'}
+            <span className="logo-brand-mark" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M12 8v8"/>
+                <path d="M8 12h8"/>
+              </svg>
+            </span>
+            <span>
+              Dodo<span className="yellow-dot">.</span>
+              {standaloneEnach ? ' eNACH' : ' finance'}
+            </span>
           </Link>
           <p>{standaloneEnach ? 'DODO · ENACH CONSOLE' : 'DODO · INSTITUTION CONSOLE'}</p>
           {standaloneEnach ? (
@@ -364,7 +376,8 @@ export function AdminShell({
                 className={enachView === 'mandates' ? 'selected' : ''}
                 onClick={() => setEnachView('mandates')}
               >
-                Mandate overview
+                <span className="nav-icon-circle"><FinanceIcon name="enach" /></span>
+                <span>Mandate overview</span>
               </button>
               {mandateViews
                 .filter((item) => item.id !== 'mandates')
@@ -375,7 +388,8 @@ export function AdminShell({
                     className={enachView === item.id ? 'selected' : ''}
                     onClick={() => setEnachView(item.id)}
                   >
-                    {item.label}
+                    <span className="nav-icon-circle"><FinanceIcon name="enach" /></span>
+                    <span>{item.label}</span>
                   </button>
                 ))}
               <a href="#enach-custom-fields">Custom fields</a>
@@ -390,54 +404,100 @@ export function AdminShell({
                 .filter(([key]) =>
                   canViewAdminArea(session.tenant.role, key!, session.tenant.permissions),
                 )
-                .map(([key, title]) => (
-                  <button
-                    type="button"
-                    className={activeArea === key ? 'selected' : ''}
-                    aria-current={activeArea === key ? 'page' : undefined}
-                    key={key}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      router.push(
-                        key === 'overview'
-                          ? '/admin/'
-                          : key === 'academic'
-                            ? '/admin/students/'
-                            : '/admin/' + key + '/',
-                      );
-                    }}
-                  >
-                    <FinanceIcon name={key!} />
-                    <span>{title}</span>
-                  </button>
-                ))}
+                .map(([key, title], index) => {
+                  const showGroup =
+                    index === 0
+                      ? 'MAIN MENU'
+                      : key === 'payments'
+                        ? 'OPERATIONS'
+                        : key === 'reports'
+                          ? 'MANAGEMENT'
+                          : null;
+                  return (
+                    <div key={key} style={{ display: 'contents' }}>
+                      {showGroup && <span className="sidebar-group-title">{showGroup}</span>}
+                      <button
+                        type="button"
+                        className={activeArea === key ? 'selected' : ''}
+                        aria-current={activeArea === key ? 'page' : undefined}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          router.push(
+                            key === 'overview'
+                              ? '/admin/'
+                              : key === 'academic'
+                                ? '/admin/students/'
+                                : '/admin/' + key + '/',
+                          );
+                        }}
+                      >
+                        <span className="nav-icon-circle">
+                          <FinanceIcon name={key!} />
+                        </span>
+                        <span>{title}</span>
+                      </button>
+                    </div>
+                  );
+                })}
             </nav>
           )}
         </aside>
         <main id="main" className="admin-main">
           <div className="admin-topbar">
-            <button
-              ref={menuButtonRef}
-              className="finance-nav-toggle"
-              aria-label="Open finance navigation"
-              aria-controls="finance-sidebar"
-              aria-expanded={menuOpen}
-              onClick={() => setMenuOpen(true)}
-            >
-              <span aria-hidden="true">☰</span>
-            </button>
-            <div>
-              <h1>
-                {standaloneEnach
-                  ? 'eNACH operations'
-                  : sections.find((item) => item[0] === activeArea)?.[1] || 'Finance workspace'}
-              </h1>
-              <p>
-                {session.tenant.name} <span aria-hidden="true"> / </span>
-                <span className="finance-role">{session.tenant.role.replaceAll('_', ' ')}</span>
-              </p>
+            <div className="admin-topbar-left">
+              <button
+                ref={menuButtonRef}
+                className="finance-nav-toggle"
+                aria-label="Open finance navigation"
+                aria-controls="finance-sidebar"
+                aria-expanded={menuOpen}
+                onClick={() => setMenuOpen(true)}
+              >
+                <span aria-hidden="true">☰</span>
+              </button>
+              <div className="admin-topbar-title-wrap">
+                <h1>
+                  {standaloneEnach
+                    ? 'eNACH operations'
+                    : sections.find((item) => item[0] === activeArea)?.[1] || 'Finance workspace'}
+                </h1>
+                <p>
+                  {session.tenant.name} <span aria-hidden="true"> / </span>
+                  <span className="finance-role">{session.tenant.role.replaceAll('_', ' ')}</span>
+                </p>
+              </div>
+            </div>
+            <div className="topbar-search-pill" role="search">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="m21 21-4.3-4.3"/>
+              </svg>
+              <input type="search" placeholder="Search..." aria-label="Search dashboard" />
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" x2="12" y1="19" y2="22"/>
+              </svg>
             </div>
             <div className="admin-top-actions">
+              <span className="topbar-lang-pill" aria-label="Language selection">
+                EN 🌐
+              </span>
+              <button
+                type="button"
+                className="topbar-setting-pill"
+                title="Settings"
+                onClick={() => {
+                  setMenuOpen(false);
+                  router.push('/admin/settings/');
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <span>Setting</span>
+              </button>
               <span className="status-pill">MFA session</span>
               <button disabled={busy} onClick={() => void signOut(false)}>
                 Sign out

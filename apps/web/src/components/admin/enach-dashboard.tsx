@@ -22,6 +22,7 @@ type Props = {
   openFeeOperations?: (target: 'payer' | 'schedule' | 'reconciliation') => void;
   initialView?: string;
   onViewChange?: (view: any) => void;
+  page?: string;
 };
 
 type EnachTab =
@@ -51,11 +52,46 @@ const TAB_CONFIG: Array<{ id: EnachTab; label: string; icon: string; badge?: str
   { id: 'audit', label: 'Audit & Compliance', icon: '🔒' },
 ];
 
-export function EnachDashboard({ openFeeOperations, initialView = 'overview', onViewChange }: Props) {
+export function EnachDashboard({ openFeeOperations, initialView = 'overview', onViewChange, page }: Props) {
+  if (page === 'custom-fields') {
+    return (
+      <section className="enach-dashboard-wrap" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+        <div id="enach-custom-fields" className="admin-panel">
+          <h2>Custom fields</h2>
+          <p>Configure custom fields for eNACH mandates.</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (page === 'reports') {
+    return (
+      <section className="enach-dashboard-wrap" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+        <div id="enach-reports" className="admin-panel">
+          <h2>Reports</h2>
+          <p>Export eNACH collection reports.</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (page === 'debits') {
+    return (
+      <section className="enach-dashboard-wrap" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+        <div className="admin-panel">
+          <h2>Automatic Debits & Scheduled AutoPay</h2>
+          <p className="status-pill warn" style={{ margin: '8px 0' }}>Provider not connected</p>
+          <p>Connect a provider to enable AutoPay automated recurring debits on live banking rails.</p>
+        </div>
+      </section>
+    );
+  }
+
   const { request, session } = useAdminApi();
 
   // Active Navigation Tab
   const [activeTab, setActiveTab] = useState<EnachTab>(() => {
+    if (page === 'overview') return 'overview';
     if (initialView === 'debits') return 'debits';
     if (initialView === 'setups' || initialView === 'setup') return 'setup';
     if (initialView === 'recovery') return 'recovery';
@@ -746,12 +782,24 @@ export function EnachDashboard({ openFeeOperations, initialView = 'overview', on
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
           <div>
             <span className="eyebrow" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', color: '#0d9488', fontWeight: 600 }}>
-              Dodo · eNACH Recurring Automation
+              Dodo · eNACH operations
             </span>
             <h2 style={{ margin: '4px 0 6px', fontSize: 'var(--text-xl)', fontWeight: 700 }}>Flex / eNACH Fee Automation</h2>
             <p className="small" style={{ margin: 0, color: 'var(--text-muted)' }}>
-              Jodo-inspired NPCI eNACH recurring mandate infrastructure, one-click authorization workflows, automatic debit scheduling, recovery retries, and isolated sandbox reconciliation.
+              NPCI eNACH recurring mandate infrastructure, one-click authorization workflows, automatic debit scheduling, recovery retries, and sandbox reconciliation. Live eNACH authorization is unavailable on simulated rails.
             </p>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px', fontSize: '11px', color: '#64748b' }}>
+              <span>Mandates ({mandates.length})</span> · 
+              <span>Setup attempts ({mandates.filter((m) => m.status === 'pending_authorization').length})</span> · 
+              <span>Automatic debits ({debits.length})</span> · 
+              <span>Settlements (0)</span> · 
+              <span>Checkouts (0)</span>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '6px', fontSize: '12px' }}>
+              <button type="button" style={{ background: 'none', border: 'none', padding: 0, color: '#0f766e', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => openFeeOperations?.('payer')}>Create payer profile</button>
+              <button type="button" style={{ background: 'none', border: 'none', padding: 0, color: '#0f766e', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => openFeeOperations?.('schedule')}>Create fee schedule</button>
+              <button type="button" style={{ background: 'none', border: 'none', padding: 0, color: '#0f766e', cursor: 'pointer', textDecoration: 'underline' }} onClick={() => openFeeOperations?.('reconciliation')}>Reconciliation and evidence review</button>
+            </div>
           </div>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
             <button
@@ -805,12 +853,17 @@ export function EnachDashboard({ openFeeOperations, initialView = 'overview', on
       <nav
         aria-label="Flex and eNACH tabs"
         style={{
-          display: 'flex',
-          gap: '4px',
-          borderBottom: '2px solid #e2e8f0',
-          paddingBottom: '0',
+          display: 'inline-flex',
+          maxWidth: '100%',
+          gap: '3px',
+          background: 'rgba(255, 255, 255, 0.9)',
+          border: '1px solid rgba(0, 0, 0, 0.08)',
+          borderRadius: '9999px',
+          padding: '4px',
           overflowX: 'auto',
           whiteSpace: 'nowrap',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.03)',
+          marginBottom: '20px',
         }}
       >
         {TAB_CONFIG.map((tab) => {
@@ -827,16 +880,15 @@ export function EnachDashboard({ openFeeOperations, initialView = 'overview', on
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '6px',
-                padding: '10px 16px',
+                padding: '7px 14px',
                 border: 'none',
-                borderBottom: isSelected ? '3px solid #0d9488' : '3px solid transparent',
-                background: isSelected ? '#f0fdfa' : 'transparent',
-                color: isSelected ? '#0f766e' : '#64748b',
-                fontWeight: isSelected ? 700 : 500,
+                background: isSelected ? '#18181b' : 'transparent',
+                color: isSelected ? '#ffffff' : '#52525b',
+                fontWeight: isSelected ? 600 : 500,
                 fontSize: '13px',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
-                borderRadius: '6px 6px 0 0',
+                borderRadius: '9999px',
               }}
             >
               <span>{tab.icon}</span>
@@ -845,10 +897,10 @@ export function EnachDashboard({ openFeeOperations, initialView = 'overview', on
                 <span
                   style={{
                     fontSize: '10px',
-                    padding: '1px 6px',
-                    borderRadius: '10px',
-                    background: '#0d9488',
-                    color: '#ffffff',
+                    padding: '2px 7px',
+                    borderRadius: '9999px',
+                    background: isSelected ? '#facc15' : 'rgba(0, 0, 0, 0.07)',
+                    color: isSelected ? '#18181b' : '#52525b',
                     fontWeight: 700,
                   }}
                 >
@@ -865,6 +917,11 @@ export function EnachDashboard({ openFeeOperations, initialView = 'overview', on
       {/* ========================================================= */}
       {activeTab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#18181b', margin: 0 }}>
+              Collection overview
+            </h2>
+          </div>
           {/* 8 KPI Cards Strip */}
           <div className="dashboard-stats" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', margin: 0 }}>
             <div className="finance-metric finance-metric-emphasis">

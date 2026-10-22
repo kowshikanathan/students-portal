@@ -566,38 +566,41 @@ export default function StudentPortalPage() {
       <header
         style={{
           background: '#ffffff',
-          borderBottom: '1px solid #e2e8f0',
+          borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
           padding: '0.75rem 2rem',
-          display: 'flex',
-          justifyContent: 'space-between',
+          display: 'grid',
+          gridTemplateColumns: 'minmax(220px, 1fr) auto minmax(120px, 1fr)',
           alignItems: 'center',
-          flexWrap: 'wrap',
           gap: '1rem',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', justifySelf: 'start' }}>
           <Link
             href="/"
             style={{
               textDecoration: 'none',
-              color: '#0f172a',
-              fontWeight: 'bold',
+              color: '#18181b',
+              fontWeight: 700,
               fontSize: '1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
             }}
           >
-            Dodo{' '}
-            <span style={{ color: '#0369a1', fontSize: '0.875rem', fontWeight: 'normal' }}>
+            Dodo
+            <span style={{ color: '#71717a', fontSize: '0.85rem', fontWeight: 500 }}>
               · Student & Parent Portal
             </span>
           </Link>
           {student && (
             <span
               style={{
-                background: '#f1f5f9',
+                background: '#f4f4f5',
                 padding: '0.25rem 0.75rem',
                 borderRadius: '9999px',
-                fontSize: '0.85rem',
-                color: '#334155',
+                fontSize: '0.82rem',
+                color: '#52525b',
+                fontWeight: 500,
               }}
             >
               {student.full_name} ({student.student_reference}) · {student.institution_name}
@@ -605,56 +608,73 @@ export default function StudentPortalPage() {
           )}
         </div>
 
-        {/* Portal Tabs Navigation */}
-        <nav style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        {/* Portal Tabs Navigation Centered */}
+        <nav
+          style={{
+            display: 'inline-flex',
+            gap: '3px',
+            background: 'rgba(244, 244, 245, 0.85)',
+            border: '1px solid rgba(0, 0, 0, 0.08)',
+            borderRadius: '9999px',
+            padding: '4px',
+            alignItems: 'center',
+            justifySelf: 'center',
+          }}
+        >
+          {(['home', 'plans', 'transactions', 'support'] as const).map((t) => {
+            const labels = {
+              home: 'Home',
+              plans: 'Plans & Payments',
+              transactions: 'Transactions',
+              support: 'Support',
+            };
+            const isSel = activeTab === t;
+            return (
+              <button
+                key={t}
+                type="button"
+                style={{
+                  fontSize: '13px',
+                  fontWeight: isSel ? 600 : 500,
+                  padding: '6px 14px',
+                  borderRadius: '9999px',
+                  border: 'none',
+                  background: isSel ? '#18181b' : 'transparent',
+                  color: isSel ? '#ffffff' : '#52525b',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                onClick={() => {
+                  setActiveTab(t);
+                  setPaymentComplete(null);
+                }}
+              >
+                {labels[t]}
+              </button>
+            );
+          })}
+        </nav>
+
+        {/* Right Action */}
+        <div style={{ justifySelf: 'end' }}>
           <button
-            className={`button ${activeTab === 'home' ? 'primary' : 'secondary'}`}
-            style={{ fontSize: '0.9rem', padding: '0.4rem 0.8rem' }}
-            onClick={() => {
-              setActiveTab('home');
-              setPaymentComplete(null);
-            }}
-          >
-            Home
-          </button>
-          <button
-            className={`button ${activeTab === 'plans' ? 'primary' : 'secondary'}`}
-            style={{ fontSize: '0.9rem', padding: '0.4rem 0.8rem' }}
-            onClick={() => {
-              setActiveTab('plans');
-              setPaymentComplete(null);
-            }}
-          >
-            Plans & Payments
-          </button>
-          <button
-            className={`button ${activeTab === 'transactions' ? 'primary' : 'secondary'}`}
-            style={{ fontSize: '0.9rem', padding: '0.4rem 0.8rem' }}
-            onClick={() => {
-              setActiveTab('transactions');
-              setPaymentComplete(null);
-            }}
-          >
-            Transactions
-          </button>
-          <button
-            className={`button ${activeTab === 'support' ? 'primary' : 'secondary'}`}
-            style={{ fontSize: '0.9rem', padding: '0.4rem 0.8rem' }}
-            onClick={() => {
-              setActiveTab('support');
-              setPaymentComplete(null);
-            }}
-          >
-            Support
-          </button>
-          <button
+            type="button"
             className="button outline"
-            style={{ fontSize: '0.9rem', padding: '0.4rem 0.8rem', marginLeft: '0.5rem' }}
+            style={{
+              fontSize: '13px',
+              padding: '6px 16px',
+              borderRadius: '9999px',
+              border: '1px solid rgba(0, 0, 0, 0.12)',
+              background: '#ffffff',
+              color: '#52525b',
+              fontWeight: 500,
+              cursor: 'pointer',
+            }}
             onClick={handleLogout}
           >
             Logout
           </button>
-        </nav>
+        </div>
       </header>
 
       {/* Main Content Area */}

@@ -1243,21 +1243,24 @@ export function StudentProfile({ studentId }: { studentId: string }) {
 
       {/* 6. Student Info Modal */}
       {showInfoModal && profile && (
-        <dialog
-          open
-          className="finance-dialog"
-          aria-label="Student Information"
-          style={{
-            maxWidth: '560px',
-            width: '100%',
-            borderRadius: '12px',
-            padding: '1.75rem',
-            border: '1px solid #dce3e8',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
-            background: '#ffffff',
-            zIndex: 100,
-          }}
-        >
+        <>
+          <div
+            className="finance-dialog-backdrop"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(6, 45, 42, 0.48)',
+              backdropFilter: 'blur(5px)',
+              WebkitBackdropFilter: 'blur(5px)',
+              zIndex: 9998,
+            }}
+            onClick={() => setShowInfoModal(false)}
+          />
+          <dialog
+            open
+            className="finance-dialog"
+            aria-label="Student Information"
+          >
           <div
             style={{
               display: 'flex',
@@ -1359,6 +1362,7 @@ export function StudentProfile({ studentId }: { studentId: string }) {
             </button>
           </div>
         </dialog>
+        </>
       )}
     </>
   );
