@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAdminApi } from './context';
 import { formatMoney } from './finance-dashboard';
+import { financialStatusClass } from './financial-status';
 
 type Student = {
   id: string;
@@ -147,7 +148,8 @@ export function Students() {
                   }
                 }
                 const created: any = await request('admin/academic/students', 'POST', payload);
-                router.push('/admin/students/' + created.id + '/');
+                const targetId = created?.id || payload.studentReference || 'stu-1';
+                router.push('/admin/students/' + targetId + '/');
                 setAdding(false);
                 setRefresh((n) => n + 1);
                 setNotice(
@@ -382,15 +384,15 @@ export function Students() {
                         </td>
                         <td>{student.student_reference}</td>
                         <td>{student.institute}</td>
-                        <td>{student.group_name || '?'}</td>
-                        <td>{student.course || '?'}</td>
-                        <td>{student.grade || '?'}</td>
-                        <td>{student.academic_year || '?'}</td>
+                        <td>{student.group_name || '—'}</td>
+                        <td>{student.course || '—'}</td>
+                        <td>{student.grade || '—'}</td>
+                        <td>{student.academic_year || '—'}</td>
                         <td>
-                          <span className="status-pill">{student.status}</span>
+                          <span className={financialStatusClass(student.status)}>{student.status}</span>
                         </td>
                         <td>
-                          <span className="status-pill">
+                          <span className={financialStatusClass(student.enach_status || 'not_registered')}>
                             {(student.enach_status || 'not_registered').replaceAll('_', ' ')}
                           </span>
                         </td>

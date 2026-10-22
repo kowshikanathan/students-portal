@@ -72,19 +72,34 @@ export function SandboxEnach({
   }
   if (enabled === false) return <p>Sandbox collection is not enabled for this installation.</p>;
   return (
-    <section className="admin-panel">
-      <div className="admin-toolbar">
-        <h3>Sandbox eNACH</h3>
+    <section className="sandbox-enach-workspace" style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+      <div className="admin-toolbar" style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 600, color: '#0f172a' }}>Sandbox eNACH</h3>
+          <p style={{ margin: '4px 0 0', fontSize: '0.875rem', color: '#64748b' }}>
+            Test mandate registration, remaining-balance debits and failed collection recovery.
+          </p>
+        </div>
         <span className="status-pill warn">Simulation · no money movement</span>
       </div>
-      <p>Test mandate registration, remaining-balance debits and failed collection recovery.</p>
-      {notice && <p role="status">{notice}</p>}
+      {notice && <p role="status" className="admin-feedback" style={{ marginBottom: '1rem' }}>{notice}</p>}
       {enabled === null ? (
-        <p role="status">Checking provider…</p>
+        <p role="status" className="small">Checking provider…</p>
       ) : (
-        <>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem', marginTop: '1rem' }}>
+          {/* Section 1: Register Mandate */}
           <form
             className="admin-form"
+            style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '10px',
+              padding: '1.25rem',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              gap: '1rem',
+            }}
             onSubmit={(event) => {
               event.preventDefault();
               const form = new FormData(event.currentTarget);
@@ -99,39 +114,69 @@ export function SandboxEnach({
               );
             }}
           >
-            <label className="field">
-              Fee schedule
-              <select
-                name="scheduleId"
-                required
-                disabled={busy || session.tenant.readOnly || !can('enach.manage')}
+            <div>
+              <h4 style={{ margin: '0 0 0.85rem 0', fontSize: '0.95rem', fontWeight: 600, color: '#1e293b' }}>
+                1. Register Sandbox Mandate
+              </h4>
+              <label className="field" style={{ marginBottom: '1rem' }}>
+                Fee schedule
+                <select
+                  name="scheduleId"
+                  required
+                  disabled={busy || session.tenant.readOnly || !can('enach.manage')}
+                >
+                  <option value="">Select a fee schedule</option>
+                  {schedules.map((schedule) => (
+                    <option key={schedule.schedule_id} value={schedule.schedule_id}>
+                      {schedule.account_reference}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label
+                className="checkbox-label"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '0.875rem',
+                  color: '#334155',
+                  cursor: 'pointer',
+                  margin: '0.75rem 0 0 0',
+                }}
               >
-                <option value="">Select a fee schedule</option>
-                {schedules.map((schedule) => (
-                  <option key={schedule.schedule_id} value={schedule.schedule_id}>
-                    {schedule.account_reference}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <input
-                type="checkbox"
-                required
+                <input
+                  type="checkbox"
+                  required
+                  disabled={busy || session.tenant.readOnly || !can('enach.manage')}
+                />
+                <span>I agree to this simulated mandate registration.</span>
+              </label>
+            </div>
+            <div style={{ marginTop: '1rem' }}>
+              <button
+                className="button primary"
                 disabled={busy || session.tenant.readOnly || !can('enach.manage')}
-              />{' '}
-              I agree to this simulated mandate registration.
-            </label>
-            <button
-              className="button secondary"
-              disabled={busy || session.tenant.readOnly || !can('enach.manage')}
-            >
-              Register sandbox mandate
-            </button>
+                style={{ width: '100%' }}
+              >
+                Register sandbox mandate
+              </button>
+            </div>
           </form>
-          <hr />
+
+          {/* Section 2: Simulate Recurring Debit */}
           <form
             className="admin-form"
+            style={{
+              background: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '10px',
+              padding: '1.25rem',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              gap: '1rem',
+            }}
             onSubmit={(event) => {
               event.preventDefault();
               const form = new FormData(event.currentTarget);
@@ -142,65 +187,54 @@ export function SandboxEnach({
               );
             }}
           >
-            <label className="field">
-              Installment
-              <select
-                name="installmentId"
-                required
-                disabled={busy || session.tenant.readOnly || !can('enach.manage')}
-              >
-                <option value="">Select an outstanding installment</option>
-                {installments?.rows
-                  .filter(
-                    (row) =>
-                      Number(row.remaining_minor) > 0 &&
-                      !['cancelled', 'adjusted'].includes(row.status),
-                  )
-                  .map((row) => (
-                    <option key={row.id} value={row.id}>
-                      Installment {row.sequence} · {formatMoney(row.remaining_minor)} remaining
-                    </option>
-                  ))}
-              </select>
-            </label>
-            {installments && installments.total > 25 && (
-              <div className="row">
-                <button
-                  type="button"
-                  disabled={busy || page === 1}
-                  onClick={() => setPage((n) => n - 1)}
+            <div>
+              <h4 style={{ margin: '0 0 0.85rem 0', fontSize: '0.95rem', fontWeight: 600, color: '#1e293b' }}>
+                2. Simulate Recurring Collection
+              </h4>
+              <label className="field" style={{ marginBottom: '1rem' }}>
+                Installment
+                <select
+                  name="installmentId"
+                  required
+                  disabled={busy || session.tenant.readOnly || !can('enach.manage')}
                 >
-                  Previous
-                </button>
-                <span>Page {page}</span>
-                <button
-                  type="button"
-                  disabled={busy || page * 25 >= installments.total}
-                  onClick={() => setPage((n) => n + 1)}
+                  <option value="">Select an outstanding installment</option>
+                  {installments?.rows
+                    .filter(
+                      (row) =>
+                        Number(row.remaining_minor) > 0 &&
+                        !['cancelled', 'adjusted'].includes(row.status),
+                    )
+                    .map((row) => (
+                      <option key={row.id} value={row.id}>
+                        Installment {row.sequence} · {formatMoney(row.remaining_minor)} remaining
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label className="field">
+                Simulated result
+                <select
+                  name="outcome"
+                  disabled={busy || session.tenant.readOnly || !can('enach.manage')}
                 >
-                  Next
-                </button>
-              </div>
-            )}
-            <label className="field">
-              Simulated result
-              <select
-                name="outcome"
+                  <option value="successful">Successful debit / retry</option>
+                  <option value="failed">Failed · insufficient funds</option>
+                  <option value="uncertain">Uncertain · requires review</option>
+                </select>
+              </label>
+            </div>
+            <div style={{ marginTop: '1rem' }}>
+              <button
+                className="button primary"
                 disabled={busy || session.tenant.readOnly || !can('enach.manage')}
+                style={{ width: '100%' }}
               >
-                <option value="successful">Successful debit / retry</option>
-                <option value="failed">Failed · insufficient funds</option>
-                <option value="uncertain">Uncertain · requires review</option>
-              </select>
-            </label>
-            <button
-              className="button primary"
-              disabled={busy || session.tenant.readOnly || !can('enach.manage')}
-            >
-              {busy ? 'Processing…' : 'Simulate collection'}
-            </button>
+                {busy ? 'Processing…' : 'Simulate collection'}
+              </button>
+            </div>
           </form>
-        </>
+        </div>
       )}
     </section>
   );

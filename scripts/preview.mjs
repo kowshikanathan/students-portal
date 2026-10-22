@@ -14,7 +14,12 @@ const child = spawn(
   ],
   {
     stdio: 'inherit',
-    env: { ...process.env, JODO_READONLY_PREVIEW: 'true', DEPLOYMENT_MODE: 'demo' },
+    env: {
+      ...process.env,
+      JODO_READONLY_PREVIEW: 'true',
+      REFERENCE_READONLY_PREVIEW: 'true',
+      DEPLOYMENT_MODE: 'demo',
+    },
   },
 );
 for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => child.kill(signal));

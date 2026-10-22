@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useAdminApi } from './context';
 import { FinanceIcon } from './finance-icon';
 import { canViewAdminArea } from './access';
+import { financialStatusClass } from './financial-status';
 
 type Dashboard = {
   students: number;
@@ -46,13 +47,31 @@ export const formatMoney = (minor: string | number) =>
     currency: 'INR',
     maximumFractionDigits: 2,
   }).format(Number(minor) / 100);
-const date = (value: string) =>
-  new Intl.DateTimeFormat('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'Asia/Kolkata',
-  }).format(new Date(value));
+const date = (value: string) => {
+  try {
+    const d = new Date(value);
+    return isNaN(d.getTime())
+      ? value
+      : new Intl.DateTimeFormat('en-IN', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+          timeZone: 'Asia/Kolkata',
+        }).format(d);
+  } catch {
+    return value;
+  }
+};
+const formatMonthLabel = (value: string) => {
+  try {
+    const d = new Date(value);
+    return isNaN(d.getTime())
+      ? value
+      : new Intl.DateTimeFormat('en-IN', { month: 'short', year: '2-digit' }).format(d);
+  } catch {
+    return value;
+  }
+};
 
 export function FinanceDashboard({ cashflow = false }: { cashflow?: boolean } = {}) {
   const { request, session, can } = useAdminApi();
@@ -289,11 +308,7 @@ export function FinanceDashboard({ cashflow = false }: { cashflow?: boolean } = 
                     }}
                   />
                 </div>
-                <strong>
-                  {new Intl.DateTimeFormat('en-IN', { month: 'short', year: '2-digit' }).format(
-                    new Date(row.month),
-                  )}
-                </strong>
+                <strong>{formatMonthLabel(row.month)}</strong>
                 <span>Expected {formatMoney(row.expected_minor)}</span>
                 <span>Collected {formatMoney(row.collected_minor)}</span>
               </div>
@@ -365,7 +380,9 @@ export function FinanceDashboard({ cashflow = false }: { cashflow?: boolean } = 
                     <td>{row.account_reference}</td>
                     <td>{date(row.recorded_at)}</td>
                     <td>
-                      <span className="status-pill">{row.status.replaceAll('_', ' ')}</span>
+                      <span className={financialStatusClass(row.status)}>
+                        {row.status.replaceAll('_', ' ')}
+                      </span>
                     </td>
                     <td className="money">{formatMoney(row.amount_minor)}</td>
                   </tr>

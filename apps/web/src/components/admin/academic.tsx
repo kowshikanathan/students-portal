@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { DataTable, useAdminApi } from './context';
+import { financialStatusClass } from './financial-status';
 
 type AcademicOverview = {
   students: Array<{
@@ -73,7 +74,7 @@ export function AcademicOperations() {
   }, [session.tenant.id]);
 
   const activeCatalogue = useMemo(
-    () => data?.catalogue.filter((item) => item.status === 'active') || [],
+    () => data?.catalogue?.filter((item) => item.status === 'active') || [],
     [data],
   );
 
@@ -358,11 +359,11 @@ export function AcademicOperations() {
               </strong>
               <span>{item.label}</span>
               <span>{item.parent_label || 'root'}</span>
-              <span className="status-pill">{item.status}</span>
+              <span className={financialStatusClass(item.status)}>{item.status}</span>
               {item.status === 'active' && (
                 <button
                   type="button"
-                  className="button outline"
+                  className="button secondary"
                   onClick={async () => {
                     try {
                       await request('admin/academic/catalogue/' + item.id + '/retire', 'POST', {});

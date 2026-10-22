@@ -7,7 +7,11 @@ export const metadata = {
 
 export default async function Admin({ params }: { params: Promise<{ path?: string[] }> }) {
   const { path } = await params;
-  if (path?.[0] === 'students') return <AdminShell initialArea="academic" studentId={path[1]} />;
+  if (path?.[0] === 'students') {
+    const rawId = path[1] ? decodeURIComponent(path[1]) : undefined;
+    const studentId = !rawId || rawId === 'undefined' ? undefined : rawId;
+    return <AdminShell initialArea="academic" studentId={studentId} />;
+  }
   if (path?.[0] === 'fees') {
     const target = path[1];
     return (

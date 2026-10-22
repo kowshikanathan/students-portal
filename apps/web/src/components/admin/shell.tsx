@@ -25,6 +25,14 @@ import { AcademicOperations } from './academic';
 import { Students } from './students';
 import { StudentProfile } from './student-profile';
 import { FeePlanStudio } from './fee-plans';
+import { PaymentsView } from './payments-view';
+import { SettlementsView } from './settlements-view';
+import { CashflowView } from './cashflow-view';
+import { OverdueView } from './overdue-view';
+import { ReportsWorkspace } from './reports-workspace';
+import { InstitutionProfile } from './institution-profile';
+import { InstitutionUsers } from './institution-users';
+import { InstitutionSettings } from './institution-settings';
 const sections = [
   ['overview', 'Dashboard'],
   ['academic', 'Students'],
@@ -237,11 +245,20 @@ export function AdminShell({
       : 'overview'
     : safeAdminArea(session.tenant.role, area, session.tenant.permissions);
   const render = () => {
-    if (['installments', 'payments', 'settlements', 'overdue'].includes(activeArea))
+    if (activeArea === 'payments') return <PaymentsView key={session.tenant.id} />;
+    if (activeArea === 'settlements') return <SettlementsView key={session.tenant.id} />;
+    if (activeArea === 'cashflow') return <CashflowView key={session.tenant.id} />;
+    if (activeArea === 'overdue') return <OverdueView key={session.tenant.id} />;
+    if (activeArea === 'reports') return <ReportsWorkspace key={session.tenant.id} />;
+    if (activeArea === 'tenant') return <InstitutionProfile key={session.tenant.id} />;
+    if (activeArea === 'users') return <InstitutionUsers key={session.tenant.id} />;
+    if (activeArea === 'settings') return <InstitutionSettings key={session.tenant.id} />;
+
+    if (activeArea === 'installments')
       return (
         <FinanceRecords
           key={session.tenant.id + activeArea}
-          kind={activeArea as FinanceRecordKind}
+          kind="installments"
         />
       );
     if (activeArea === 'debits' || activeArea === 'failed-debits')
@@ -252,10 +269,6 @@ export function AdminShell({
           initialStatus={activeArea === 'failed-debits' ? 'failed' : ''}
         />
       );
-    if (activeArea === 'reports')
-      return <FinanceRecords key={session.tenant.id + 'reports'} report />;
-    if (activeArea === 'cashflow')
-      return <FinanceDashboard key={session.tenant.id + 'cashflow'} cashflow />;
     if (activeArea === 'bulk') return <FinanceBulk key={session.tenant.id} />;
     if (activeArea === 'academic-tools' || activeArea === 'groups')
       return <AcademicOperations key={session.tenant.id + activeArea} />;
@@ -310,12 +323,13 @@ export function AdminShell({
           <Students key={session.tenant.id} />
         );
       case 'tenant':
+        return <InstitutionProfile key={session.tenant.id} />;
       case 'users':
-        return <TenancyStudio />;
+        return <InstitutionUsers key={session.tenant.id} />;
       case 'media':
         return <Media />;
       case 'settings':
-        return <FinanceSettings key={session.tenant.id} />;
+        return <InstitutionSettings key={session.tenant.id} />;
       default:
         return <Records key={activeArea} area={activeArea} />;
     }

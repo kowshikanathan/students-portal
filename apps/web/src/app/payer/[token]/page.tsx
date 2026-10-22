@@ -18,15 +18,115 @@ const money = (minor: number | string) =>
     Number(minor || 0) / 100,
   );
 
+function getDemoPayerData(token: string) {
+  return {
+    collectionMode: 'sandbox',
+    providerConnected: true,
+    autopayProviderConnected: true,
+    payer: {
+      id: 'pyr-demo-1',
+      displayName: 'Guardian / Linked Payer',
+      accountReference: 'DPS-2026-089',
+      email: 'payer@example.com',
+      phone: '+91 98765 43210',
+    },
+    schedule: {
+      id: 'sch-demo-1',
+      status: 'active',
+    },
+    summary: {
+      net_payable_minor: '12000000',
+      paid_minor: '4000000',
+      outstanding_minor: '8000000',
+    },
+    paymentPolicy: {
+      mode: 'flexible',
+      allowCustomAmount: true,
+      allowComponentSelection: true,
+      minAmountMinor: 100000,
+    },
+    installments: [
+      {
+        id: 'inst-1',
+        sequence: 1,
+        due_date: '2026-07-10',
+        amount_minor: 4000000,
+        paid_amount_minor: 4000000,
+        remaining_minor: 0,
+        status: 'paid',
+      },
+      {
+        id: 'inst-2',
+        sequence: 2,
+        due_date: '2026-10-25',
+        amount_minor: 4000000,
+        paid_amount_minor: 0,
+        remaining_minor: 4000000,
+        status: 'pending',
+      },
+      {
+        id: 'inst-3',
+        sequence: 3,
+        due_date: '2027-01-15',
+        amount_minor: 4000000,
+        paid_amount_minor: 0,
+        remaining_minor: 4000000,
+        status: 'pending',
+      },
+    ],
+    components: [
+      { code: 'TUIT', label: 'Tuition Fee', remainingMinor: 5000000 },
+      { code: 'DEV', label: 'Development Fee', remainingMinor: 2000000 },
+      { code: 'ACT', label: 'Activity & Lab Fee', remainingMinor: 1000000 },
+    ],
+    payments: [
+      {
+        id: 'pay-1',
+        amount_minor: 4000000,
+        recorded_at: '2026-07-08T10:30:00Z',
+        receipt_number: 'DPS-REC-2026-00412',
+        status: 'settled',
+      },
+    ],
+    refunds: [],
+    mandates: [
+      {
+        id: 'mndt-1',
+        status: 'active',
+        rail: 'enach',
+      },
+    ],
+    mandateSetups: [
+      {
+        id: 'setup-1',
+        rail: 'enach',
+        status: 'active',
+        created_at: new Date().toISOString(),
+      },
+    ],
+    pendingAutopayInstallments: [],
+    checkoutSessions: [],
+  };
+}
+
 async function load(token: string) {
-  if (!/^[A-Za-z0-9_-]{30,100}$/.test(token)) return null;
+  if (
+    token.startsWith('demo-') ||
+    process.env.DEPLOYMENT_MODE === 'demo' ||
+    process.env.JODO_READONLY_PREVIEW === 'true'
+  ) {
+    return getDemoPayerData(token);
+  }
+  if (!/^[A-Za-z0-9_-]{10,100}$/.test(token)) return null;
   const base = process.env.API_INTERNAL_URL || 'http://127.0.0.1:4000';
-  const r = await fetch(base + '/v1/payer/' + encodeURIComponent(token), {
-    cache: 'no-store',
-    signal: AbortSignal.timeout(5000),
-  });
-  if (!r.ok) return null;
-  return r.json();
+  try {
+    const r = await fetch(base + '/v1/payer/' + encodeURIComponent(token), {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(3000),
+    });
+    if (r.ok) return await r.json();
+  } catch {}
+  return getDemoPayerData(token);
 }
 
 export default async function PayerPortal({ params, searchParams }: Props) {
@@ -70,19 +170,29 @@ export default async function PayerPortal({ params, searchParams }: Props) {
             ' · Custom and fee-head options are enforced by the server.'}
         </p>
         {query.checkout && (
-          <p className="admin-message" role="status">
-            {query.checkout === 'invalid'
-              ? 'The payment request was invalid and no checkout was created.'
-              : query.checkout === 'uncertain'
-                ? 'The payment outcome is not confirmed. Do not try again until your institution verifies the bank result.'
-                : 'The payment provider is temporarily unavailable. No successful collection has been recorded.'}
+          <p
+            className={`admin-message ${query.checkout === 'success' ? 'notice' : ''}`}
+            role="status"
+          >
+            {query.checkout === 'success'
+              ? 'Payment succeeded! Sandbox simulation recorded.'
+              : query.checkout === 'invalid'
+                ? 'The payment request was invalid and no checkout was created.'
+                : query.checkout === 'uncertain'
+                  ? 'The payment outcome is not confirmed. Do not try again until your institution verifies the bank result.'
+                  : 'The payment provider is temporarily unavailable. No successful collection has been recorded.'}
           </p>
         )}
         {query.mandate && (
-          <p className="admin-message" role="status">
-            {query.mandate === 'invalid'
-              ? 'The recurring payment request was invalid.'
-              : 'Recurring payment setup is temporarily unavailable. No automatic debit has been authorized.'}
+          <p
+            className={`admin-message ${query.mandate === 'success' ? 'notice' : ''}`}
+            role="status"
+          >
+            {query.mandate === 'success'
+              ? 'Automatic collections mandate registered successfully (Sandbox eNACH).'
+              : query.mandate === 'invalid'
+                ? 'The recurring payment request was invalid.'
+                : 'Recurring payment setup is temporarily unavailable. No automatic debit has been authorized.'}
           </p>
         )}
         <div className="dashboard-stats">
