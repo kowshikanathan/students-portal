@@ -581,11 +581,13 @@ export default function StudentPortalPage() {
       paid_minor: 0,
       outstanding_minor: totalMinor,
     });
-    setUpcomingInstallment(newSchedule[0]);
-    setUpcomingDebit({
-      amount_minor: perInstMinor,
-      scheduled_date: newSchedule[0].due_date,
-    });
+    setUpcomingInstallment(newSchedule[0] || null);
+    if (newSchedule[0]) {
+      setUpcomingDebit({
+        amount_minor: perInstMinor,
+        scheduled_date: newSchedule[0].due_date,
+      });
+    }
 
     setPlanSuccessNotice(
       `eNACH Payment Plan registered successfully! ${count} recurring installment${count > 1 ? 's' : ''} of ${formatMoney(perInstMinor)} each linked to your bank mandate.`
@@ -789,7 +791,6 @@ export default function StudentPortalPage() {
               style={{
                 width: '36px',
                 height: '36px',
-                borderRadius: '8px',
                 background: '#062B28',
                 color: '#FFFFFF',
                 display: 'flex',

@@ -102,15 +102,14 @@ export class StudentPortalController {
     // 1. Try finding access via cryptographic token hash if identifier is 30+ chars
     let access: { id: string; tenant_id: string; access_id: string } | null = null;
     if (val2.length >= 30) {
-      access = (
-        await this.db.query(
-          `SELECT s.id, s.tenant_id, t.id AS access_id FROM payer_access_tokens t
+      const rows = await this.db.query<{ id: string; tenant_id: string; access_id: string }>(
+        `SELECT s.id, s.tenant_id, t.id AS access_id FROM payer_access_tokens t
          JOIN fee_schedules s ON s.id=t.schedule_id
          JOIN fee_payers p ON p.id=s.payer_id AND p.tenant_id=s.tenant_id
          WHERE t.token_hash=$1 AND t.revoked_at IS NULL AND t.expires_at>now() AND p.active=true`,
-          [digest(val2)],
-        )
-      )[0] || null;
+        [digest(val2)],
+      );
+      access = rows[0] || null;
     }
 
     // 2. Query academic student
@@ -816,7 +815,7 @@ export class StudentPortalController {
       )
     )[0];
     const nextSeq = Number(maxDateRow?.max_seq || 0) + 1;
-    const baseTime = new Date(maxDateRow.max_due_date).getTime();
+    const baseTime = maxDateRow?.max_due_date ? new Date(maxDateRow.max_due_date).getTime() : Date.now();
     const nextDueDate = new Date(baseTime + 30 * 24 * 60 * 60 * 1000);
 
     const instId = randomUUID();
