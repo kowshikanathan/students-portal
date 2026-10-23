@@ -1745,22 +1745,9 @@ export default function StudentPortalPage() {
                 <button
                   className="button secondary"
                   style={{
-                    borderRadius: '9999px',
-                    padding: '0.75rem 1.85rem',
-                    fontWeight: 600,
-                    fontSize: '0.9rem',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => setActiveTab('plans')}
-                >
-                  View Fee Schedule
-                </button>
-                <button
-                  className="button outline"
-                  style={{
                     background: '#FFFFFF',
                     color: '#062B28',
-                    border: '1px solid #E1ECE9',
+                    border: '1.5px solid #062B28',
                     borderRadius: '9999px',
                     padding: '0.75rem 1.85rem',
                     fontWeight: 600,
