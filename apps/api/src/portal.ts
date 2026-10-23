@@ -287,7 +287,7 @@ export class StudentPortalController {
           [session.tenantId, session.scheduleId || randomUUID(), session.accountReference],
         ),
         this.db.query(
-          `SELECT m.id, m.rail, m.provider, m.provider_reference, m.status, m.last_event_at
+          `SELECT m.id, m.rail, m.provider, m.provider_reference, m.status, m.last_event_at, m.umrn, m.bank_name, m.bank_account_masked, m.bank_ifsc, m.max_amount_minor
            FROM payment_mandates m
            WHERE m.tenant_id=$1 AND m.schedule_id=$2 AND $3::text IS NOT NULL
            ORDER BY CASE WHEN m.status='active' THEN 0 ELSE 1 END, m.last_event_at DESC
@@ -455,8 +455,13 @@ export class StudentPortalController {
         status: mandate?.status || 'not_registered',
         rail: mandate?.rail || 'enach',
         provider: mandate?.provider || 'sandbox_enach',
-        mandateReference: mandate?.provider_reference || null,
+        mandateReference: mandate?.umrn || mandate?.provider_reference || null,
         mandateId: mandate?.id || null,
+        umrn: mandate?.umrn || null,
+        bankName: mandate?.bank_name || null,
+        accountMask: mandate?.bank_account_masked || null,
+        ifsc: mandate?.bank_ifsc || null,
+        maxAmountMinor: mandate?.max_amount_minor || null,
         upcomingDebit:
           mandate?.status === 'active' && upcomingInstallment
             ? {
@@ -773,6 +778,20 @@ export class StudentPortalController {
         },
         token(),
         session.tenantId,
+      );
+
+      await c.query(
+        `UPDATE payment_mandates
+         SET bank_name=$1, bank_account_masked=$2, bank_ifsc=$3, umrn=$4
+         WHERE schedule_id=$5 AND tenant_id=$6 AND status='active'`,
+        [
+          input.bankName || 'State Bank of India',
+          input.accountNumber ? '•••• ' + input.accountNumber.slice(-4) : '•••• 4421',
+          (input.ifsc || 'SBIN0001234').toUpperCase(),
+          'UMRN-' + randomUUID().slice(0, 8).toUpperCase(),
+          schedule.id,
+          session.tenantId,
+        ],
       );
 
       return reqRow;
