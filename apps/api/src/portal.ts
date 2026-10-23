@@ -864,6 +864,7 @@ export class StudentPortalController {
       .object({
         outcome: z.enum(['successful', 'failed', 'uncertain']).default('successful'),
         installmentId: z.string().trim().optional(),
+        paymentMode: z.string().trim().optional(),
       })
       .parse(body);
 
@@ -1003,6 +1004,13 @@ export class StudentPortalController {
     if (!payment)
       throw new ConflictException('No confirmed financial payment exists for this debit');
 
+    if (input.paymentMode) {
+      await this.db.query(
+        "UPDATE payment_records SET direct_details = jsonb_build_object('mode', $1::text) WHERE id=$2",
+        [input.paymentMode, payment.id],
+      );
+    }
+
     // Fetch updated balance
     const updatedBalances = (
       await this.db.query(
@@ -1034,7 +1042,7 @@ export class StudentPortalController {
         receiptNumber: payment?.receipt_number || 'RCP-SIMULATED',
         transactionId: payment?.transaction_id || 'TXN-' + attempt.id,
         paymentDate: payment?.recorded_at || new Date().toISOString(),
-        paymentMode: 'eNACH',
+        paymentMode: input.paymentMode || 'eNACH',
         amountMinor: Number(payment.amount_minor),
         totalAmountMinor: updatedBalances.net_payable_minor,
         paidMinor: updatedBalances.paid_minor,

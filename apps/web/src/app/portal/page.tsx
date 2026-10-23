@@ -113,6 +113,7 @@ type PaymentCompleteData = {
   date: string;
   installmentRemainingMinor: number;
   netOutstandingMinor: number;
+  paymentMethod?: string;
 };
 
 const formatMoney = (minor: string | number | undefined) =>
@@ -188,6 +189,19 @@ export default function StudentPortalPage() {
   const [enachSuccessMessage, setEnachSuccessMessage] = useState('');
   const [enachError, setEnachError] = useState('');
   const [showUpdateMandate, setShowUpdateMandate] = useState(false);
+
+  // AutoPay Modal & Payment Methods State
+  const [showAutoPayModal, setShowAutoPayModal] = useState(false);
+  const [selectedAutoPayInstallment, setSelectedAutoPayInstallment] = useState<Installment | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'enach' | 'upi' | 'netbanking' | 'card' | 'bank_transfer'>('enach');
+  const [upiId, setUpiId] = useState('');
+  const [selectedNetBank, setSelectedNetBank] = useState('HDFC Bank');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [cardName, setCardName] = useState('');
+  const [autoPayProcessing, setAutoPayProcessing] = useState(false);
+  const [autoPayError, setAutoPayError] = useState('');
 
   // Sandbox Debit Simulator State
   const [simulatingDebit, setSimulatingDebit] = useState(false);
@@ -456,6 +470,69 @@ export default function StudentPortalPage() {
       setDebitMessage(err.message || 'eNACH debit could not be processed.');
     } finally {
       setSimulatingDebit(false);
+    }
+  };
+
+  const openAutoPayModal = (inst: Installment) => {
+    setSelectedAutoPayInstallment(inst);
+    setSelectedPaymentMethod('enach');
+    setAutoPayError('');
+    setShowAutoPayModal(true);
+  };
+
+  const handleAutoPaySubmit = async (method: 'enach' | 'upi' | 'netbanking' | 'card' | 'bank_transfer') => {
+    if (!token || !selectedAutoPayInstallment) return;
+    setAutoPayProcessing(true);
+    setAutoPayError('');
+    try {
+      const modeLabels: Record<string, string> = {
+        enach: 'eNACH Auto-Debit',
+        upi: 'UPI Instant AutoPay',
+        netbanking: `Net Banking (${selectedNetBank || 'HDFC Bank'})`,
+        card: 'Debit / Credit Card',
+        bank_transfer: 'NEFT / RTGS Transfer',
+      };
+      const paymentMode = modeLabels[method] || 'AutoPay';
+
+      const res = await fetch('/api/v1/portal/enach/simulate-debit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          outcome: 'successful',
+          installmentId: selectedAutoPayInstallment.id,
+          paymentMode,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'AutoPay payment could not be processed.');
+      }
+
+      setShowAutoPayModal(false);
+
+      if (data.paymentComplete) {
+        const p = data.paymentComplete;
+        setPaymentComplete({
+          paymentId: p.transactionId,
+          receiptNumber: p.receiptNumber,
+          transactionId: p.transactionId,
+          amountMinor: p.amountMinor,
+          date: p.paymentDate,
+          installmentRemainingMinor: 0,
+          netOutstandingMinor: p.outstandingMinor,
+          paymentMethod: paymentMode,
+        });
+      }
+
+      await fetchPortalData(token);
+    } catch (err: any) {
+      setAutoPayError(err.message || 'Payment processing failed. Please verify your details.');
+    } finally {
+      setAutoPayProcessing(false);
     }
   };
 
@@ -932,7 +1009,7 @@ export default function StudentPortalPage() {
               <line x1="2" y1="10" x2="22" y2="10" />
             </svg>
             <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
-              <span>eNACH</span>
+              <span>AutoPay</span>
               {mandate?.status === 'active' ? (
                 <span
                   style={{
@@ -1185,7 +1262,7 @@ export default function StudentPortalPage() {
               }}
             >
               {activeTab === 'home' && 'Student Dashboard'}
-              {activeTab === 'enach' && 'eNACH Mandate & Scheduled Debits'}
+              {activeTab === 'enach' && 'AutoPay — Payment Methods & eNACH Mandate'}
               {activeTab === 'plans' && 'Fee Schedule & Breakdown'}
               {activeTab === 'transactions' && 'Payment History & Receipts'}
               {activeTab === 'support' && 'Helpdesk & Support'}
@@ -1369,7 +1446,7 @@ export default function StudentPortalPage() {
                 <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block' }}>
                   Payment Method
                 </span>
-                <strong style={{ fontSize: '1rem', color: '#1e293b' }}>eNACH Debit</strong>
+                <strong style={{ fontSize: '1rem', color: '#1e293b' }}>{paymentComplete.paymentMethod || 'AutoPay'}</strong>
               </div>
             </div>
 
@@ -3447,11 +3524,11 @@ export default function StudentPortalPage() {
                                 <button
                                   className="button primary"
                                   disabled={simulatingDebit}
-                                  onClick={() => handleSimulateDebit('success', inst.id)}
-                                  title="Trigger bank debit for this installment through the active eNACH mandate"
-                                  style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#0d6b60' }}
+                                  onClick={() => openAutoPayModal(inst)}
+                                  title="Pay installment using AutoPay (eNACH, UPI, Net Banking, Cards)"
+                                  style={{ padding: '0.4rem 1.15rem', fontSize: '0.825rem', fontWeight: 700, borderRadius: '9999px', display: 'inline-flex', alignItems: 'center', gap: '0.45rem', background: '#062B28', color: '#FFFFFF', border: 'none', cursor: 'pointer' }}
                                 >
-                                  <span>Debit via eNACH</span>
+                                  <span>AutoPay</span>
                                 </button>
                               )}
                             </td>
@@ -3768,6 +3845,675 @@ export default function StudentPortalPage() {
           }
         }
       `}</style>
+
+            {/* -------------------------------------------------------------
+          AUTOPAY PAYMENT MODAL (ALL PAYMENT METHODS INCLUDING eNACH)
+      ------------------------------------------------------------- */}
+      {showAutoPayModal && selectedAutoPayInstallment && student && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="AutoPay Payment Selection"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(6, 43, 40, 0.7)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9998,
+            padding: '1rem',
+          }}
+        >
+          <div
+            className="portal-autopay-modal"
+            style={{
+              background: '#FFFFFF',
+              borderRadius: '24px',
+              maxWidth: '680px',
+              width: '100%',
+              maxHeight: '92vh',
+              overflowY: 'auto',
+              padding: '2rem 2.25rem',
+              boxShadow: '0 25px 50px -12px rgba(6, 43, 40, 0.25)',
+              position: 'relative',
+              boxSizing: 'border-box',
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                marginBottom: '1.25rem',
+                borderBottom: '1px solid #EEF5F3',
+                paddingBottom: '1rem',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                  <span
+                    style={{
+                      background: '#062B28',
+                      color: '#8BEA00',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '0.15rem 0.6rem',
+                      borderRadius: '9999px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                    }}
+                  >
+                    AutoPay
+                  </span>
+                  <span
+                    style={{
+                      background: '#EEF5F3',
+                      color: '#062B28',
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      padding: '0.15rem 0.6rem',
+                      borderRadius: '9999px',
+                    }}
+                  >
+                    All Payment Methods
+                  </span>
+                </div>
+                <h2 style={{ margin: 0, fontSize: '1.45rem', color: '#062B28', fontWeight: 700, letterSpacing: '-0.02em' }}>
+                  AutoPay Installment Collection
+                </h2>
+                <p style={{ margin: '0.2rem 0 0 0', color: '#64748b', fontSize: '0.85rem' }}>
+                  Select your preferred payment method to settle <strong>Installment #{selectedAutoPayInstallment.sequence}</strong>.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAutoPayModal(false)}
+                style={{
+                  background: '#F1F5F9',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '34px',
+                  height: '34px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.2rem',
+                  color: '#64748b',
+                  cursor: 'pointer',
+                  lineHeight: 1,
+                }}
+                aria-label="Close modal"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Installment Summary Banner */}
+            <div
+              style={{
+                background: '#F0FDF4',
+                border: '1px solid #BBF7D0',
+                borderRadius: '16px',
+                padding: '1.25rem 1.5rem',
+                marginBottom: '1.5rem',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                gap: '0.75rem',
+                fontSize: '0.85rem',
+              }}
+            >
+              <div>
+                <span style={{ color: '#64748b', display: 'block', fontSize: '0.75rem' }}>Installment</span>
+                <strong style={{ color: '#062B28', fontSize: '0.95rem' }}>#{selectedAutoPayInstallment.sequence}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', display: 'block', fontSize: '0.75rem' }}>Due Date</span>
+                <strong style={{ color: '#062B28', fontSize: '0.95rem' }}>{formatDate(selectedAutoPayInstallment.due_date)}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', display: 'block', fontSize: '0.75rem' }}>Original Fee</span>
+                <strong style={{ color: '#64748b', fontSize: '0.95rem' }}>{formatMoney(selectedAutoPayInstallment.amount_minor)}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#166534', display: 'block', fontSize: '0.75rem', fontWeight: 600 }}>Payable Amount</span>
+                <strong style={{ color: '#15803d', fontSize: '1.2rem', fontWeight: 800 }}>
+                  {formatMoney(selectedAutoPayInstallment.remaining_minor)}
+                </strong>
+              </div>
+            </div>
+
+            {/* Error Notification */}
+            {autoPayError && (
+              <div
+                role="alert"
+                style={{
+                  background: '#FEF2F2',
+                  border: '1px solid #FECACA',
+                  color: '#DC2626',
+                  padding: '0.85rem 1rem',
+                  borderRadius: '10px',
+                  marginBottom: '1.25rem',
+                  fontSize: '0.875rem',
+                }}
+              >
+                ✕ {autoPayError}
+              </div>
+            )}
+
+            {/* Payment Method Selector Heading */}
+            <h3 style={{ margin: '0 0 0.85rem 0', fontSize: '1rem', color: '#062B28', fontWeight: 700 }}>
+              Choose Payment Method
+            </h3>
+
+            {/* Method Tabs / Tiles */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              {/* Method 1: eNACH Mandate */}
+              <div
+                onClick={() => setSelectedPaymentMethod('enach')}
+                style={{
+                  border: selectedPaymentMethod === 'enach' ? '2px solid #062B28' : '1px solid #E2E8F0',
+                  background: selectedPaymentMethod === 'enach' ? '#F8FAF8' : '#FFFFFF',
+                  borderRadius: '14px',
+                  padding: '1rem 1.15rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: selectedPaymentMethod === 'enach' ? '0 4px 12px rgba(6, 43, 40, 0.08)' : 'none',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <input
+                      type="radio"
+                      name="payment_method"
+                      checked={selectedPaymentMethod === 'enach'}
+                      onChange={() => setSelectedPaymentMethod('enach')}
+                      style={{ accentColor: '#062B28', width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <strong style={{ fontSize: '0.95rem', color: '#062B28' }}>
+                      1. eNACH Mandate (Automated Bank Debit)
+                    </strong>
+                  </div>
+                  <span
+                    style={{
+                      background: '#D7F4BE',
+                      color: '#173C1C',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '0.15rem 0.6rem',
+                      borderRadius: '9999px',
+                    }}
+                  >
+                    Recommended · 0% Surcharge
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 0 1.75rem', color: '#64748b', fontSize: '0.825rem' }}>
+                  NPCI automated clearing directly from your registered bank account. Zero transaction charges.
+                </p>
+
+                {selectedPaymentMethod === 'enach' && (
+                  <div
+                    style={{
+                      marginTop: '0.85rem',
+                      marginLeft: '1.75rem',
+                      background: '#FFFFFF',
+                      border: '1px solid #DCFCE7',
+                      borderRadius: '10px',
+                      padding: '0.85rem 1rem',
+                      fontSize: '0.825rem',
+                      color: '#1E293B',
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    <div>
+                      <span style={{ color: '#64748b', display: 'block', fontSize: '0.75rem' }}>Designated Bank:</span>
+                      <strong>{mandate?.bank_name || 'HDFC Bank'}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748b', display: 'block', fontSize: '0.75rem' }}>Account Number:</span>
+                      <strong>{mandate?.account_mask ? `A/C ${mandate.account_mask}` : '•••• 8172'}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748b', display: 'block', fontSize: '0.75rem' }}>Mandate Reference:</span>
+                      <strong>{mandate?.umrn || mandate?.provider_reference || 'UMRN-ACTIVE-992'}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748b', display: 'block', fontSize: '0.75rem' }}>Clearing Rail:</span>
+                      <strong style={{ color: '#15803d' }}>NPCI eNACH Network</strong>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Method 2: UPI / QR */}
+              <div
+                onClick={() => setSelectedPaymentMethod('upi')}
+                style={{
+                  border: selectedPaymentMethod === 'upi' ? '2px solid #062B28' : '1px solid #E2E8F0',
+                  background: selectedPaymentMethod === 'upi' ? '#F8FAF8' : '#FFFFFF',
+                  borderRadius: '14px',
+                  padding: '1rem 1.15rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: selectedPaymentMethod === 'upi' ? '0 4px 12px rgba(6, 43, 40, 0.08)' : 'none',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <input
+                      type="radio"
+                      name="payment_method"
+                      checked={selectedPaymentMethod === 'upi'}
+                      onChange={() => setSelectedPaymentMethod('upi')}
+                      style={{ accentColor: '#062B28', width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <strong style={{ fontSize: '0.95rem', color: '#062B28' }}>
+                      2. UPI AutoPay &amp; Instant QR
+                    </strong>
+                  </div>
+                  <span
+                    style={{
+                      background: '#E0F2FE',
+                      color: '#0369A1',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '0.15rem 0.6rem',
+                      borderRadius: '9999px',
+                    }}
+                  >
+                    Google Pay · PhonePe · Paytm
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 0 1.75rem', color: '#64748b', fontSize: '0.825rem' }}>
+                  Pay via any UPI App (GPay, PhonePe, Paytm, BHIM) or UPI Dynamic QR code instantly.
+                </p>
+
+                {selectedPaymentMethod === 'upi' && (
+                  <div style={{ marginTop: '0.85rem', marginLeft: '1.75rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#475569', fontWeight: 600, marginBottom: '0.35rem' }}>
+                      Enter UPI ID / VPA
+                    </label>
+                    <input
+                      type="text"
+                      value={upiId}
+                      onChange={(e) => setUpiId(e.target.value)}
+                      placeholder="e.g. mobile@upi or student@oksbi"
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        width: '100%',
+                        padding: '0.6rem 0.85rem',
+                        borderRadius: '8px',
+                        border: '1px solid #CBD5E1',
+                        fontSize: '0.875rem',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+                      {['@okhdfcbank', '@okaxis', '@paytm', '@ybl'].map((handle) => (
+                        <button
+                          key={handle}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setUpiId((prev) => (prev.includes('@') ? prev.split('@')[0] + handle : 'student' + handle));
+                          }}
+                          style={{
+                            background: '#F1F5F9',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '4px',
+                            padding: '0.2rem 0.5rem',
+                            fontSize: '0.75rem',
+                            color: '#475569',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {handle}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Method 3: Net Banking */}
+              <div
+                onClick={() => setSelectedPaymentMethod('netbanking')}
+                style={{
+                  border: selectedPaymentMethod === 'netbanking' ? '2px solid #062B28' : '1px solid #E2E8F0',
+                  background: selectedPaymentMethod === 'netbanking' ? '#F8FAF8' : '#FFFFFF',
+                  borderRadius: '14px',
+                  padding: '1rem 1.15rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: selectedPaymentMethod === 'netbanking' ? '0 4px 12px rgba(6, 43, 40, 0.08)' : 'none',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <input
+                      type="radio"
+                      name="payment_method"
+                      checked={selectedPaymentMethod === 'netbanking'}
+                      onChange={() => setSelectedPaymentMethod('netbanking')}
+                      style={{ accentColor: '#062B28', width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <strong style={{ fontSize: '0.95rem', color: '#062B28' }}>
+                      3. Net Banking (50+ Indian Banks)
+                    </strong>
+                  </div>
+                  <span
+                    style={{
+                      background: '#FEF3C7',
+                      color: '#92400E',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '0.15rem 0.6rem',
+                      borderRadius: '9999px',
+                    }}
+                  >
+                    Direct Bank Gateway
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 0 1.75rem', color: '#64748b', fontSize: '0.825rem' }}>
+                  State Bank of India, HDFC Bank, ICICI Bank, Axis Bank, Kotak Mahindra &amp; more.
+                </p>
+
+                {selectedPaymentMethod === 'netbanking' && (
+                  <div style={{ marginTop: '0.85rem', marginLeft: '1.75rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#475569', fontWeight: 600, marginBottom: '0.35rem' }}>
+                      Select Bank
+                    </label>
+                    <select
+                      value={selectedNetBank}
+                      onChange={(e) => setSelectedNetBank(e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{
+                        width: '100%',
+                        padding: '0.6rem 0.85rem',
+                        borderRadius: '8px',
+                        border: '1px solid #CBD5E1',
+                        fontSize: '0.875rem',
+                        background: '#FFFFFF',
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      <option value="HDFC Bank">HDFC Bank</option>
+                      <option value="State Bank of India">State Bank of India</option>
+                      <option value="ICICI Bank">ICICI Bank</option>
+                      <option value="Axis Bank">Axis Bank</option>
+                      <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
+                      <option value="Punjab National Bank">Punjab National Bank</option>
+                      <option value="Canara Bank">Canara Bank</option>
+                      <option value="Bank of Baroda">Bank of Baroda</option>
+                      <option value="Union Bank of India">Union Bank of India</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              {/* Method 4: Debit & Credit Cards */}
+              <div
+                onClick={() => setSelectedPaymentMethod('card')}
+                style={{
+                  border: selectedPaymentMethod === 'card' ? '2px solid #062B28' : '1px solid #E2E8F0',
+                  background: selectedPaymentMethod === 'card' ? '#F8FAF8' : '#FFFFFF',
+                  borderRadius: '14px',
+                  padding: '1rem 1.15rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: selectedPaymentMethod === 'card' ? '0 4px 12px rgba(6, 43, 40, 0.08)' : 'none',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <input
+                      type="radio"
+                      name="payment_method"
+                      checked={selectedPaymentMethod === 'card'}
+                      onChange={() => setSelectedPaymentMethod('card')}
+                      style={{ accentColor: '#062B28', width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <strong style={{ fontSize: '0.95rem', color: '#062B28' }}>
+                      4. Debit &amp; Credit Cards
+                    </strong>
+                  </div>
+                  <span
+                    style={{
+                      background: '#F1F5F9',
+                      color: '#475569',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '0.15rem 0.6rem',
+                      borderRadius: '9999px',
+                    }}
+                  >
+                    Visa · RuPay · MasterCard
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 0 1.75rem', color: '#64748b', fontSize: '0.825rem' }}>
+                  Secure payment with 3D Secure OTP verification from any Indian or international card.
+                </p>
+
+                {selectedPaymentMethod === 'card' && (
+                  <div style={{ marginTop: '0.85rem', marginLeft: '1.75rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', fontWeight: 600, marginBottom: '0.25rem' }}>
+                        Card Number
+                      </label>
+                      <input
+                        type="text"
+                        value={cardNumber}
+                        onChange={(e) => setCardNumber(e.target.value)}
+                        placeholder="4111 2222 3333 4444"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          width: '100%',
+                          padding: '0.6rem 0.85rem',
+                          borderRadius: '8px',
+                          border: '1px solid #CBD5E1',
+                          fontSize: '0.875rem',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', fontWeight: 600, marginBottom: '0.25rem' }}>
+                          Expiry (MM/YY)
+                        </label>
+                        <input
+                          type="text"
+                          value={cardExpiry}
+                          onChange={(e) => setCardExpiry(e.target.value)}
+                          placeholder="12/28"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            width: '100%',
+                            padding: '0.6rem 0.85rem',
+                            borderRadius: '8px',
+                            border: '1px solid #CBD5E1',
+                            fontSize: '0.875rem',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', fontWeight: 600, marginBottom: '0.25rem' }}>
+                          CVV
+                        </label>
+                        <input
+                          type="password"
+                          maxLength={4}
+                          value={cardCvv}
+                          onChange={(e) => setCardCvv(e.target.value)}
+                          placeholder="•••"
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            width: '100%',
+                            padding: '0.6rem 0.85rem',
+                            borderRadius: '8px',
+                            border: '1px solid #CBD5E1',
+                            fontSize: '0.875rem',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Method 5: NEFT / RTGS Transfer */}
+              <div
+                onClick={() => setSelectedPaymentMethod('bank_transfer')}
+                style={{
+                  border: selectedPaymentMethod === 'bank_transfer' ? '2px solid #062B28' : '1px solid #E2E8F0',
+                  background: selectedPaymentMethod === 'bank_transfer' ? '#F8FAF8' : '#FFFFFF',
+                  borderRadius: '14px',
+                  padding: '1rem 1.15rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: selectedPaymentMethod === 'bank_transfer' ? '0 4px 12px rgba(6, 43, 40, 0.08)' : 'none',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <input
+                      type="radio"
+                      name="payment_method"
+                      checked={selectedPaymentMethod === 'bank_transfer'}
+                      onChange={() => setSelectedPaymentMethod('bank_transfer')}
+                      style={{ accentColor: '#062B28', width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <strong style={{ fontSize: '0.95rem', color: '#062B28' }}>
+                      5. NEFT / RTGS / IMPS Direct Transfer
+                    </strong>
+                  </div>
+                  <span
+                    style={{
+                      background: '#F3E8FF',
+                      color: '#6B21A8',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      padding: '0.15rem 0.6rem',
+                      borderRadius: '9999px',
+                    }}
+                  >
+                    Virtual Account (VAN)
+                  </span>
+                </div>
+                <p style={{ margin: '0 0 0 1.75rem', color: '#64748b', fontSize: '0.825rem' }}>
+                  Transfer directly to the institution dedicated collection account via your bank portal.
+                </p>
+
+                {selectedPaymentMethod === 'bank_transfer' && (
+                  <div
+                    style={{
+                      marginTop: '0.85rem',
+                      marginLeft: '1.75rem',
+                      background: '#FFFFFF',
+                      border: '1px solid #E9D5FF',
+                      borderRadius: '10px',
+                      padding: '0.85rem 1rem',
+                      fontSize: '0.825rem',
+                      color: '#1E293B',
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                      gap: '0.5rem',
+                    }}
+                  >
+                    <div>
+                      <span style={{ color: '#64748b', display: 'block', fontSize: '0.75rem' }}>Beneficiary Name:</span>
+                      <strong>{tenant?.name || student.institution_name}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748b', display: 'block', fontSize: '0.75rem' }}>Virtual A/C No:</span>
+                      <strong>JODO{student.student_reference.replace(/[^a-zA-Z0-9]/g, '')}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748b', display: 'block', fontSize: '0.75rem' }}>IFSC Code:</span>
+                      <strong>HDFC0000001</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: '#64748b', display: 'block', fontSize: '0.75rem' }}>Bank Name:</span>
+                      <strong>HDFC Bank Institutional CMS</strong>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                gap: '1rem',
+                borderTop: '1px solid #EEF5F3',
+                paddingTop: '1.25rem',
+                flexWrap: 'wrap',
+              }}
+            >
+              <button
+                type="button"
+                className="button outline"
+                onClick={() => setShowAutoPayModal(false)}
+                style={{
+                  background: '#FFFFFF',
+                  color: '#475569',
+                  border: '1px solid #CBD5E1',
+                  borderRadius: '9999px',
+                  padding: '0.65rem 1.5rem',
+                  fontSize: '0.875rem',
+                  cursor: 'pointer',
+                  fontWeight: 600,
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                className="button primary"
+                disabled={autoPayProcessing}
+                onClick={() => handleAutoPaySubmit(selectedPaymentMethod)}
+                style={{
+                  background: '#062B28',
+                  color: '#FFFFFF',
+                  borderRadius: '9999px',
+                  padding: '0.75rem 2.25rem',
+                  fontSize: '0.95rem',
+                  fontWeight: 700,
+                  border: 'none',
+                  cursor: autoPayProcessing ? 'not-allowed' : 'pointer',
+                  opacity: autoPayProcessing ? 0.7 : 1,
+                  boxShadow: '0 4px 14px rgba(6, 43, 40, 0.25)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                }}
+              >
+                {autoPayProcessing ? (
+                  <span>Processing Payment...</span>
+                ) : (
+                  <>
+                    <span>✓ Pay {formatMoney(selectedAutoPayInstallment.remaining_minor)}</span>
+                    <span style={{ fontSize: '0.8rem', opacity: 0.85 }}>
+                      via {selectedPaymentMethod === 'enach' ? 'eNACH' : selectedPaymentMethod.toUpperCase()}
+                    </span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* -------------------------------------------------------------
           RECEIPT MODAL (VIEW / PRINT)
