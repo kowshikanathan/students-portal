@@ -129,6 +129,208 @@ const DEMO_DASHBOARD = {
 
 const STUDENT_CUSTOM_PAYMENTS: Record<string, any[]> = {};
 const STUDENT_CUSTOM_RECEIPTS: Record<string, any[]> = {};
+const STUDENT_CUSTOM_COMPONENTS: Record<string, any[]> = {};
+
+const DEMO_FEE_PLANS: any[] = [
+  {
+    id: 'plan-1',
+    plan_key: 'grade10_annual_2026',
+    version: 1,
+    name: 'Grade 10 Annual Academic Structure',
+    status: 'effective',
+    total_minor: '12000000',
+    component_count: 3,
+    installment_count: 4,
+    created_by: 'institution_owner',
+  },
+  {
+    id: 'plan-2',
+    plan_key: 'cbse_semi_annual_2026',
+    version: 1,
+    name: 'CBSE Semi-Annual Flex Plan',
+    status: 'effective',
+    total_minor: '11000000',
+    component_count: 3,
+    installment_count: 2,
+    created_by: 'institution_owner',
+  },
+  {
+    id: 'plan-3',
+    plan_key: 'cbse_senior_2026',
+    version: 1,
+    name: 'Senior Secondary Science & Lab Plan',
+    status: 'effective',
+    total_minor: '14500000',
+    component_count: 4,
+    installment_count: 4,
+    created_by: 'institution_owner',
+  },
+];
+
+const DEMO_FEE_ASSIGNMENTS: any[] = [
+  {
+    id: 'asgn-1',
+    student_id: 'stu-1',
+    student_reference: 'DPS-2026-089',
+    student_name: 'Aarav Sharma',
+    name: 'Grade 10 Annual Academic Structure',
+    plan_id: 'plan-1',
+    plan_name: 'Grade 10 Annual Academic Structure',
+    version: 1,
+    status: 'active',
+    assigned_at: new Date(Date.now() - 30 * 86400000).toISOString(),
+  },
+  {
+    id: 'asgn-2',
+    student_id: 'stu-2',
+    student_reference: 'DPS-2026-104',
+    student_name: 'Diya Patel',
+    name: 'CBSE Semi-Annual Flex Plan',
+    plan_id: 'plan-2',
+    plan_name: 'CBSE Semi-Annual Flex Plan',
+    version: 1,
+    status: 'active',
+    assigned_at: new Date(Date.now() - 25 * 86400000).toISOString(),
+  },
+  {
+    id: 'asgn-3',
+    student_id: 'stu-3',
+    student_reference: 'DPS-2026-141',
+    student_name: 'Rohan Mehta',
+    name: 'Senior Secondary Science & Lab Plan',
+    plan_id: 'plan-3',
+    plan_name: 'Senior Secondary Science & Lab Plan',
+    version: 1,
+    status: 'active',
+    assigned_at: new Date(Date.now() - 20 * 86400000).toISOString(),
+  },
+  {
+    id: 'asgn-rakesh',
+    student_id: 'stu-rakesh',
+    student_reference: 'test',
+    student_name: 'V Rakesh',
+    name: 'Grade 10 Annual Academic Structure',
+    plan_id: 'plan-1',
+    plan_name: 'Grade 10 Annual Academic Structure',
+    version: 1,
+    status: 'active',
+    assigned_at: new Date(Date.now() - 15 * 86400000).toISOString(),
+  },
+];
+
+const DEMO_FEE_SCHEDULES: any[] = [
+  {
+    id: 'sched-1',
+    account_reference: 'DPS-2026-089 (Aarav Sharma)',
+    student_id: 'stu-1',
+    student_name: 'Aarav Sharma',
+    plan_name: 'Grade 10 Annual Academic Structure',
+    total_amount_minor: 12000000,
+    total_minor: 12000000,
+    paid_minor: 6000000,
+    remaining_minor: 6000000,
+    status: 'active',
+  },
+  {
+    id: 'sched-2',
+    account_reference: 'DPS-2026-104 (Diya Patel)',
+    student_id: 'stu-2',
+    student_name: 'Diya Patel',
+    plan_name: 'CBSE Semi-Annual Flex Plan',
+    total_amount_minor: 11000000,
+    total_minor: 11000000,
+    paid_minor: 7500000,
+    remaining_minor: 3500000,
+    status: 'active',
+  },
+  {
+    id: 'sched-3',
+    account_reference: 'DPS-2026-141 (Rohan Mehta)',
+    student_id: 'stu-3',
+    student_name: 'Rohan Mehta',
+    plan_name: 'Senior Secondary Science & Lab Plan',
+    total_amount_minor: 14500000,
+    total_minor: 14500000,
+    paid_minor: 5000000,
+    remaining_minor: 9500000,
+    status: 'active',
+  },
+  {
+    id: 'sched-rakesh',
+    account_reference: 'test (V Rakesh)',
+    student_id: 'stu-rakesh',
+    student_name: 'V Rakesh',
+    plan_name: 'Grade 10 Annual Academic Structure',
+    total_amount_minor: 12000000,
+    total_minor: 12000000,
+    paid_minor: 0,
+    remaining_minor: 12000000,
+    status: 'active',
+  },
+];
+
+const DEMO_FEE_ADJUSTMENTS: any[] = [
+  {
+    id: 'adj-1',
+    schedule_id: 'sched-1',
+    account_reference: 'DPS-2026-089 (Aarav Sharma)',
+    student_name: 'Aarav Sharma',
+    kind: 'scholarship',
+    type: 'scholarship',
+    amount_minor: '1000000',
+    status: 'approved',
+    reason: 'Academic Merit 10%',
+    requested_by: 'staff',
+    created_at: new Date(Date.now() - 5 * 86400000).toISOString(),
+  },
+  {
+    id: 'adj-2',
+    schedule_id: 'sched-2',
+    account_reference: 'DPS-2026-104 (Diya Patel)',
+    student_name: 'Diya Patel',
+    kind: 'concession',
+    type: 'concession',
+    amount_minor: '500000',
+    status: 'pending',
+    reason: 'Sibling Concession 5%',
+    requested_by: 'staff',
+    created_at: new Date(Date.now() - 2 * 86400000).toISOString(),
+  },
+];
+
+const DEMO_FEE_CHANGES: any[] = [
+  {
+    id: 'chg-1',
+    schedule_id: 'sched-3',
+    assignment_id: 'asgn-3',
+    account_reference: 'DPS-2026-141 (Rohan Mehta)',
+    change_type: 'plan_change',
+    status: 'pending',
+    reason: 'Switch to Semi-Annual installment cycle',
+    requested_by: 'staff',
+    created_at: new Date(Date.now() - 1 * 86400000).toISOString(),
+  },
+];
+
+const DEMO_FEE_CREDITS: any[] = [
+  {
+    id: 'crd-1',
+    account_reference: 'DPS-2026-089 (Aarav Sharma)',
+    source: 'Confirmed external advance',
+    amount_minor: '1500000',
+    applied_minor: '0',
+    status: 'unapplied',
+    note: 'Advance deposit paid at counter',
+    created_at: new Date(Date.now() - 10 * 86400000).toISOString(),
+  },
+];
+
+const DEMO_PAYERS_LIST = [
+  { id: 'payer-1', display_name: 'Rajesh Sharma (Aarav Sharma)', name: 'Rajesh Sharma', account_reference: 'DPS-2026-089', phone: '+91 98765 43210', email: 'rajesh.s@example.com', student_name: 'Aarav Sharma' },
+  { id: 'payer-2', display_name: 'Ananya Patel (Diya Patel)', name: 'Ananya Patel', account_reference: 'DPS-2026-104', phone: '+91 98765 43211', email: 'ananya.p@example.com', student_name: 'Diya Patel' },
+  { id: 'payer-3', display_name: 'Vikram Mehta (Rohan Mehta)', name: 'Vikram Mehta', account_reference: 'DPS-2026-141', phone: '+91 98765 43212', email: 'vikram.m@example.com', student_name: 'Rohan Mehta' },
+  { id: 'payer-4', display_name: 'Rakesh Guardian (V Rakesh)', name: 'Rakesh Guardian', account_reference: 'test', phone: '+91 98765 00000', email: 'rakesh.g@example.com', student_name: 'V Rakesh' },
+];
 
 const DEMO_STUDENTS = [
   {
@@ -196,6 +398,153 @@ const DEMO_STUDENTS = [
     net_payable_minor: '14500000',
     paid_minor: '5000000',
     outstanding_minor: '9500000',
+  },
+  {
+    id: 'stu-4',
+    full_name: 'Kavya Reddy',
+    student_reference: 'DPS-2026-055',
+    status: 'enrolled',
+    institute: 'Delhi Public School (Demo)',
+    group_name: 'Grade 5-B',
+    course: 'Primary Foundation',
+    grade: '5',
+    academic_year: '2026-27',
+    campus: 'Delhi South Campus',
+    email: 'kavya.student@example.com',
+    phone: '+91 98765 00004',
+    guardian_name: 'Venkat Reddy',
+    guardian_email: 'venkat.reddy@example.com',
+    guardian_phone: '+91 98765 43213',
+    enach_status: 'active',
+    net_payable_minor: '14000000',
+    paid_minor: '7000000',
+    outstanding_minor: '7000000',
+  },
+  {
+    id: 'stu-5',
+    full_name: 'Ananya Gupta',
+    student_reference: 'DPS-2026-062',
+    status: 'enrolled',
+    institute: 'Delhi Public School (Demo)',
+    group_name: 'Grade 9-A',
+    course: 'CBSE Secondary',
+    grade: '9',
+    academic_year: '2026-27',
+    campus: 'Delhi Main Campus',
+    email: 'ananya.student@example.com',
+    phone: '+91 98765 00005',
+    guardian_name: 'Pooja Gupta',
+    guardian_email: 'pooja.gupta@example.com',
+    guardian_phone: '+91 98765 43214',
+    enach_status: 'active',
+    net_payable_minor: '12500000',
+    paid_minor: '6000000',
+    outstanding_minor: '6500000',
+  },
+  {
+    id: 'stu-6',
+    full_name: 'Vivaan Malhotra',
+    student_reference: 'DPS-2026-077',
+    status: 'enrolled',
+    institute: 'Delhi Public School (Demo)',
+    group_name: 'Grade 7-A',
+    course: 'Middle School',
+    grade: '7',
+    academic_year: '2026-27',
+    campus: 'Delhi Main Campus',
+    email: 'vivaan.student@example.com',
+    phone: '+91 98765 00006',
+    guardian_name: 'Karan Malhotra',
+    guardian_email: 'karan.malhotra@example.com',
+    guardian_phone: '+91 98765 43215',
+    enach_status: 'active',
+    net_payable_minor: '16000000',
+    paid_minor: '8000000',
+    outstanding_minor: '8000000',
+  },
+  {
+    id: 'stu-7',
+    full_name: 'Ishan Verma',
+    student_reference: 'DPS-2026-092',
+    status: 'enrolled',
+    institute: 'Delhi Public School (Demo)',
+    group_name: 'Grade 11-Commerce',
+    course: 'CBSE Senior Secondary',
+    grade: '11',
+    academic_year: '2026-27',
+    campus: 'Delhi South Campus',
+    email: 'ishan.student@example.com',
+    phone: '+91 98765 00007',
+    guardian_name: 'Sunita Verma',
+    guardian_email: 'sunita.verma@example.com',
+    guardian_phone: '+91 98765 43216',
+    enach_status: 'pending',
+    net_payable_minor: '13500000',
+    paid_minor: '3500000',
+    outstanding_minor: '10000000',
+  },
+  {
+    id: 'stu-8',
+    full_name: 'Tara Nair',
+    student_reference: 'DPS-2026-118',
+    status: 'enrolled',
+    institute: 'Delhi Public School (Demo)',
+    group_name: 'Grade 6-C',
+    course: 'CBSE Middle School',
+    grade: '6',
+    academic_year: '2026-27',
+    campus: 'Delhi Main Campus',
+    email: 'tara.student@example.com',
+    phone: '+91 98765 00008',
+    guardian_name: 'Madhavan Nair',
+    guardian_email: 'madhavan.nair@example.com',
+    guardian_phone: '+91 98765 43217',
+    enach_status: 'active',
+    net_payable_minor: '12800000',
+    paid_minor: '6400000',
+    outstanding_minor: '6400000',
+  },
+  {
+    id: 'stu-9',
+    full_name: 'Aditya Joshi',
+    student_reference: 'DPS-2026-133',
+    status: 'enrolled',
+    institute: 'Delhi Public School (Demo)',
+    group_name: 'Grade 10-B',
+    course: 'CBSE Secondary',
+    grade: '10',
+    academic_year: '2026-27',
+    campus: 'Delhi South Campus',
+    email: 'aditya.student@example.com',
+    phone: '+91 98765 00009',
+    guardian_name: 'Sanjay Joshi',
+    guardian_email: 'sanjay.joshi@example.com',
+    guardian_phone: '+91 98765 43218',
+    enach_status: 'failed',
+    net_payable_minor: '11200000',
+    paid_minor: '2800000',
+    outstanding_minor: '8400000',
+  },
+  {
+    id: 'stu-10',
+    full_name: 'Meera Singhania',
+    student_reference: 'DPS-2026-150',
+    status: 'enrolled',
+    institute: 'Delhi Public School (Demo)',
+    group_name: 'Grade 12-Arts',
+    course: 'CBSE Senior Secondary',
+    grade: '12',
+    academic_year: '2026-27',
+    campus: 'Delhi Main Campus',
+    email: 'meera.student@example.com',
+    phone: '+91 98765 00010',
+    guardian_name: 'Alok Singhania',
+    guardian_email: 'alok.singhania@example.com',
+    guardian_phone: '+91 98765 43219',
+    enach_status: 'cancelled',
+    net_payable_minor: '15000000',
+    paid_minor: '4500000',
+    outstanding_minor: '10500000',
   },
 ];
 
@@ -1262,6 +1611,59 @@ async function handle(req: NextRequest, { params }: { params: Promise<{ route: s
       });
     }
 
+    if (action === 'components' && method === 'POST') {
+      let body: any = {};
+      try {
+        body = await req.json();
+      } catch {}
+
+      if (!STUDENT_CUSTOM_COMPONENTS[student.id]) {
+        STUDENT_CUSTOM_COMPONENTS[student.id] = [
+          { id: 'comp-1', label: 'Tuition Fee', code: 'TUIT', amount_minor: '8000000', account_reference: student.student_reference },
+          { id: 'comp-2', label: 'Development Fee', code: 'DEV', amount_minor: '2000000', account_reference: student.student_reference },
+          { id: 'comp-3', label: 'Activity & Lab Fee', code: 'ACT', amount_minor: '2000000', account_reference: student.student_reference },
+        ];
+      }
+
+      const list = STUDENT_CUSTOM_COMPONENTS[student.id]!;
+      if (body.action === 'delete') {
+        const idx = list.findIndex((c: any) => c.id === body.id);
+        if (idx !== -1) list.splice(idx, 1);
+      } else if (body.action === 'edit' || (body.id && list.some((c: any) => c.id === body.id))) {
+        const item = list.find((c: any) => c.id === body.id);
+        if (item) {
+          if (body.label) item.label = body.label;
+          if (body.code) item.code = body.code;
+          if (body.amount_minor !== undefined) item.amount_minor = String(body.amount_minor);
+          if (body.account_reference) item.account_reference = body.account_reference;
+        }
+      } else {
+        const newComp = {
+          id: 'comp-' + Date.now().toString().slice(-6),
+          label: body.label || 'Additional Fee',
+          code: body.code || 'FEE',
+          amount_minor: String(body.amount_minor || 1000000),
+          account_reference: body.account_reference || student.student_reference,
+        };
+        list.push(newComp);
+      }
+
+      // Recalculate student net payable & outstanding
+      const totalMinor = list.reduce((sum: number, item: any) => sum + Number(item.amount_minor || 0), 0);
+      student.net_payable_minor = String(totalMinor);
+      const paid = Number(student.paid_minor || 0);
+      student.outstanding_minor = String(Math.max(0, totalMinor - paid));
+
+      return NextResponse.json({
+        ok: true,
+        rows: list,
+        total: list.length,
+        net_payable_minor: student.net_payable_minor,
+        outstanding_minor: student.outstanding_minor,
+        message: 'Component updated successfully',
+      });
+    }
+
     if (action === 'records') {
       const section = req.nextUrl.searchParams.get('section') || 'overview';
 
@@ -1311,11 +1713,14 @@ async function handle(req: NextRequest, { params }: { params: Promise<{ route: s
           { id: 'm-3', sequence: 3, due_date: '2027-01-15', amount_minor: '4000000' },
         ];
       } else if (section === 'components') {
-        rows = [
-          { id: 'comp-1', label: 'Tuition Fee', code: 'TUIT', amount_minor: '8000000', account_reference: student.student_reference },
-          { id: 'comp-2', label: 'Development Fee', code: 'DEV', amount_minor: '2000000', account_reference: student.student_reference },
-          { id: 'comp-3', label: 'Activity & Lab Fee', code: 'ACT', amount_minor: '2000000', account_reference: student.student_reference },
-        ];
+        if (!STUDENT_CUSTOM_COMPONENTS[student.id]) {
+          STUDENT_CUSTOM_COMPONENTS[student.id] = [
+            { id: 'comp-1', label: 'Tuition Fee', code: 'TUIT', amount_minor: '8000000', account_reference: student.student_reference },
+            { id: 'comp-2', label: 'Development Fee', code: 'DEV', amount_minor: '2000000', account_reference: student.student_reference },
+            { id: 'comp-3', label: 'Activity & Lab Fee', code: 'ACT', amount_minor: '2000000', account_reference: student.student_reference },
+          ];
+        }
+        rows = STUDENT_CUSTOM_COMPONENTS[student.id]!;
       } else if (section === 'payments') {
         const custom = STUDENT_CUSTOM_PAYMENTS[student.id] || [];
         const basePayments = Number(student.paid_minor || 0) > 0 ? [
@@ -1393,6 +1798,78 @@ async function handle(req: NextRequest, { params }: { params: Promise<{ route: s
       page: 1,
       pageSize: 20,
     });
+  }
+
+  if (path === 'admin/academic/guardians' && method === 'POST') {
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {}
+    const newGuardian = {
+      id: 'g-' + (DEMO_ACADEMIC_OVERVIEW.guardians.length + 1),
+      display_name: body.displayName || body.display_name || 'Guardian',
+      email: body.email || null,
+      phone: body.phone || null,
+      verification_status: 'verified',
+      active_links: 0,
+    };
+    DEMO_ACADEMIC_OVERVIEW.guardians.unshift(newGuardian);
+    DEMO_PAYERS_LIST.unshift({
+      id: 'payer-' + (DEMO_PAYERS_LIST.length + 1),
+      display_name: newGuardian.display_name,
+      name: newGuardian.display_name,
+      account_reference: '',
+      phone: newGuardian.phone || '',
+      email: newGuardian.email || '',
+      student_name: '',
+    });
+    return NextResponse.json({ ok: true, message: 'Guardian record created.', guardian: newGuardian });
+  }
+
+  if (path.startsWith('admin/academic/students/') && path.endsWith('/guardians') && method === 'POST') {
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {}
+    const studentId = path.replace('admin/academic/students/', '').replace('/guardians', '');
+    const guardian = DEMO_ACADEMIC_OVERVIEW.guardians.find((g) => g.id === body.guardianId);
+    if (guardian) {
+      guardian.active_links = (guardian.active_links || 0) + 1;
+    }
+    const student = DEMO_STUDENTS.find((s) => s.id === studentId || s.student_reference === studentId);
+    if (student && guardian) {
+      student.guardian_name = guardian.display_name;
+      student.guardian_email = guardian.email || student.guardian_email;
+      student.guardian_phone = guardian.phone || student.guardian_phone;
+    }
+    return NextResponse.json({ ok: true, message: 'Guardian relationship saved successfully.' });
+  }
+
+  if (path === 'admin/academic/catalogue' && method === 'POST') {
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {}
+    const parent = DEMO_ACADEMIC_OVERVIEW.catalogue.find((c) => c.id === body.parentId);
+    const newItem = {
+      id: 'cat-' + (DEMO_ACADEMIC_OVERVIEW.catalogue.length + 1),
+      kind: body.kind || 'course',
+      code: body.code || 'CODE',
+      label: body.label || 'Label',
+      parent_id: body.parentId || null,
+      parent_label: parent ? parent.label : null,
+      status: 'active',
+      version: 1,
+    };
+    DEMO_ACADEMIC_OVERVIEW.catalogue.unshift(newItem);
+    return NextResponse.json({ ok: true, message: 'Catalogue item created.', item: newItem });
+  }
+
+  if (path.startsWith('admin/academic/catalogue/') && path.endsWith('/retire') && method === 'POST') {
+    const catId = path.replace('admin/academic/catalogue/', '').replace('/retire', '');
+    const item = DEMO_ACADEMIC_OVERVIEW.catalogue.find((c) => c.id === catId);
+    if (item) item.status = 'retired';
+    return NextResponse.json({ ok: true, message: 'Catalogue item retired.' });
   }
 
   if (path === 'admin/academic/guardians') {
@@ -1911,35 +2388,141 @@ async function handle(req: NextRequest, { params }: { params: Promise<{ route: s
     return NextResponse.json(DEMO_INSTITUTION_SETTINGS);
   }
 
+  // Function to generate dynamic installments across all demo students
+  function getAllStudentInstallments(): any[] {
+    const list: any[] = [];
+    const students = Array.isArray(DEMO_STUDENTS) ? DEMO_STUDENTS : [];
+
+    for (const s of students) {
+      const netPayable = Number(s.net_payable_minor || 12000000);
+      const paidMinor = Number(s.paid_minor || 0);
+
+      // 4 Quarterly Installments (EMIs)
+      const count = 4;
+      const baseInstAmount = Math.round(netPayable / count);
+      const dates = ['2026-07-10', '2026-10-25', '2027-01-15', '2027-03-25'];
+
+      for (let seq = 1; seq <= count; seq++) {
+        const instAmount =
+          seq === count ? netPayable - baseInstAmount * (count - 1) : baseInstAmount;
+        const priorAllocated = (seq - 1) * baseInstAmount;
+        const paidForThisInst = Math.max(0, Math.min(instAmount, paidMinor - priorAllocated));
+        const remainingForThisInst = Math.max(0, instAmount - paidForThisInst);
+
+        let status = 'scheduled';
+        if (paidForThisInst >= instAmount) {
+          status = 'paid';
+        } else if (paidForThisInst > 0) {
+          status = 'part_paid';
+        } else {
+          const dueDate = new Date(dates[seq - 1]!);
+          if (dueDate.getTime() < Date.now()) {
+            status = 'overdue';
+          } else {
+            status = 'scheduled';
+          }
+        }
+
+        list.push({
+          id: `inst-${s.id}-${seq}`,
+          student_id: s.id,
+          student_name: s.full_name,
+          account_reference: s.student_reference || `DPS-2026-${s.id}`,
+          student_reference: s.student_reference || `DPS-2026-${s.id}`,
+          sequence: seq,
+          emi_details: `EMI ${seq} of ${count}`,
+          installment_label: `Term ${seq} · Quarterly Fee`,
+          due_date: dates[seq - 1],
+          amount_minor: String(instAmount),
+          paid_amount_minor: String(paidForThisInst),
+          remaining_minor: String(remainingForThisInst),
+          status,
+          grade: s.grade ? `Grade ${s.grade}` : s.group_name || 'Grade 10',
+          course: s.course || 'CBSE Secondary',
+          institute: s.institute || 'Delhi Public School (Demo)',
+        });
+      }
+    }
+
+    return list;
+  }
+
   // Backward compatibility: admin/fees/records fallback
   if (path.startsWith('admin/fees/records/') || path === 'admin/fees/records') {
     const kind = req.nextUrl.searchParams.get('kind') || path.replace('admin/fees/records/', '') || 'installments';
+    const search = (req.nextUrl.searchParams.get('search') || '').toLowerCase().trim();
+    const statusFilter = (req.nextUrl.searchParams.get('status') || '').toLowerCase().trim();
+    const sort = req.nextUrl.searchParams.get('sort') || 'date';
+    const page = parseInt(req.nextUrl.searchParams.get('page') || '1', 10);
+    const pageSize = parseInt(req.nextUrl.searchParams.get('pageSize') || '25', 10);
+
     let rows: any[] = [];
     if (kind === 'payments') {
-      rows = DEMO_PAYMENTS_LIST;
+      rows = [...DEMO_PAYMENTS_LIST];
     } else if (kind === 'settlements') {
-      rows = DEMO_SETTLEMENTS_DETAILED;
+      rows = [...DEMO_SETTLEMENTS_DETAILED];
     } else if (kind === 'overdue') {
-      rows = DEMO_OVERDUE_RECORDS;
+      rows = [...DEMO_OVERDUE_RECORDS];
     } else {
-      rows = [
-        {
-          id: 'inst-1',
-          account_reference: 'DPS-2026-089',
-          sequence: 1,
-          due_date: '2026-10-15',
-          amount_minor: '3000000',
-          paid_amount_minor: '3000000',
-          remaining_minor: '0',
-          status: 'paid',
-        },
-      ];
+      rows = getAllStudentInstallments();
     }
+
+    if (search) {
+      rows = rows.filter((r) => {
+        const text = [
+          r.account_reference,
+          r.student_name,
+          r.student_id,
+          r.student_reference,
+          r.emi_details,
+          r.installment_label,
+          r.sequence ? `installment ${r.sequence}` : '',
+          r.sequence ? `emi ${r.sequence}` : '',
+          r.sequence ? `installment-${r.sequence}` : '',
+          r.sequence ? `emi-${r.sequence}` : '',
+          r.grade,
+          r.course,
+          r.status,
+          r.provider_reference,
+          r.payer_name,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+        return text.includes(search);
+      });
+    }
+
+    if (statusFilter && statusFilter !== 'all' && statusFilter !== 'all statuses') {
+      rows = rows.filter((r) => {
+        const s = String(r.status || '').toLowerCase();
+        if (statusFilter === 'paid') return s === 'paid' || s === 'settled';
+        if (statusFilter === 'pending' || statusFilter === 'scheduled') return s === 'scheduled' || s === 'pending';
+        if (statusFilter === 'part_paid' || statusFilter === 'partial') return s === 'part_paid' || s === 'partial';
+        if (statusFilter === 'overdue') return s === 'overdue';
+        return s.includes(statusFilter);
+      });
+    }
+
+    if (sort === 'amount') {
+      rows.sort((a, b) => Number(b.amount_minor || 0) - Number(a.amount_minor || 0));
+    } else {
+      rows.sort((a, b) => {
+        const dateA = new Date(a.due_date || a.recorded_at || a.settled_at || 0).getTime();
+        const dateB = new Date(b.due_date || b.recorded_at || b.settled_at || 0).getTime();
+        return dateB - dateA;
+      });
+    }
+
+    const total = rows.length;
+    const paginated = rows.slice((page - 1) * pageSize, page * pageSize);
+
     return NextResponse.json({
-      rows,
-      total: rows.length,
-      page: 1,
-      pageSize: 20,
+      rows: paginated,
+      total,
+      page,
+      pageSize,
     });
   }
 
@@ -1955,74 +2538,11 @@ async function handle(req: NextRequest, { params }: { params: Promise<{ route: s
 
   if (path === 'admin/fee-plans/overview') {
     return NextResponse.json({
-      plans: [
-        {
-          id: 'plan-1',
-          plan_key: 'cbse_annual_2026',
-          version: 1,
-          name: 'Standard CBSE Annual 2026-27',
-          status: 'effective',
-          total_minor: '12000000',
-          component_count: 3,
-          installment_count: 4,
-          created_by: 'institution_owner',
-        },
-        {
-          id: 'plan-2',
-          plan_key: 'cbse_semi_annual_2026',
-          version: 1,
-          name: 'CBSE Semi-Annual Flex Plan',
-          status: 'effective',
-          total_minor: '12000000',
-          component_count: 3,
-          installment_count: 2,
-          created_by: 'institution_owner',
-        },
-        {
-          id: 'plan-3',
-          plan_key: 'cbse_quarterly_2026',
-          version: 1,
-          name: 'CBSE 10-Month Autopay Structure',
-          status: 'effective',
-          total_minor: '12000000',
-          component_count: 3,
-          installment_count: 10,
-          created_by: 'institution_owner',
-        },
-      ],
-      assignments: [
-        {
-          id: 'asgn-1',
-          student_id: 'stu-1',
-          student_name: 'Aarav Sharma',
-          plan_id: 'plan-1',
-          plan_name: 'Standard CBSE Annual 2026-27',
-          status: 'active',
-          assigned_at: new Date(Date.now() - 30 * 86400000).toISOString(),
-        },
-        {
-          id: 'asgn-2',
-          student_id: 'stu-2',
-          student_name: 'Ananya Verma',
-          plan_id: 'plan-1',
-          plan_name: 'Standard CBSE Annual 2026-27',
-          status: 'active',
-          assigned_at: new Date(Date.now() - 25 * 86400000).toISOString(),
-        },
-      ],
-      adjustments: [
-        {
-          id: 'adj-1',
-          student_name: 'Aarav Sharma',
-          type: 'scholarship',
-          amount_minor: '1000000',
-          status: 'approved',
-          reason: 'Academic Merit 10%',
-          requested_by: 'staff',
-        },
-      ],
-      credits: [],
-      changes: [],
+      plans: DEMO_FEE_PLANS,
+      assignments: DEMO_FEE_ASSIGNMENTS,
+      adjustments: DEMO_FEE_ADJUSTMENTS,
+      credits: DEMO_FEE_CREDITS,
+      changes: DEMO_FEE_CHANGES,
       ageing: [
         { bucket: 'Current (Not due)', obligations: 142, outstanding_minor: '18500000' },
         { bucket: '1-30 days overdue', obligations: 8, outstanding_minor: '2800000' },
@@ -2033,18 +2553,19 @@ async function handle(req: NextRequest, { params }: { params: Promise<{ route: s
   }
 
   if (path === 'admin/payers') {
-    return NextResponse.json([
-      { id: 'payer-1', name: 'Rajesh Sharma', phone: '+91 98765 43210', email: 'rajesh.s@example.com', student_name: 'Aarav Sharma' },
-      { id: 'payer-2', name: 'Pooja Verma', phone: '+91 98111 22334', email: 'pooja.v@example.com', student_name: 'Ananya Verma' },
-      { id: 'payer-3', name: 'Vikram Rakesh', phone: '+91 98222 33445', email: 'vikram.r@example.com', student_name: 'V Rakesh' },
-    ]);
+    return NextResponse.json(DEMO_PAYERS_LIST);
   }
 
   if (path === 'admin/fees/schedules') {
+    return NextResponse.json(DEMO_FEE_SCHEDULES);
+  }
+
+  if (path === 'admin/fee-plans/receivables/ageing') {
     return NextResponse.json([
-      { id: 'sched-1', student_id: 'stu-1', student_name: 'Aarav Sharma', plan_name: 'Standard CBSE Annual', total_minor: 12000000, paid_minor: 8000000, remaining_minor: 4000000, status: 'active' },
-      { id: 'sched-2', student_id: 'stu-2', student_name: 'Ananya Verma', plan_name: 'Standard CBSE Annual', total_minor: 12000000, paid_minor: 12000000, remaining_minor: 0, status: 'completed' },
-      { id: 'sched-3', student_id: 'stu-3', student_name: 'V Rakesh', plan_name: 'CBSE Semi-Annual Flex Plan', total_minor: 8000000, paid_minor: 4000000, remaining_minor: 4000000, status: 'active' },
+      { bucket: 'Current (Not due)', obligations: 142, outstanding_minor: '18500000' },
+      { bucket: '1-30 days overdue', obligations: 8, outstanding_minor: '2800000' },
+      { bucket: '31-60 days overdue', obligations: 3, outstanding_minor: '1200000' },
+      { bucket: '>60 days overdue', obligations: 1, outstanding_minor: '500000' },
     ]);
   }
 
@@ -2053,71 +2574,224 @@ async function handle(req: NextRequest, { params }: { params: Promise<{ route: s
     try {
       body = await req.json();
     } catch {}
+    const totalMinor = Array.isArray(body.components)
+      ? body.components.reduce((sum: number, c: any) => sum + Number(c.amountMinor || 0), 0)
+      : 12000000;
+    const newPlan = {
+      id: 'plan-' + Date.now(),
+      plan_key: body.planKey || 'custom_plan',
+      version: 1,
+      name: body.name || 'Custom Plan',
+      status: 'draft',
+      total_minor: String(totalMinor),
+      component_count: Array.isArray(body.components) ? body.components.length : 1,
+      installment_count: Array.isArray(body.installments) ? body.installments.length : 1,
+      components: body.components || [],
+      installments: body.installments || [],
+      created_by: 'institution_owner',
+      created_at: new Date().toISOString(),
+    };
+    DEMO_FEE_PLANS.unshift(newPlan);
     return NextResponse.json({
       ok: true,
       message: 'Fee-plan draft created. Validate it before requesting approval.',
-      plan: {
-        id: 'plan-' + Date.now(),
-        plan_key: body.planKey || 'custom_plan',
-        version: 1,
-        name: body.name || 'Custom Plan',
-        status: 'draft',
-        total_minor: '12000000',
-        component_count: Array.isArray(body.components) ? body.components.length : 1,
-        installment_count: Array.isArray(body.installments) ? body.installments.length : 1,
-        created_by: 'institution_owner',
-      },
+      plan: newPlan,
     });
   }
 
   if (path.startsWith('admin/fee-plans/') && path.endsWith('/validate') && method === 'POST') {
+    const planId = path.replace('admin/fee-plans/', '').replace('/validate', '');
+    const plan = DEMO_FEE_PLANS.find((p) => p.id === planId);
+    if (plan) plan.status = 'validated';
     return NextResponse.json({ ok: true, valid: true, message: 'Fee plan successfully validated.' });
   }
 
   if (path.startsWith('admin/fee-plans/') && path.endsWith('/request-approval') && method === 'POST') {
+    const planId = path.replace('admin/fee-plans/', '').replace('/request-approval', '');
+    const plan = DEMO_FEE_PLANS.find((p) => p.id === planId);
+    if (plan) plan.status = 'pending_approval';
     return NextResponse.json({ ok: true, status: 'approval_requested', message: 'Approval requested.' });
   }
 
   if (path.startsWith('admin/fee-plans/') && path.endsWith('/approve') && method === 'POST') {
+    const planId = path.replace('admin/fee-plans/', '').replace('/approve', '');
+    const plan = DEMO_FEE_PLANS.find((p) => p.id === planId);
+    if (plan) plan.status = 'approved';
     return NextResponse.json({ ok: true, status: 'approved', message: 'Fee plan approved.' });
   }
 
   if (path.startsWith('admin/fee-plans/') && path.endsWith('/effective') && method === 'POST') {
+    const planId = path.replace('admin/fee-plans/', '').replace('/effective', '');
+    const plan = DEMO_FEE_PLANS.find((p) => p.id === planId);
+    if (plan) plan.status = 'effective';
     return NextResponse.json({ ok: true, status: 'effective', message: 'Fee plan marked as effective.' });
   }
 
   if (path.startsWith('admin/fee-plans/') && path.endsWith('/assign') && method === 'POST') {
+    const planId = path.replace('admin/fee-plans/', '').replace('/assign', '');
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {}
+    const plan = DEMO_FEE_PLANS.find((p) => p.id === planId) || DEMO_FEE_PLANS[0];
+    const student = DEMO_STUDENTS.find((s) => s.id === body.studentId) || DEMO_STUDENTS[0];
+    const newAsgn = {
+      id: 'asgn-' + Date.now(),
+      student_id: body.studentId || student?.id,
+      student_reference: student?.student_reference || body.accountReference,
+      student_name: student?.full_name || 'Enrolled Student',
+      name: plan?.name || 'Assigned Plan',
+      plan_id: planId,
+      plan_name: plan?.name || 'Assigned Plan',
+      version: plan?.version || 1,
+      status: 'active',
+      assigned_at: new Date().toISOString(),
+    };
+    DEMO_FEE_ASSIGNMENTS.unshift(newAsgn);
+
+    const newSched = {
+      id: 'sched-' + Date.now(),
+      account_reference: `${student?.student_reference || body.accountReference} · ${student?.full_name}`,
+      student_id: student?.id,
+      student_name: student?.full_name,
+      plan_name: plan?.name,
+      total_amount_minor: Number(plan?.total_minor || 12000000),
+      total_minor: Number(plan?.total_minor || 12000000),
+      paid_minor: 0,
+      remaining_minor: Number(plan?.total_minor || 12000000),
+      status: 'active',
+    };
+    DEMO_FEE_SCHEDULES.unshift(newSched);
+
     return NextResponse.json({ ok: true, assigned: true, message: 'Fee plan assigned to student.' });
   }
 
+  // Adjustments CRUD & Decisions
   if (path === 'admin/fee-plans/adjustments' && method === 'POST') {
-    return NextResponse.json({ ok: true, message: 'Adjustment request created.' });
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {}
+    const sched = DEMO_FEE_SCHEDULES.find((s) => s.id === body.scheduleId);
+    const newAdj = {
+      id: 'adj-' + Date.now(),
+      schedule_id: body.scheduleId,
+      account_reference: sched?.account_reference || body.scheduleId || 'Account Reference',
+      student_name: sched?.student_name || 'Student',
+      kind: body.kind || 'concession',
+      type: body.kind || 'concession',
+      amount_minor: String(body.amountMinor || 0),
+      status: 'pending',
+      reason: body.reason || 'Fee adjustment',
+      requested_by: 'finance_operator',
+      created_at: new Date().toISOString(),
+    };
+    DEMO_FEE_ADJUSTMENTS.unshift(newAdj);
+    return NextResponse.json({ ok: true, message: 'Adjustment request created.', adjustment: newAdj });
   }
 
+  if (path.startsWith('admin/fee-plans/adjustments/') && path.endsWith('/decide') && method === 'POST') {
+    const adjId = path.replace('admin/fee-plans/adjustments/', '').replace('/decide', '');
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {}
+    const adj = DEMO_FEE_ADJUSTMENTS.find((a) => a.id === adjId);
+    if (adj) {
+      adj.status = body.decision === 'reject' ? 'rejected' : 'approved';
+    }
+    return NextResponse.json({ ok: true, message: 'Adjustment decision recorded.' });
+  }
+
+  if (path.startsWith('admin/fee-plans/adjustments/') && path.endsWith('/apply') && method === 'POST') {
+    const adjId = path.replace('admin/fee-plans/adjustments/', '').replace('/apply', '');
+    const adj = DEMO_FEE_ADJUSTMENTS.find((a) => a.id === adjId);
+    if (adj) {
+      adj.status = 'applied';
+      const sched = DEMO_FEE_SCHEDULES.find((s) => s.id === adj.schedule_id);
+      if (sched) {
+        sched.remaining_minor = Math.max(0, sched.remaining_minor - Number(adj.amount_minor || 0));
+      }
+    }
+    return NextResponse.json({ ok: true, message: 'Adjustment successfully applied to balance.' });
+  }
+
+  // Credits
   if (path === 'admin/fee-plans/credits' && method === 'POST') {
-    return NextResponse.json({ ok: true, message: 'Credit record created.' });
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {}
+    const newCredit = {
+      id: 'crd-' + Date.now(),
+      account_reference: body.accountReference,
+      source: body.source === 'external_advance' ? 'Confirmed external advance' : body.source,
+      amount_minor: String(body.amountMinor || 0),
+      applied_minor: '0',
+      status: 'unapplied',
+      note: body.note || '',
+      created_at: new Date().toISOString(),
+    };
+    DEMO_FEE_CREDITS.unshift(newCredit);
+    return NextResponse.json({ ok: true, message: 'Credit record created.', credit: newCredit });
   }
 
+  // Changes (Withdrawals / Transfers) CRUD & Decisions
   if (path === 'admin/fee-plans/changes' && method === 'POST') {
-    return NextResponse.json({ ok: true, message: 'Receivable change request created.' });
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {}
+    const sched = DEMO_FEE_SCHEDULES.find((s) => s.id === body.scheduleId);
+    const asgn = DEMO_FEE_ASSIGNMENTS.find((a) => a.id === body.assignmentId);
+    const newChange = {
+      id: 'chg-' + Date.now(),
+      schedule_id: body.scheduleId,
+      assignment_id: body.assignmentId,
+      account_reference: sched?.account_reference || asgn?.student_reference || body.scheduleId,
+      student_name: sched?.student_name || asgn?.student_name,
+      change_type: body.changeType || 'withdrawal',
+      status: 'pending',
+      reason: body.reason || 'Controlled change request',
+      requested_by: 'finance_operator',
+      created_at: new Date().toISOString(),
+    };
+    DEMO_FEE_CHANGES.unshift(newChange);
+    return NextResponse.json({ ok: true, message: 'Receivable change request created.', change: newChange });
+  }
+
+  if (path.startsWith('admin/fee-plans/changes/') && path.endsWith('/decide') && method === 'POST') {
+    const chgId = path.replace('admin/fee-plans/changes/', '').replace('/decide', '');
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {}
+    const chg = DEMO_FEE_CHANGES.find((c) => c.id === chgId);
+    if (chg) {
+      chg.status = body.decision === 'reject' ? 'rejected' : 'approved';
+    }
+    return NextResponse.json({ ok: true, message: 'Receivable change decision recorded.' });
+  }
+
+  if (path.startsWith('admin/fee-plans/changes/') && path.endsWith('/execute') && method === 'POST') {
+    const chgId = path.replace('admin/fee-plans/changes/', '').replace('/execute', '');
+    const chg = DEMO_FEE_CHANGES.find((c) => c.id === chgId);
+    if (chg) {
+      chg.status = 'executed';
+      if (chg.schedule_id) {
+        const sched = DEMO_FEE_SCHEDULES.find((s) => s.id === chg.schedule_id);
+        if (sched) sched.status = chg.change_type === 'withdrawal' ? 'withdrawn' : 'transferred';
+      }
+      if (chg.assignment_id) {
+        const asgn = DEMO_FEE_ASSIGNMENTS.find((a) => a.id === chg.assignment_id);
+        if (asgn) asgn.status = chg.change_type === 'withdrawal' ? 'withdrawn' : 'transferred';
+      }
+    }
+    return NextResponse.json({ ok: true, message: 'Approved receivable change executed.' });
   }
 
   if (path === 'admin/fee-plans') {
-    return NextResponse.json([
-      {
-        id: 'plan-1',
-        name: 'Standard CBSE Annual 2026-27',
-        code: 'CBSE-2026-STD',
-        status: 'active',
-        version: 1,
-        academic_year: '2026-27',
-        components: [
-          { code: 'TUIT', name: 'Tuition Fee', amount_minor: '8000000' },
-          { code: 'DEV', name: 'Development Fee', amount_minor: '2000000' },
-          { code: 'ACT', name: 'Activity Fee', amount_minor: '1000000' },
-        ],
-      },
-    ]);
+    return NextResponse.json(DEMO_FEE_PLANS);
   }
 
   if (path === 'admin/overview') {
