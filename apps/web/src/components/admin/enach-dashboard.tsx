@@ -135,6 +135,21 @@ export function EnachDashboard({ openFeeOperations, initialView = 'overview', on
   const [retryModalDebit, setRetryModalDebit] = useState<SandboxDebitAttempt | null>(null);
   const [showDiagnosticsDrawer, setShowDiagnosticsDrawer] = useState(false);
   const [testNotificationModal, setTestNotificationModal] = useState(false);
+  // Share Mandate Approval Link Modal State (WhatsApp, SMS, Email, Copy Link)
+  const [shareModalData, setShareModalData] = useState<{
+    isOpen: boolean;
+    mandate: SandboxMandate;
+    recipientType: 'student' | 'guardian';
+    recipientName: string;
+    recipientPhone: string;
+    recipientEmail: string;
+    approvalUrl: string;
+    sentChannels: {
+      whatsapp?: boolean;
+      sms?: boolean;
+      email?: boolean;
+    };
+  } | null>(null);
 
   // One-Click Setup Form State
   const [setupStudentId, setSetupStudentId] = useState('');
@@ -516,10 +531,21 @@ export function EnachDashboard({ openFeeOperations, initialView = 'overview', on
       );
 
       if (res.ok && res.mandate) {
-        showToast(`✓ Sandbox Mandate ${res.mandate.mandate_reference} created! Simulated authorization required.`);
         setRefreshCount((n) => n + 1);
-        // Automatically pop up the test authorization simulator
-        setAuthModalMandate(res.mandate);
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+        const approvalUrl = `${baseUrl}/payer/demo-access-token-12345?mandate=${res.mandate.id}&ref=${encodeURIComponent(res.mandate.mandate_reference)}`;
+
+        setShareModalData({
+          isOpen: true,
+          mandate: res.mandate,
+          recipientType: 'student',
+          recipientName: res.mandate.student_name || 'V Rakesh',
+          recipientPhone: res.mandate.payer_phone || setupPayerPhone || '+91 98765 43210',
+          recipientEmail: res.mandate.payer_email || setupPayerEmail || 'payer@example.com',
+          approvalUrl,
+          sentChannels: {},
+        });
+        showToast(`✓ eNACH Mandate ${res.mandate.mandate_reference} created! Share link with student for approval.`);
       }
     } catch (err: any) {
       alert(err.message || 'Could not create mandate.');
@@ -1744,6 +1770,28 @@ export function EnachDashboard({ openFeeOperations, initialView = 'overview', on
                             >
                               View
                             </button>
+                            <button
+                              type="button"
+                              className="button secondary"
+                              style={{ fontSize: '11px', padding: '3px 8px', background: '#ecfdf5', borderColor: '#a7f3d0', color: '#065f46', fontWeight: 600 }}
+                              onClick={() => {
+                                const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+                                const approvalUrl = `${baseUrl}/payer/demo-access-token-12345?mandate=${m.id}&ref=${encodeURIComponent(m.mandate_reference)}`;
+                                setShareModalData({
+                                  isOpen: true,
+                                  mandate: m,
+                                  recipientType: 'student',
+                                  recipientName: m.student_name || 'V Rakesh',
+                                  recipientPhone: m.payer_phone || '+91 98765 43210',
+                                  recipientEmail: m.payer_email || 'payer@example.com',
+                                  approvalUrl,
+                                  sentChannels: {},
+                                });
+                              }}
+                              title="Share authorization link via WhatsApp, SMS, or Email"
+                            >
+                              Share Link 📨
+                            </button>
                             {m.status === 'pending_authorization' && (
                               <button
                                 type="button"
@@ -1887,17 +1935,64 @@ export function EnachDashboard({ openFeeOperations, initialView = 'overview', on
                               + Setup Mandate
                             </button>
                           ) : (
-                            <button
-                              type="button"
-                              className="button secondary"
-                              style={{ fontSize: '11px', padding: '3px 8px' }}
-                              onClick={() => {
-                                const found = mandates.find((m) => m.student_id === s.student_id);
-                                if (found) setSelectedMandate(found);
-                              }}
-                            >
-                              Inspect Mandate
-                            </button>
+                            <div style={{ display: 'flex', gap: '4px' }}>
+                              <button
+                                type="button"
+                                className="button secondary"
+                                style={{ fontSize: '11px', padding: '3px 8px' }}
+                                onClick={() => {
+                                  const found = mandates.find((m) => m.student_id === s.student_id);
+                                  if (found) setSelectedMandate(found);
+                                }}
+                              >
+                                Inspect
+                              </button>
+                              <button
+                                type="button"
+                                className="button secondary"
+                                style={{ fontSize: '11px', padding: '3px 8px', background: '#ecfdf5', borderColor: '#a7f3d0', color: '#065f46', fontWeight: 600 }}
+                                onClick={() => {
+                                  const found = mandates.find((m) => m.student_id === s.student_id);
+                                  const m = found || {
+                                    id: `mandate-${s.student_id}`,
+                                    mandate_reference: `UMRN-NACH-2026-${s.student_reference}`,
+                                    student_id: s.student_id,
+                                    student_name: s.student_name,
+                                    account_reference: s.student_reference,
+                                    payer_name: s.payer_name,
+                                    payer_phone: s.payer_phone,
+                                    payer_email: s.payer_email,
+                                    bank_name: 'HDFC Bank',
+                                    masked_account: '•••• 1244',
+                                    ifsc_code: 'HDFC0001234',
+                                    fee_plan: s.fee_plan,
+                                    max_amount_minor: s.remaining_minor ? Math.min(s.remaining_minor, 5000000) : 5000000,
+                                    frequency: 'quarterly',
+                                    start_date: '2026-07-01',
+                                    end_date: '2027-06-30',
+                                    status: s.mandate_status as MandateStatus,
+                                    auth_mode: 'NetBanking (Simulated)',
+                                    created_at: new Date().toISOString(),
+                                    updated_at: new Date().toISOString(),
+                                  };
+                                  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+                                  const approvalUrl = `${baseUrl}/payer/demo-access-token-12345?mandate=${m.id}&ref=${encodeURIComponent(m.mandate_reference)}`;
+                                  setShareModalData({
+                                    isOpen: true,
+                                    mandate: m as SandboxMandate,
+                                    recipientType: 'student',
+                                    recipientName: s.student_name,
+                                    recipientPhone: s.payer_phone || '+91 98765 43210',
+                                    recipientEmail: s.payer_email || 'payer@example.com',
+                                    approvalUrl,
+                                    sentChannels: {},
+                                  });
+                                }}
+                                title="Share authorization link via WhatsApp, SMS, or Email"
+                              >
+                                Share Link 📨
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -2657,6 +2752,431 @@ export function EnachDashboard({ openFeeOperations, initialView = 'overview', on
       )}
 
       {/* ========================================================= */}
+      {/* MODAL 0: Share eNACH Setup Link to Student for Approval   */}
+      {/* ========================================================= */}
+      {shareModalData && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(7, 43, 38, 0.72)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1rem',
+            zIndex: 9999,
+            animation: 'fadeInOverlay 0.2s ease-out both',
+          }}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: 20,
+              padding: '24px 28px',
+              maxWidth: 620,
+              width: '100%',
+              boxShadow: '0 25px 50px -12px rgba(6, 45, 42, 0.28)',
+              border: '1px solid rgba(7, 53, 51, 0.12)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <div>
+                <span
+                  style={{
+                    display: 'inline-block',
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    padding: '3px 10px',
+                    borderRadius: '9999px',
+                    background: '#eafbf4',
+                    color: '#075e47',
+                    border: '1px solid #a3ebce',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    marginBottom: '6px',
+                  }}
+                >
+                  ⚡ eNACH Mandate Created · Approval Link Ready
+                </span>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#073533' }}>
+                  Share eNACH Setup Link to Student for Approval
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShareModalData(null)}
+                style={{
+                  background: '#f1f5f9',
+                  border: 'none',
+                  fontSize: '16px',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  color: '#64748b',
+                  display: 'grid',
+                  placeItems: 'center',
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <p style={{ margin: '0 0 16px', fontSize: '13.5px', color: '#587973', lineHeight: 1.5 }}>
+              Dispatch an encrypted mandate authorization link to the student or guardian. They can open the link, verify the auto-debit schedule, enter their banking details, and approve via WhatsApp, SMS, or Email.
+            </p>
+
+            {/* Mandate Summary Overview */}
+            <div
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: 14,
+                padding: '14px 16px',
+                marginBottom: '18px',
+                fontSize: '12.5px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: '10px',
+              }}
+            >
+              <div>
+                <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Mandate Reference / UMRN</span>
+                <strong style={{ color: '#0d9488', fontFamily: 'monospace' }}>{shareModalData.mandate.mandate_reference}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Student</span>
+                <strong style={{ color: '#0f172a' }}>{shareModalData.mandate.student_name} ({shareModalData.mandate.account_reference})</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Authorized Payer / Guardian</span>
+                <strong style={{ color: '#0f172a' }}>{shareModalData.mandate.payer_name}</strong>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', display: 'block', fontSize: '11px' }}>Mandate Cap / Frequency</span>
+                <strong style={{ color: '#0f766e' }}>{formatMoney(shareModalData.mandate.max_amount_minor)} ({shareModalData.mandate.frequency})</strong>
+              </div>
+            </div>
+
+            {/* Recipient Configuration */}
+            <div style={{ marginBottom: '18px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#073533', marginBottom: '6px' }}>
+                Recipient Designation &amp; Contact Info
+              </label>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '10px' }}>
+                <select
+                  value={shareModalData.recipientType}
+                  onChange={(e) => {
+                    const type = e.target.value as 'student' | 'guardian';
+                    setShareModalData((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            recipientType: type,
+                            recipientName:
+                              type === 'student'
+                                ? prev.mandate.student_name || 'V Rakesh'
+                                : prev.mandate.payer_name || 'Rajesh Sharma',
+                          }
+                        : null
+                    );
+                  }}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    color: '#073533',
+                    background: '#ffffff',
+                    fontWeight: 600,
+                  }}
+                >
+                  <option value="student">🎓 Student: {shareModalData.mandate.student_name}</option>
+                  <option value="guardian">👨‍👩‍👦 Guardian: {shareModalData.mandate.payer_name}</option>
+                </select>
+
+                <input
+                  type="tel"
+                  value={shareModalData.recipientPhone}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setShareModalData((prev) => (prev ? { ...prev, recipientPhone: val } : null));
+                  }}
+                  placeholder="Mobile / WhatsApp (+91 98765 43210)"
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    color: '#073533',
+                  }}
+                />
+
+                <input
+                  type="email"
+                  value={shareModalData.recipientEmail}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setShareModalData((prev) => (prev ? { ...prev, recipientEmail: val } : null));
+                  }}
+                  placeholder="Email address (payer@example.com)"
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: 10,
+                    border: '1px solid #cbd5e1',
+                    fontSize: '13px',
+                    color: '#073533',
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Share Channel Cards: WhatsApp, SMS, Email */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#073533', marginBottom: '8px' }}>
+                Select Delivery Channel (WhatsApp, SMS, Email)
+              </label>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px' }}>
+                {/* 1. WhatsApp Button */}
+                <div
+                  style={{
+                    border: shareModalData.sentChannels.whatsapp ? '1.5px solid #10b981' : '1px solid #e2e8f0',
+                    borderRadius: 12,
+                    padding: '12px',
+                    background: shareModalData.sentChannels.whatsapp ? '#ecfdf5' : '#ffffff',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '18px' }}>💬</span>
+                      <strong style={{ fontSize: '13px', color: '#073533' }}>WhatsApp</strong>
+                    </div>
+                    {shareModalData.sentChannels.whatsapp && (
+                      <span style={{ fontSize: '10px', fontWeight: 700, color: '#059669', background: '#d1fae5', padding: '2px 6px', borderRadius: 9999 }}>
+                        ✓ Shared
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#64748b' }}>
+                    Send direct WhatsApp message with approval link.
+                  </p>
+                  <button
+                    type="button"
+                    className="button"
+                    style={{
+                      background: '#25D366',
+                      borderColor: '#25D366',
+                      color: '#ffffff',
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      padding: '6px 10px',
+                      borderRadius: 8,
+                      width: '100%',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                      const cleanPhone = (shareModalData.recipientPhone || '').replace(/\D/g, '');
+                      const msg = `Hello ${shareModalData.recipientName}, please review and approve the eNACH auto-debit schedule for student ${shareModalData.mandate.student_name} (${shareModalData.mandate.account_reference}) for ${formatMoney(shareModalData.mandate.max_amount_minor)}. Authorize securely here: ${shareModalData.approvalUrl}`;
+                      const waUrl = cleanPhone
+                        ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(msg)}`
+                        : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
+                      window.open(waUrl, '_blank');
+                      setShareModalData((prev) =>
+                        prev ? { ...prev, sentChannels: { ...prev.sentChannels, whatsapp: true } } : null
+                      );
+                      showToast(`✓ WhatsApp approval link initiated for ${shareModalData.recipientName}`);
+                    }}
+                  >
+                    Share on WhatsApp ↗
+                  </button>
+                </div>
+
+                {/* 2. SMS Button */}
+                <div
+                  style={{
+                    border: shareModalData.sentChannels.sms ? '1.5px solid #0284c7' : '1px solid #e2e8f0',
+                    borderRadius: 12,
+                    padding: '12px',
+                    background: shareModalData.sentChannels.sms ? '#f0f9ff' : '#ffffff',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '18px' }}>📱</span>
+                      <strong style={{ fontSize: '13px', color: '#073533' }}>SMS Alert</strong>
+                    </div>
+                    {shareModalData.sentChannels.sms && (
+                      <span style={{ fontSize: '10px', fontWeight: 700, color: '#0284c7', background: '#e0f2fe', padding: '2px 6px', borderRadius: 9999 }}>
+                        ✓ Dispatched
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#64748b' }}>
+                    Dispatch instant SMS alert to recipient phone.
+                  </p>
+                  <button
+                    type="button"
+                    className="button"
+                    style={{
+                      background: '#0284c7',
+                      borderColor: '#0284c7',
+                      color: '#ffffff',
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      padding: '6px 10px',
+                      borderRadius: 8,
+                      width: '100%',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                      setShareModalData((prev) =>
+                        prev ? { ...prev, sentChannels: { ...prev.sentChannels, sms: true } } : null
+                      );
+                      showToast(`✓ SMS with authorization link dispatched to ${shareModalData.recipientPhone}`);
+                    }}
+                  >
+                    Dispatch via SMS ↗
+                  </button>
+                </div>
+
+                {/* 3. Email Button */}
+                <div
+                  style={{
+                    border: shareModalData.sentChannels.email ? '1.5px solid #7c3aed' : '1px solid #e2e8f0',
+                    borderRadius: 12,
+                    padding: '12px',
+                    background: shareModalData.sentChannels.email ? '#faf5ff' : '#ffffff',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '18px' }}>✉️</span>
+                      <strong style={{ fontSize: '13px', color: '#073533' }}>Email Invite</strong>
+                    </div>
+                    {shareModalData.sentChannels.email && (
+                      <span style={{ fontSize: '10px', fontWeight: 700, color: '#7c3aed', background: '#f3e8ff', padding: '2px 6px', borderRadius: 9999 }}>
+                        ✓ Dispatched
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#64748b' }}>
+                    Send official email invite with approval button.
+                  </p>
+                  <button
+                    type="button"
+                    className="button"
+                    style={{
+                      background: '#7c3aed',
+                      borderColor: '#7c3aed',
+                      color: '#ffffff',
+                      fontWeight: 700,
+                      fontSize: '12px',
+                      padding: '6px 10px',
+                      borderRadius: 8,
+                      width: '100%',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => {
+                      setShareModalData((prev) =>
+                        prev ? { ...prev, sentChannels: { ...prev.sentChannels, email: true } } : null
+                      );
+                      showToast(`✓ Email invitation dispatched to ${shareModalData.recipientEmail}`);
+                    }}
+                  >
+                    Send via Email ↗
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Direct Link Copy Bar */}
+            <div
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                borderRadius: 12,
+                padding: '10px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '10px',
+                marginBottom: '20px',
+              }}
+            >
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <span style={{ fontSize: '10.5px', color: '#64748b', fontWeight: 700, display: 'block', textTransform: 'uppercase' }}>
+                  Student Direct Authorization Link
+                </span>
+                <span style={{ fontSize: '12px', color: '#073533', fontFamily: 'monospace', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {shareModalData.approvalUrl}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="button secondary"
+                style={{ fontSize: '12px', padding: '6px 14px', fontWeight: 700, whiteSpace: 'nowrap', borderRadius: 8 }}
+                onClick={() => {
+                  if (navigator.clipboard) {
+                    navigator.clipboard.writeText(shareModalData.approvalUrl);
+                  }
+                  showToast('✓ Authorization link copied to clipboard!');
+                }}
+              >
+                Copy Link 📋
+              </button>
+            </div>
+
+            {/* Footer Modal Actions */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
+              <button
+                type="button"
+                className="button outline"
+                style={{ fontSize: '12.5px', color: '#0f766e', borderColor: '#a7f3d0', background: '#f0fdfa' }}
+                onClick={() => {
+                  const m = shareModalData.mandate;
+                  setShareModalData(null);
+                  setAuthModalMandate(m);
+                }}
+              >
+                ⚡ Test / Simulate Student Approval Now
+              </button>
+
+              <button
+                type="button"
+                className="button primary"
+                style={{ background: '#073533', borderColor: '#073533', color: '#ffffff', fontWeight: 700, padding: '8px 24px', borderRadius: '9999px' }}
+                onClick={() => setShareModalData(null)}
+              >
+                Done ✓
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
       {/* MODAL 1: Simulated Payer Authorization Workflow           */}
       {/* ========================================================= */}
       {authModalMandate && (
@@ -2897,7 +3417,30 @@ export function EnachDashboard({ openFeeOperations, initialView = 'overview', on
               </table>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+              <button
+                type="button"
+                className="button primary"
+                style={{ background: '#0d9488', borderColor: '#0d9488', color: '#ffffff', fontWeight: 600, fontSize: '12.5px' }}
+                onClick={() => {
+                  const m = selectedMandate;
+                  setSelectedMandate(null);
+                  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+                  const approvalUrl = `${baseUrl}/payer/demo-access-token-12345?mandate=${m.id}&ref=${encodeURIComponent(m.mandate_reference)}`;
+                  setShareModalData({
+                    isOpen: true,
+                    mandate: m,
+                    recipientType: 'student',
+                    recipientName: m.student_name || 'V Rakesh',
+                    recipientPhone: m.payer_phone || '+91 98765 43210',
+                    recipientEmail: m.payer_email || 'payer@example.com',
+                    approvalUrl,
+                    sentChannels: {},
+                  });
+                }}
+              >
+                Share Approval Link 📨
+              </button>
               <button type="button" className="button secondary" onClick={() => setSelectedMandate(null)}>
                 Close
               </button>

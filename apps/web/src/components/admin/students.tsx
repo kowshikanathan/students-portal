@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useAdminApi } from './context';
 import { formatMoney } from './finance-dashboard';
 import { financialStatusClass } from './financial-status';
+import { SuccessModal, SuccessPopupDetail } from './success-modal';
 
 type Student = {
   id: string;
@@ -43,6 +44,15 @@ export function Students() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [guardians, setGuardians] = useState<Array<{ id: string; display_name: string }>>([]);
+  const [modalConfig, setModalConfig] = useState<{
+    badge?: string;
+    title: string;
+    subtitle?: string;
+    details?: SuccessPopupDetail[];
+    note?: string;
+    primaryAction?: { label: string; onClick: () => void };
+    secondaryAction?: { label: string; onClick: () => void };
+  } | null>(null);
   useEffect(() => {
     if (!adding) return;
     let active = true;
@@ -92,6 +102,18 @@ export function Students() {
   }, [session.tenant.id, query, status, sort, page, refresh]);
   return (
     <>
+      <SuccessModal
+        isOpen={Boolean(modalConfig)}
+        onClose={() => setModalConfig(null)}
+        title={modalConfig?.title || ''}
+        badge={modalConfig?.badge}
+        subtitle={modalConfig?.subtitle}
+        details={modalConfig?.details}
+        note={modalConfig?.note}
+        primaryAction={modalConfig?.primaryAction}
+        secondaryAction={modalConfig?.secondaryAction}
+      />
+
       <div className="admin-toolbar">
         <div>
           <p className="eyebrow">STUDENT FINANCE</p>
@@ -149,12 +171,41 @@ export function Students() {
                 }
                 const created: any = await request('admin/academic/students', 'POST', payload);
                 const targetId = created?.id || payload.studentReference || 'stu-1';
-                router.push('/admin/students/' + targetId + '/');
                 setAdding(false);
                 setRefresh((n) => n + 1);
                 setNotice(
                   `Student created successfully (${payload.studentReference}). Next steps: Assign Fee Structure → Configure Components → Assign Master Schedule → Flex Schedule → Enable eNACH.`,
                 );
+
+                // Show clear confirmation popup
+                setModalConfig({
+                  badge: 'STUDENT REGISTERED',
+                  title: 'Student Created Successfully',
+                  subtitle: `Learner profile for ${payload.fullName} (${payload.studentReference}) has been committed to the academic registry.`,
+                  details: [
+                    { label: 'Student Reference', value: String(payload.studentReference) },
+                    { label: 'Full Name', value: String(payload.fullName) },
+                    { label: 'Course / Stream', value: String(payload.course || 'CBSE Secondary') },
+                    { label: 'Grade / Class', value: String(payload.grade || '10') },
+                    { label: 'Guardian / Payer', value: String(payload.guardianName || 'Assigned Payer') },
+                    { label: 'Academic Status', value: 'Active Enrolled' },
+                    { label: 'Tenant Campus', value: session.tenant.name },
+                  ],
+                  note: 'Committed atomically to institution registry & audit trail. Ready for fee schedule assignment.',
+                  primaryAction: {
+                    label: 'Open Student Profile →',
+                    onClick: () => {
+                      setModalConfig(null);
+                      router.push('/admin/students/' + targetId + '/');
+                    },
+                  },
+                  secondaryAction: {
+                    label: 'Done / View Roster',
+                    onClick: () => {
+                      setModalConfig(null);
+                    },
+                  },
+                });
               } catch (err: any) {
                 setNotice(
                   err?.message ||

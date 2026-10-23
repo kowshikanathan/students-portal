@@ -4964,40 +4964,365 @@ dialog textarea:focus,
   box-shadow: 0 0 0 3px rgba(66, 194, 168, 0.2) !important;
 }
 
-/* 13. Fee Plan Workspace */
+/* 13. Fee Plan Workspace - Dashboard Design System */
 .fee-plan-workspace {
-  display: grid;
-  gap: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6, 24px);
   min-width: 0;
+  width: 100%;
+}
+
+.fee-plan-workspace .admin-panel {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  box-shadow: 0 4px 20px -2px rgba(6, 51, 49, 0.05);
+  padding: 28px;
+  margin-bottom: 0;
+}
+
+.fee-plan-workspace .admin-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.fee-plan-workspace .eyebrow {
+  color: #0f766e;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.fee-plan-workspace h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #063331;
+  margin: 0 0 6px 0;
+}
+
+.fee-plan-workspace h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #063331;
+  margin: 24px 0 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fee-plan-workspace p {
+  color: #527972;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.fee-plan-workspace .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #063331;
+  min-width: 0;
+}
+
+.fee-plan-workspace input,
+.fee-plan-workspace select,
+.fee-plan-workspace textarea {
+  height: 42px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(15, 118, 110, 0.2);
+  background: #ffffff;
+  padding: 0 14px;
+  font-size: 0.88rem;
+  color: #063331;
+  transition: all 0.2s ease;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.fee-plan-workspace input:focus,
+.fee-plan-workspace select:focus,
+.fee-plan-workspace textarea:focus {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.15);
 }
 
 .fee-plan-workspace .admin-form .row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
-  gap: var(--space-4);
+  gap: var(--space-4, 16px);
+  margin-bottom: 16px;
 }
 
-.fee-plan-workspace .admin-form .fee-component-row {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+.fee-plan-workspace .admin-form .row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: end;
+  gap: var(--space-4, 16px);
+  margin-bottom: 16px;
 }
 
-.fee-plan-workspace .fee-component-row > button {
-  grid-column: 1 / -1;
-  justify-self: end;
+.fee-plan-workspace .admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-6, 24px);
 }
 
-.fee-plan-workspace .admin-form .fee-installment-row,
-.fee-plan-workspace .admin-form .fee-generator {
-  grid-template-columns: repeat(2, minmax(0, 1fr)) auto;
+/* Component Row Layout */
+.fee-plan-workspace .fee-component-row {
+  display: grid;
+  grid-template-columns: 140px 1.5fr 140px 140px 42px;
+  gap: 12px;
+  align-items: end;
+  background: #fbfdfc;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 118, 110, 0.1);
+  margin-bottom: 10px;
 }
 
-.fee-plan-workspace .field {
-  min-width: 0;
+.fee-plan-workspace .fee-component-row button.btn-remove,
+.fee-plan-workspace .fee-installment-row button.btn-remove {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.fee-plan-workspace .fee-component-row button.btn-remove:hover,
+.fee-plan-workspace .fee-installment-row button.btn-remove:hover {
+  background: #fee2e2;
+  border-color: #dc2626;
+}
+
+/* Generator Banner */
+.fee-plan-workspace .fee-generator {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 16px;
+  align-items: end;
+  background: #f0faf6;
+  padding: 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 118, 110, 0.15);
+  margin-bottom: 16px;
+}
+
+/* Installment Row Layout */
+.fee-plan-workspace .fee-installment-row {
+  display: grid;
+  grid-template-columns: 110px 1fr 1fr 42px;
+  gap: 12px;
+  align-items: end;
+  background: #fbfdfc;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 118, 110, 0.1);
+  margin-bottom: 10px;
+}
+
+/* Balance Overview Bar */
+.fee-plan-workspace .fee-balance-bar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  background: #f8fbf9;
+  padding: 16px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  flex-wrap: wrap;
+  margin: 16px 0;
+}
+
+.fee-plan-workspace .fee-balance-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fee-plan-workspace .fee-balance-chip span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #527972;
+}
+
+.fee-plan-workspace .fee-balance-chip strong {
+  font-size: 1.1rem;
+  color: #063331;
+  font-weight: 700;
+}
+
+/* Buttons */
+.fee-plan-workspace button.button.primary,
+.fee-plan-workspace .btn-primary {
+  background: #063331;
+  color: #ffffff;
+  border-radius: 9999px;
+  padding: 11px 24px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 2px 8px rgba(6, 51, 49, 0.15);
+}
+
+.fee-plan-workspace button.button.primary:hover,
+.fee-plan-workspace .btn-primary:hover {
+  background: #0a4946;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(6, 51, 49, 0.2);
+}
+
+.fee-plan-workspace button.button.secondary,
+.fee-plan-workspace .btn-secondary {
+  background: #f0faf6;
+  color: #0f766e;
+  border: 1.5px solid rgba(15, 118, 110, 0.25);
+  border-radius: 9999px;
+  padding: 9px 20px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fee-plan-workspace button.button.secondary:hover,
+.fee-plan-workspace .btn-secondary:hover {
+  background: #d1fae5;
+  border-color: #0f766e;
+}
+
+.fee-plan-workspace button.button.outline,
+.fee-plan-workspace .btn-outline {
+  background: #ffffff;
+  color: #063331;
+  border: 1.5px solid rgba(6, 51, 49, 0.2);
+  border-radius: 9999px;
+  padding: 9px 20px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fee-plan-workspace button.button.outline:hover,
+.fee-plan-workspace .btn-outline:hover {
+  border-color: #063331;
+  background: #f8fbf9;
+}
+
+.fee-plan-workspace .btn-add-dashed {
+  width: 100%;
+  padding: 12px 18px;
+  border-radius: 12px;
+  border: 1.5px dashed rgba(15, 118, 110, 0.3);
+  background: #f8fbf9;
+  color: #0f766e;
+  font-weight: 600;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.fee-plan-workspace .btn-add-dashed:hover {
+  background: #f0faf6;
+  border-color: #0f766e;
+  color: #063331;
+}
+
+/* Plan Cards Grid */
+.fee-plan-workspace .fee-schedule-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.fee-plan-workspace .fee-schedule-card {
+  background: #ffffff;
+  border-radius: 14px;
+  border: 1px solid rgba(15, 118, 110, 0.15);
+  box-shadow: 0 2px 12px -2px rgba(6, 51, 49, 0.04);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  transition: all 0.2s ease;
+}
+
+.fee-plan-workspace .fee-schedule-card:hover {
+  box-shadow: 0 6px 20px -2px rgba(6, 51, 49, 0.08);
+  border-color: rgba(15, 118, 110, 0.3);
+}
+
+/* Queue Rows */
+.fee-plan-workspace .record-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: #fbfdfc;
+  border: 1px solid rgba(15, 118, 110, 0.1);
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.fee-plan-workspace .status-pill {
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: capitalize;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .fee-plan-workspace [aria-invalid="true"] {
   border-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
 }
 
 
@@ -5144,4 +5469,238 @@ dialog textarea:focus,
     grid-template-columns: repeat(3, minmax(0, 1fr));
     row-gap: 16px;
   }
+}
+
+/* =========================================================================
+   13. Dashboard Unified Success Popup & Feedback System
+   Strict adherence to the Dodo / Jodo Dashboard Overview Design System:
+   - Frosted emerald-glass backdrop with backdrop-filter: blur(8px)
+   - Centered floating card with 28px border-radius and deep dual-tone shadow
+   - Hero emerald badge circle with glowing pulse & animated checkmark
+   - Structured key-value details pill box with mint background (#f7fbf9)
+   - Dark pill action button (#063331) with smooth hover and click transitions
+   ========================================================================= */
+
+@keyframes fadeInOverlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes successIconPulse {
+  0% {
+    transform: scale(0.8);
+    box-shadow: 0 0 0 0 rgba(66, 194, 168, 0.4);
+  }
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 14px rgba(66, 194, 168, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(66, 194, 168, 0);
+  }
+}
+
+@keyframes checkmarkDraw {
+  0% {
+    stroke-dashoffset: 48;
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+.dashboard-success-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(6, 45, 42, 0.52) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  z-index: 10000 !important;
+  animation: fadeInOverlay 0.22s ease-out both !important;
+}
+
+.dashboard-success-modal {
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 10001 !important;
+  width: min(520px, calc(100vw - 32px)) !important;
+  max-width: calc(100vw - 32px) !important;
+  max-height: min(92vh, 780px) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(7, 53, 51, 0.12) !important;
+  border-radius: 28px !important;
+  box-shadow: 0 25px 70px -10px rgba(6, 45, 42, 0.32), 0 12px 30px -5px rgba(6, 45, 42, 0.14) !important;
+  padding: 32px 32px 28px !important;
+  animation: modalPopupCenter 0.28s cubic-bezier(0.16, 1, 0.3, 1) both !important;
+  box-sizing: border-box !important;
+  color: var(--text-main) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  text-align: center !important;
+}
+
+.dashboard-success-close {
+  position: absolute !important;
+  top: 18px !important;
+  right: 18px !important;
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 50% !important;
+  background: #f1f7f5 !important;
+  border: 1px solid rgba(7, 53, 51, 0.08) !important;
+  color: #4a6834 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  font-size: 16px !important;
+  line-height: 1 !important;
+  transition: all 0.18s ease !important;
+  padding: 0 !important;
+}
+
+.dashboard-success-close:hover {
+  background: #e2f2ec !important;
+  color: #063331 !important;
+  transform: scale(1.08) !important;
+}
+
+.dashboard-success-hero-icon {
+  width: 68px !important;
+  height: 68px !important;
+  border-radius: 50% !important;
+  background: linear-gradient(135deg, #e4f9b8 0%, #b9f3e5 100%) !important;
+  border: 2px solid #a3ebce !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin: 0 auto 16px !important;
+  box-shadow: 0 10px 24px -4px rgba(66, 194, 168, 0.4) !important;
+  animation: successIconPulse 0.6s cubic-bezier(0.16, 1, 0.3, 1) both !important;
+}
+
+.dashboard-success-hero-icon svg {
+  width: 34px !important;
+  height: 34px !important;
+  color: #064840 !important;
+}
+
+.dashboard-success-hero-icon svg path {
+  stroke-dasharray: 48;
+  animation: checkmarkDraw 0.45s 0.15s ease-out forwards;
+}
+
+.dashboard-success-eyebrow {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 4px 14px !important;
+  border-radius: 9999px !important;
+  background: #eafbf4 !important;
+  color: #075e47 !important;
+  border: 1px solid #a3ebce !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  margin-bottom: 10px !important;
+}
+
+.dashboard-success-title {
+  font-size: 22px !important;
+  font-weight: 700 !important;
+  color: #073533 !important;
+  letter-spacing: -0.02em !important;
+  margin: 0 0 6px !important;
+  line-height: 1.25 !important;
+}
+
+.dashboard-success-subtitle {
+  font-size: 13.5px !important;
+  color: #587973 !important;
+  margin: 0 0 20px !important;
+  line-height: 1.5 !important;
+  max-width: 440px !important;
+}
+
+.dashboard-success-card {
+  width: 100% !important;
+  background: #f7fbf9 !important;
+  border: 1px solid rgba(7, 53, 51, 0.08) !important;
+  border-radius: 18px !important;
+  padding: 16px 18px !important;
+  margin-bottom: 20px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  box-sizing: border-box !important;
+  text-align: left !important;
+}
+
+.dashboard-success-row {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  gap: 12px !important;
+  font-size: 13px !important;
+  border-bottom: 1px dashed rgba(7, 53, 51, 0.08) !important;
+  padding-bottom: 8px !important;
+}
+
+.dashboard-success-row:last-child {
+  border-bottom: none !important;
+  padding-bottom: 0 !important;
+}
+
+.dashboard-success-label {
+  color: #6c8f89 !important;
+  font-weight: 500 !important;
+  font-size: 12.5px !important;
+}
+
+.dashboard-success-value {
+  color: #073533 !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  text-align: right !important;
+  word-break: break-word !important;
+}
+
+.dashboard-success-note {
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  font-size: 12px !important;
+  color: #2b6d63 !important;
+  background: rgba(185, 243, 229, 0.35) !important;
+  padding: 8px 12px !important;
+  border-radius: 10px !important;
+  margin-bottom: 22px !important;
+  box-sizing: border-box !important;
+}
+
+.dashboard-success-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+  width: 100% !important;
+  flex-wrap: wrap !important;
 }
