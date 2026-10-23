@@ -567,6 +567,142 @@ export default function StudentPortalPage() {
     }
   };
 
+  const downloadReceiptDirectly = async (receiptNumber: string) => {
+    if (!token) return;
+    try {
+      let rData: any = null;
+      if (paymentComplete && paymentComplete.receiptNumber === receiptNumber) {
+        rData = {
+          receiptNumber: paymentComplete.receiptNumber,
+          institutionName: tenant?.name || student?.institution_name || 'Educational Institution',
+          studentName: student?.full_name || 'Student',
+          studentReference: student?.student_reference || 'STU',
+          course: student?.course || 'General',
+          grade: student?.grade || 'Standard',
+          paymentDate: formatDate(paymentComplete.date),
+          transactionId: paymentComplete.transactionId,
+          paymentMethod: paymentComplete.paymentMethod || 'AutoPay',
+          amountFormatted: formatMoney(paymentComplete.amountMinor),
+        };
+      } else {
+        const res = await fetch(`/api/v1/portal/receipts/${encodeURIComponent(receiptNumber)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const snap = data.snapshot || {};
+          rData = {
+            receiptNumber: data.receipt_number,
+            institutionName: snap.instituteName || data.institution_name || tenant?.name || 'Educational Institution',
+            studentName: snap.studentName || student?.full_name || 'Student',
+            studentReference: snap.accountReference || student?.student_reference || 'STU',
+            course: snap.course || student?.course || 'General',
+            grade: snap.grade || student?.grade || 'Standard',
+            paymentDate: formatDate(data.recorded_at),
+            transactionId: data.transaction_id,
+            paymentMethod: data.payment_mode || 'AutoPay',
+            amountFormatted: formatMoney(data.amount_minor),
+          };
+        }
+      }
+
+      if (!rData) return;
+
+      const cleanInst = String(rData.institutionName || 'Educational Institution').replace(/[\\()]/g, '');
+      const cleanStudent = String(rData.studentName || 'Student').replace(/[\\()]/g, '');
+      const cleanRef = String(rData.studentReference || 'STU').replace(/[\\()]/g, '');
+      const cleanCourse = String(rData.course || 'General').replace(/[\\()]/g, '');
+      const cleanGrade = String(rData.grade || 'Standard').replace(/[\\()]/g, '');
+      const cleanTx = String(rData.transactionId || '').replace(/[\\()]/g, '');
+      const cleanMode = String(rData.paymentMethod || 'AutoPay').replace(/[\\()]/g, '');
+      const cleanAmount = String(rData.amountFormatted || '').replace('₹', 'INR ').replace(/[\\()]/g, '');
+      const cleanDate = String(rData.paymentDate || '').replace(/[\\()]/g, '');
+      const cleanRcpt = String(rData.receiptNumber || receiptNumber).replace(/[\\()]/g, '');
+
+      const streamContent = [
+        'BT',
+        '/F1 18 Tf',
+        '50 770 Td',
+        '(OFFICIAL FEE RECEIPT) Tj',
+        '/F1 13 Tf',
+        '0 -26 Td',
+        '(' + cleanInst + ') Tj',
+        '0 -30 Td',
+        '/F1 10 Tf',
+        '(Receipt Number: ' + cleanRcpt + ') Tj',
+        '0 -20 Td',
+        '(Payment Date: ' + cleanDate + ') Tj',
+        '0 -20 Td',
+        '(Student Name: ' + cleanStudent + ') Tj',
+        '0 -20 Td',
+        '(Enrollment ID: ' + cleanRef + ') Tj',
+        '0 -20 Td',
+        '(Course / Grade: ' + cleanCourse + ' - ' + cleanGrade + ') Tj',
+        '0 -20 Td',
+        '(Transaction Reference: ' + cleanTx + ') Tj',
+        '0 -20 Td',
+        '(Payment Mode: ' + cleanMode + ') Tj',
+        '0 -30 Td',
+        '/F1 14 Tf',
+        '(Total Amount Paid: ' + cleanAmount + ') Tj',
+        '0 -30 Td',
+        '/F1 9 Tf',
+        '(Status: CONFIRMED & VERIFIED BY INSTITUTION FINANCIAL LEDGER) Tj',
+        '0 -18 Td',
+        '(This is an electronically generated official institutional receipt.) Tj',
+        'ET',
+      ].join('\n');
+
+      const streamBytes = new TextEncoder().encode(streamContent);
+      const streamLength = streamBytes.length;
+
+      const header = '%PDF-1.4\n';
+      const obj1 = '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n';
+      const obj2 = '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n';
+      const obj3 = '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n';
+      const obj4 = '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n';
+      const obj5Header = '5 0 obj\n<< /Length ' + streamLength + ' >>\nstream\n';
+      const obj5Footer = '\nendstream\nendobj\n';
+
+      const offset1 = header.length;
+      const offset2 = offset1 + obj1.length;
+      const offset3 = offset2 + obj2.length;
+      const offset4 = offset3 + obj3.length;
+      const offset5 = offset4 + obj4.length;
+      const xrefOffset = offset5 + obj5Header.length + streamLength + obj5Footer.length;
+
+      const pad = (n: number) => n.toString().padStart(10, '0');
+      const xref = [
+        'xref',
+        '0 6',
+        '0000000000 65535 f ',
+        pad(offset1) + ' 00000 n ',
+        pad(offset2) + ' 00000 n ',
+        pad(offset3) + ' 00000 n ',
+        pad(offset4) + ' 00000 n ',
+        pad(offset5) + ' 00000 n ',
+        'trailer',
+        '<< /Size 6 /Root 1 0 R >>',
+        'startxref',
+        xrefOffset.toString(),
+        '%%EOF',
+      ].join('\n');
+
+      const fullPdf = header + obj1 + obj2 + obj3 + obj4 + obj5Header + streamContent + obj5Footer + xref;
+      const blob = new Blob([fullPdf], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Fee_Receipt_${receiptNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Direct download failed:', err);
+    }
+  };
+
   
 
   const handleAddTestInstallment = async () => {
@@ -1461,7 +1597,7 @@ export default function StudentPortalPage() {
                   boxShadow: '0 1px 3px rgba(6, 43, 40, 0.05)',
                   transition: 'all 0.15s ease',
                 }}
-                onClick={() => openReceipt(paymentComplete.receiptNumber)}
+                onClick={() => downloadReceiptDirectly(paymentComplete.receiptNumber)}
               >
                 Download Receipt
               </button>
@@ -2372,7 +2508,7 @@ export default function StudentPortalPage() {
                             <button
                               className="button secondary"
                               style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}
-                              onClick={() => openReceipt(p.receipt_number!)}
+                              onClick={() => downloadReceiptDirectly(p.receipt_number!)}
                             >
                               Download Receipt
                             </button>
