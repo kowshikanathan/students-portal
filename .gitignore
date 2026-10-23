@@ -10,6 +10,7 @@ playwright-report/
 .data/
 backups/
 *.tsbuildinfo
+*.bak
 .DS_Store
 *.log
 artifacts/

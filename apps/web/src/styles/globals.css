@@ -1,16 +1,90 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 @import 'tailwindcss';
 :root {
-  --blue: #0f766e;
-  --blue-dark: #115e59;
-  --ink: #141518;
-  --muted: #5c606b;
-  --line: #e4e7ef;
-  --lavender: #f0fdfa;
-  --yellow: #f97316;
+  /* =========================================================
+     Pharmacy Inspiration Design Tokens
+     ========================================================= */
+  --pharmacy-canvas: #F0F7F6;
+  --pharmacy-surface-card: #FFFFFF;
+  --pharmacy-surface-subtle: #E8F3F1;
+  --pharmacy-border: #E1ECE9;
+  --pharmacy-border-light: #EEF5F3;
+
+  /* Deep Dark Contrast Teal */
+  --pharmacy-dark-teal: #062B28;
+  --pharmacy-dark-teal-hover: #0A3D39;
+  --pharmacy-dark-teal-muted: #144743;
+
+  /* Typography Colors */
+  --pharmacy-text-primary: #062B28;
+  --pharmacy-text-secondary: #5C736E;
+  --pharmacy-text-muted: #8A9995;
+
+  /* Signature Pastel Stat Cards */
+  --pharmacy-pastel-pistachio: #D7F4BE;
+  --pharmacy-pastel-pistachio-text: #173C1C;
+  --pharmacy-pastel-pistachio-label: #35623B;
+  --pharmacy-pastel-pistachio-badge: #234927;
+
+  --pharmacy-pastel-mint: #BCEAE5;
+  --pharmacy-pastel-mint-text: #0E3D36;
+  --pharmacy-pastel-mint-label: #235D55;
+  --pharmacy-pastel-mint-badge: #154741;
+
+  --pharmacy-pastel-coral: #FCD0CF;
+  --pharmacy-pastel-coral-text: #4A1B1B;
+  --pharmacy-pastel-coral-label: #713535;
+  --pharmacy-pastel-coral-badge: #542525;
+
+  --pharmacy-pastel-lavender: #D2D6FA;
+  --pharmacy-pastel-lavender-text: #1F244A;
+
+  /* Elevation & Geometry */
+  --pharmacy-shadow-card: 0 4px 20px rgba(6, 43, 40, 0.03);
+  --pharmacy-shadow-hover: 0 10px 30px rgba(6, 43, 40, 0.07);
+  --pharmacy-radius-card: 24px;
+  --pharmacy-radius-pill: 9999px;
+
+  /* Crextio Reference Design System Tokens */
+  --ref-bg-canvas: #F7F5EE;
+  --ref-bg-ambient: radial-gradient(ellipse 90% 60% at 88% 22%, rgba(254, 235, 166, 0.42) 0%, rgba(247, 245, 238, 0.8) 60%, #F5F3EC 100%);
+  --ref-surface-card: #FFFFFF;
+  --ref-surface-card-dark: #202226;
+  --ref-surface-card-muted: #F9F8F3;
+  --ref-surface-pill: rgba(255, 255, 255, 0.95);
+  --ref-accent-yellow: #F6CD56;
+  --ref-accent-yellow-light: #FEF7DE;
+  --ref-accent-yellow-border: #E8BF45;
+  --ref-accent-yellow-hover: #EDC144;
+  --ref-charcoal-primary: #1C1D20;
+  --ref-charcoal-secondary: #2A2D32;
+  --ref-charcoal-muted: #434750;
+  --ref-text-primary: #1C1D20;
+  --ref-text-secondary: #585B62;
+  --ref-text-muted: #8E929B;
+  --ref-border-subtle: #E8E4DA;
+  --ref-border-card: #EAE6DC;
+  --ref-border-translucent: rgba(28, 29, 32, 0.08);
+  --ref-radius-canvas: 32px;
+  --ref-radius-card: 24px;
+  --ref-radius-pill: 9999px;
+  --ref-radius-sm: 12px;
+  --ref-shadow-card: 0 4px 24px rgba(28, 29, 32, 0.04), 0 1px 3px rgba(28, 29, 32, 0.02);
+  --ref-shadow-pill: 0 2px 10px rgba(28, 29, 32, 0.04), 0 1px 2px rgba(28, 29, 32, 0.02);
+  --ref-shadow-dropdown: 0 16px 40px rgba(28, 29, 32, 0.09), 0 2px 8px rgba(28, 29, 32, 0.04);
+
+  /* Preserved platform variables mapped to harmonious design tokens */
+  --blue: #1C1D20;
+  --blue-dark: #141518;
+  --ink: #1C1D20;
+  --muted: #585B62;
+  --line: #E8E4DA;
+  --lavender: #FEF7DE;
+  --yellow: #F6CD56;
   --radius: 24px;
-  font-family: Lato, Arial, Helvetica, sans-serif;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: var(--ink);
-  background: #fff;
+  background: var(--ref-bg-canvas);
   font-synthesis: none;
 }
 * {
@@ -20,6 +94,11 @@ body {
   margin: 0;
   font-size: 16px;
   line-height: 1.6;
+  background-color: var(--ref-bg-canvas);
+  background-image: var(--ref-bg-ambient);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  color: var(--ref-text-primary);
 }
 a {
   color: inherit;
@@ -218,44 +297,104 @@ p {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
+/* 3-Column Centered Header Layout matching Crextio reference */
 .site-header {
-  height: 90px;
-  background: #fff;
+  height: 88px;
+  background: transparent;
   position: relative;
   z-index: 40;
+  display: flex;
+  align-items: center;
 }
 .header-inner {
-  width: min(1240px, calc(100% - 64px));
+  width: min(1320px, calc(100% - 48px));
   height: 100%;
   margin: auto;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 20px;
+}
+.header-left {
+  justify-self: start;
   display: flex;
   align-items: center;
-  gap: 48px;
-  justify-content: space-between;
+}
+.header-center {
+  justify-self: center;
+  display: flex;
+  align-items: center;
+}
+.header-right {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .brand {
-  display: flex;
-  flex: 0 0 136px;
-}
-.navigation {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 30px;
-  font-size: 15px;
+  gap: 8px;
+  padding: 8px 18px;
+  background: var(--ref-surface-card);
+  border: 1px solid var(--ref-border-subtle);
+  border-radius: var(--ref-radius-pill);
+  box-shadow: var(--ref-shadow-pill);
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--ref-charcoal-primary);
+  text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.navigation > a:not(.button),
-.nav-dropdown summary {
-  padding-block: 14px;
+.brand:hover {
+  box-shadow: 0 4px 12px rgba(28, 29, 32, 0.08);
+  transform: translateY(-1px);
+}
+.brand-mark {
+  color: var(--ref-accent-yellow);
+  font-size: 14px;
+}
+
+/* Crextio Floating Pill Navigation */
+.nav-pill-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  background: var(--ref-surface-card);
+  border: 1px solid var(--ref-border-subtle);
+  border-radius: var(--ref-radius-pill);
+  box-shadow: var(--ref-shadow-pill);
+}
+.nav-pill-container > a,
+.nav-pill-container .nav-pill-item,
+.nav-pill-container .nav-dropdown > summary {
+  padding: 8px 18px;
+  font-size: 14px;
   font-weight: 500;
+  color: var(--ref-text-secondary);
+  border-radius: var(--ref-radius-pill);
+  text-decoration: none;
+  transition: all 0.18s ease;
+  white-space: nowrap;
 }
-.navigation .active {
-  color: var(--blue);
-  font-weight: 700 !important;
+.nav-pill-container > a:hover,
+.nav-pill-container .nav-pill-item:hover,
+.nav-pill-container .nav-dropdown > summary:hover {
+  color: var(--ref-charcoal-primary);
+  background: rgba(28, 29, 32, 0.04);
 }
-.navigation .login-link {
-  margin-left: 30px;
-  min-width: 125px;
+/* Crextio Active Dark Pill */
+.nav-pill-container > a.active,
+.nav-pill-container .nav-pill-item.active,
+.nav-pill-container .nav-dropdown > summary.active {
+  background: var(--ref-charcoal-primary) !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(28, 29, 32, 0.2);
 }
+
+/* Navigation Dropdown */
 .nav-dropdown {
   position: relative;
 }
@@ -270,33 +409,79 @@ p {
   display: none;
 }
 .nav-dropdown summary span {
-  color: var(--blue);
+  font-size: 11px;
+  opacity: 0.7;
 }
 .nav-dropdown > div {
   position: absolute;
-  top: 100%;
-  left: -20px;
-  min-width: 290px;
-  background: #fff;
-  box-shadow: 0 15px 40px #14254821;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 12px;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 280px;
+  background: var(--ref-surface-card);
+  box-shadow: var(--ref-shadow-dropdown);
+  border: 1px solid var(--ref-border-subtle);
+  border-radius: 18px;
+  padding: 10px;
+  z-index: 60;
 }
 .nav-dropdown a {
   display: block;
   padding: 10px 14px;
   border-radius: 10px;
+  color: var(--ref-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.15s ease;
 }
 .nav-dropdown a:hover {
-  background: #f0f5ff;
+  background: var(--ref-accent-yellow-light);
+  color: var(--ref-charcoal-primary);
 }
+
+/* Action controls on right */
+.header-right .button.outline,
+.header-right .login-link {
+  background: var(--ref-surface-card);
+  border: 1px solid var(--ref-border-subtle);
+  color: var(--ref-charcoal-primary);
+  box-shadow: var(--ref-shadow-pill);
+  border-radius: var(--ref-radius-pill);
+  padding: 8px 18px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.header-right .button.outline:hover,
+.header-right .login-link:hover {
+  background: #fdfcf9;
+  border-color: rgba(28, 29, 32, 0.2);
+}
+.header-right .button.primary {
+  background: var(--ref-charcoal-primary);
+  color: #ffffff;
+  border: 1px solid var(--ref-charcoal-primary);
+  box-shadow: 0 2px 8px rgba(28, 29, 32, 0.15);
+  border-radius: var(--ref-radius-pill);
+  padding: 9px 20px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.header-right .button.primary:hover {
+  background: #2d3036;
+  transform: translateY(-1px);
+}
+
 .menu-toggle {
   display: none;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px 15px;
+  background: var(--ref-surface-card);
+  border: 1px solid var(--ref-border-subtle);
+  border-radius: var(--ref-radius-pill);
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 13px;
+  box-shadow: var(--ref-shadow-pill);
+}
+.mobile-only-actions {
+  display: none;
 }
 .demo-strip {
   padding: 6px 20px;
@@ -4182,4 +4367,195 @@ p {
  .fee-plan-workspace .admin-form .fee-component-row,
  .fee-plan-workspace .admin-form .fee-installment-row,
  .fee-plan-workspace .admin-form .fee-generator { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* =========================================================
+   Crextio Design System: Cards, Tables, Badges & Portal
+   ========================================================= */
+
+/* Cards & Panels */
+.admin-panel,
+.dashboard-stat,
+.hero,
+.portal-card {
+  border-radius: var(--ref-radius-card) !important;
+  border: 1px solid var(--ref-border-card) !important;
+  box-shadow: var(--ref-shadow-card) !important;
+}
+
+/* Status Pills & Badges */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: var(--ref-radius-pill);
+  background: var(--ref-accent-yellow-light);
+  color: #8A6708;
+  border: 1px solid var(--ref-accent-yellow-border);
+  white-space: nowrap;
+}
+.status-pill.dark {
+  background: var(--ref-charcoal-primary);
+  color: #ffffff;
+  border-color: var(--ref-charcoal-primary);
+}
+.status-pill.success {
+  background: #EDFBF1;
+  color: #15803D;
+  border-color: #BBF7D0;
+}
+
+/* Table Styling */
+.admin-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
+.admin-table th {
+  background: #FAF8F2;
+  color: var(--ref-text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ref-border-subtle);
+}
+.admin-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #F1EEE6;
+  color: var(--ref-text-primary);
+  font-size: 13.5px;
+}
+.admin-table tbody tr:hover {
+  background: #FDFCF9;
+}
+
+/* Student Portal Clean Top Header (No duplicate top nav) */
+.portal-top-header {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--ref-border-subtle);
+  padding: 1.1rem 2.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  box-shadow: 0 1px 3px rgba(28, 29, 32, 0.02);
+}
+.portal-student-pill {
+  background: var(--ref-surface-card);
+  padding: 0.4rem 0.95rem;
+  border-radius: var(--ref-radius-pill);
+  font-size: 0.82rem;
+  color: var(--ref-text-secondary);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--ref-border-subtle);
+  box-shadow: var(--ref-shadow-pill);
+}
+.portal-online-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #16a34a;
+  display: inline-block;
+}
+.portal-logout-pill {
+  background: var(--ref-surface-card);
+  border: 1px solid var(--ref-border-subtle);
+  border-radius: var(--ref-radius-pill);
+  padding: 0.4rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ref-charcoal-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.portal-logout-pill:hover {
+  background: #fdfcf9;
+  border-color: rgba(28, 29, 32, 0.2);
+}
+
+@media (max-width: 1024px) {
+  .portal-top-header {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem;
+  }
+  .portal-header-center {
+    display: none;
+  }
+}
+
+/* =========================================================
+   Pharmacy Animations & Micro-Interactions
+   ========================================================= */
+
+@keyframes pharmacyFadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.portal-stagger-1 {
+  animation: pharmacyFadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 60ms;
+}
+.portal-stagger-2 {
+  animation: pharmacyFadeInUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 130ms;
+}
+.portal-stagger-3 {
+  animation: pharmacyFadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 200ms;
+}
+.portal-stagger-4 {
+  animation: pharmacyFadeInUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 270ms;
+}
+
+/* Card hover lift */
+.student-portal-shell .admin-panel,
+.student-portal-shell .portal-card,
+.student-portal-shell .portal-stat-card {
+  transition: transform 0.22s ease, box-shadow 0.22s ease !important;
+}
+.student-portal-shell .admin-panel:hover,
+.student-portal-shell .portal-card:hover,
+.student-portal-shell .portal-stat-card:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: var(--pharmacy-shadow-hover) !important;
+}
+
+/* Button micro-interaction */
+.student-portal-shell button:not(:disabled):hover,
+.student-portal-shell .button:not(:disabled):hover {
+  transform: scale(1.025);
+  transition: transform 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .portal-stagger-1,
+  .portal-stagger-2,
+  .portal-stagger-3,
+  .portal-stagger-4 {
+    animation: none !important;
+  }
+  .student-portal-shell .admin-panel:hover,
+  .student-portal-shell button:not(:disabled):hover {
+    transform: none !important;
+  }
 }

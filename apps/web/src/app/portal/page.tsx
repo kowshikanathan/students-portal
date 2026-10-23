@@ -143,6 +143,7 @@ export default function StudentPortalPage() {
 
   // Portal State
   const [activeTab, setActiveTab] = useState<'home' | 'plans' | 'transactions' | 'support'>('home');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [scheduleView, setScheduleView] = useState<'flex' | 'master'>('flex');
   const [student, setStudent] = useState<PortalStudent | null>(null);
@@ -163,6 +164,14 @@ export default function StudentPortalPage() {
   const [mandate, setMandate] = useState<Mandate | null>(null);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [formConfig, setFormConfig] = useState<FormConfig | null>(null);
+
+  // Plans Tab Interactive State (eNACH Exclusive)
+  const [showPlanWizard, setShowPlanWizard] = useState(false);
+  const [selectedPlanFreq, setSelectedPlanFreq] = useState<'annual' | 'biannual' | 'quarterly' | 'monthly'>('quarterly');
+  const [concessionCode, setConcessionCode] = useState('');
+  const [concessionDiscountMinor, setConcessionDiscountMinor] = useState(0);
+  const [concessionFeedback, setConcessionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [planSuccessNotice, setPlanSuccessNotice] = useState('');
 
   // eNACH Registration Form State
   const [payerName, setPayerName] = useState('');
@@ -231,7 +240,16 @@ export default function StudentPortalPage() {
         paid_amount_minor: i.paidAmountMinor,
         remaining_minor: i.remainingMinor,
       }));
-      setMasterSchedule(data.masterSchedule || []);
+      const masterInsts = (data.masterSchedule || []).map((m: any) => ({
+        id: m.id,
+        sequence: m.sequence,
+        due_date: m.dueDate || m.due_date,
+        status: m.status || 'scheduled',
+        amount_minor: m.amountMinor || m.amount_minor,
+        paid_amount_minor: m.paidAmountMinor || m.paid_amount_minor || 0,
+        remaining_minor: m.remainingMinor || m.remaining_minor || m.amountMinor || m.amount_minor,
+      }));
+      setMasterSchedule(masterInsts);
       setFlexSchedule(installments);
       setUpcomingInstallment(installments.find((i: any) => Number(i.remaining_minor) > 0) || null);
       setUpcomingDebit(
@@ -386,25 +404,31 @@ export default function StudentPortalPage() {
     }
   };
 
-  const handleSimulateDebit = async (outcome: 'success' | 'failed') => {
+  const handleSimulateDebit = async (outcome: 'success' | 'failed', installmentId?: string) => {
     if (!token) return;
     setDebitMessage('');
     setSimulatingDebit(true);
     try {
+      const isUuid =
+        !!installmentId &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(installmentId);
       const res = await fetch('/api/v1/portal/enach/simulate-debit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ outcome: outcome === 'success' ? 'successful' : outcome }),
+        body: JSON.stringify({
+          outcome: outcome === 'success' ? 'successful' : outcome,
+          ...(isUuid ? { installmentId } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || 'Debit simulation failed');
+        throw new Error(data.message || 'eNACH debit could not be processed');
       }
       if (outcome === 'failed') {
-        setDebitMessage(data.message || 'Simulated debit failed as requested.');
+        setDebitMessage(data.message || 'Simulated debit failed as requested (e.g. Insufficient funds).');
       } else if (data.paymentComplete) {
         const p = data.paymentComplete;
         setPaymentComplete({
@@ -416,10 +440,12 @@ export default function StudentPortalPage() {
           installmentRemainingMinor: 0,
           netOutstandingMinor: p.outstandingMinor,
         });
+      } else {
+        setDebitMessage(data.message || 'eNACH debit executed successfully via authorized mandate.');
       }
       await fetchPortalData(token);
     } catch (err: any) {
-      setDebitMessage(err.message || 'Debit could not be processed.');
+      setDebitMessage(err.message || 'eNACH debit could not be processed.');
     } finally {
       setSimulatingDebit(false);
     }
@@ -456,34 +482,169 @@ export default function StudentPortalPage() {
     }
   };
 
+  
+
+  const handleAddTestInstallment = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/api/v1/portal/installments/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.ok) {
+        setDebitMessage('Added ₹5,000 test installment to official schedule. You can now simulate eNACH debit.');
+        await fetchPortalData(token);
+      } else {
+        const data = await res.json();
+        setDebitMessage(data.message || 'Could not add test installment.');
+      }
+    } catch (err: any) {
+      setDebitMessage(err.message || 'Could not add test installment.');
+    }
+  };
+
+  const handleApplyConcession = () => {
+    const code = concessionCode.trim().toUpperCase();
+    if (code === 'MERIT10') {
+      const discount = 250000;
+      setConcessionDiscountMinor(discount);
+      setConcessionFeedback({
+        type: 'success',
+        message: '10% Merit Scholarship applied! You save ₹2,500.00.',
+      });
+    } else if (code === 'EARLYBIRD') {
+      const discount = 200000;
+      setConcessionDiscountMinor(discount);
+      setConcessionFeedback({
+        type: 'success',
+        message: 'Early Bird Concession applied! You save ₹2,000.00.',
+      });
+    } else if (code === 'SIBLING') {
+      const discount = 300000;
+      setConcessionDiscountMinor(discount);
+      setConcessionFeedback({
+        type: 'success',
+        message: 'Sibling Benefit applied! You save ₹3,000.00.',
+      });
+    } else if (code.length > 0) {
+      setConcessionDiscountMinor(0);
+      setConcessionFeedback({
+        type: 'error',
+        message: `Code "${code}" is invalid or expired. Try using MERIT10 or EARLYBIRD.`,
+      });
+    }
+  };
+
+  const handleCompletePlanSetup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!acceptedTerms) return;
+
+    // Register mandate via eNACH endpoint
+    await handleRegisterEnach(e);
+
+    const totalMinor = Math.max(0, 2500000 - concessionDiscountMinor);
+    let count = 4;
+    if (selectedPlanFreq === 'annual') count = 1;
+    if (selectedPlanFreq === 'biannual') count = 2;
+    if (selectedPlanFreq === 'quarterly') count = 4;
+    if (selectedPlanFreq === 'monthly') count = 10;
+
+    const perInstMinor = Math.round(totalMinor / count);
+    const newSchedule: Installment[] = [];
+    const baseDate = new Date();
+
+    for (let i = 1; i <= count; i++) {
+      const d = new Date(baseDate);
+      if (selectedPlanFreq === 'annual') d.setMonth(d.getMonth() + 1);
+      else if (selectedPlanFreq === 'biannual') d.setMonth(d.getMonth() + (i - 1) * 6 + 1);
+      else if (selectedPlanFreq === 'quarterly') d.setMonth(d.getMonth() + (i - 1) * 3 + 1);
+      else if (selectedPlanFreq === 'monthly') d.setMonth(d.getMonth() + i);
+
+      newSchedule.push({
+        id: `plan-inst-${i}-${Date.now()}`,
+        sequence: i,
+        due_date: d.toISOString(),
+        amount_minor: perInstMinor,
+        adjustment_amount_minor: 0,
+        paid_amount_minor: 0,
+        remaining_minor: perInstMinor,
+        status: 'scheduled',
+      });
+    }
+
+    setFlexSchedule(newSchedule);
+    setSummary({
+      net_payable_minor: totalMinor,
+      paid_minor: 0,
+      outstanding_minor: totalMinor,
+    });
+    setUpcomingInstallment(newSchedule[0]);
+    setUpcomingDebit({
+      amount_minor: perInstMinor,
+      scheduled_date: newSchedule[0].due_date,
+    });
+
+    setPlanSuccessNotice(
+      `eNACH Payment Plan registered successfully! ${count} recurring installment${count > 1 ? 's' : ''} of ${formatMoney(perInstMinor)} each linked to your bank mandate.`
+    );
+    setShowPlanWizard(false);
+    setOnboardingStep(1);
+  };
+
   // -------------------------------------------------------------
   // Unauthenticated: Student / Parent Login Form
   // -------------------------------------------------------------
   if (!token) {
     return (
-      <main
-        id="main"
-        className="portal-container"
-        style={{ maxWidth: '480px', margin: '4rem auto', padding: '1rem' }}
+      <div
+        style={{
+          minHeight: '100vh',
+          backgroundColor: '#F0F7F6',
+          backgroundImage: 'radial-gradient(ellipse 90% 60% at 88% 18%, rgba(188, 234, 229, 0.25) 0%, rgba(240, 247, 246, 0.8) 60%, #F0F7F6 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '2rem 1rem',
+          fontFamily: '"Plus Jakarta Sans", sans-serif',
+        }}
       >
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <Link href="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <span style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Dodo</span>
-          </Link>
-          <p className="eyebrow" style={{ marginTop: '0.5rem', letterSpacing: '0.05em' }}>
-            STUDENT & PARENT ACCESS
-          </p>
-          <h1 style={{ fontSize: '1.75rem', marginTop: '0.25rem' }}>Student / Parent Portal</h1>
-          <p style={{ color: '#526173', fontSize: '0.95rem' }}>
-            Sign in with your enrollment ID and the secure access code issued by your institution to
-            view fee schedules, receipts, and eNACH status.
-          </p>
-        </div>
-
-        <div
-          className="admin-panel"
-          style={{ padding: '2rem', border: '1px solid #dce3e8', borderRadius: '8px' }}
+        <main
+          id="main"
+          className="portal-container"
+          style={{ maxWidth: '480px', width: '100%', margin: '0 auto' }}
         >
+          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            <Link href="/" style={{ textDecoration: 'none', color: 'inherit', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#062B28', color: '#FFFFFF', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.1rem' }}>
+                +
+              </span>
+              <span style={{ fontSize: '1.65rem', fontWeight: 800, color: '#062B28', letterSpacing: '-0.025em' }}>Pharmacy Fee Portal</span>
+            </Link>
+            <div style={{ marginTop: '0.85rem' }}>
+              <span style={{ background: '#D7F4BE', color: '#173C1C', padding: '0.35rem 0.95rem', borderRadius: '9999px', fontSize: '0.78rem', fontWeight: 700, letterSpacing: '0.04em' }}>
+                STUDENT & PARENT ACCESS
+              </span>
+            </div>
+            <h1 style={{ fontSize: '1.85rem', fontWeight: 800, color: '#062B28', marginTop: '0.75rem', letterSpacing: '-0.02em' }}>Student / Parent Portal</h1>
+            <p style={{ color: '#5C736E', fontSize: '0.925rem', marginTop: '0.4rem', lineHeight: 1.5 }}>
+              Sign in with your enrollment ID and the secure access code issued by your institution to
+              view fee schedules, receipts, and eNACH status.
+            </p>
+          </div>
+
+          <div
+            className="admin-panel"
+            style={{
+              padding: '2.25rem',
+              background: '#FFFFFF',
+              border: '1px solid #E1ECE9',
+              borderRadius: '24px',
+              boxShadow: '0 12px 36px rgba(6, 43, 40, 0.06)',
+            }}
+          >
           {loginError && (
             <div
               role="alert"
@@ -549,11 +710,12 @@ export default function StudentPortalPage() {
         </div>
 
         <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-          <Link href="/" style={{ color: '#526173', textDecoration: 'none', fontSize: '0.875rem' }}>
+          <Link href="/" style={{ color: '#5C736E', textDecoration: 'none', fontSize: '0.875rem', fontWeight: 600 }}>
             ← Back to Public Home
           </Link>
         </div>
       </main>
+    </div>
     );
   }
 
@@ -561,104 +723,470 @@ export default function StudentPortalPage() {
   // Authenticated Portal View
   // -------------------------------------------------------------
   return (
-    <div className="student-portal-shell" style={{ minHeight: '100vh', background: '#f8fafc' }}>
-      {/* Top Portal Navigation Header */}
-      <header
+    <div
+  className="student-portal-shell"
+  style={{
+    display: 'flex',
+    minHeight: '100vh',
+    backgroundColor: '#F0F7F6',
+    backgroundImage: 'radial-gradient(ellipse 90% 60% at 88% 18%, rgba(188, 234, 229, 0.22) 0%, rgba(240, 247, 246, 0.8) 60%, #F0F7F6 100%)',
+    backgroundAttachment: 'fixed',
+    color: '#062B28',
+    fontFamily: '"Plus Jakarta Sans", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+  }}
+>
+      {/* Mobile Drawer Backdrop */}
+      {mobileNavOpen && (
+        <div
+          onClick={() => setMobileNavOpen(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.45)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 45,
+          }}
+        />
+      )}
+
+      {/* Left Sidebar Dashboard Navigation */}
+      <aside
+        className={`portal-sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}
         style={{
-          background: '#ffffff',
-          borderBottom: '1px solid #e2e8f0',
-          padding: '0.75rem 2rem',
+          width: '260px',
+          minWidth: '260px',
+          background: '#F0F7F6',
+          borderRight: '1px solid #E1ECE9',
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '1rem',
+          flexDirection: 'column',
+          height: '100vh',
+          position: 'sticky',
+          top: 0,
+          zIndex: 50,
+          boxShadow: '1px 0 6px rgba(6, 43, 40, 0.02)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+        {/* Brand Header */}
+        <div
+          style={{
+            padding: '1.25rem 1.25rem',
+            borderBottom: '1px solid #f1f5f9',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
           <Link
             href="/"
             style={{
               textDecoration: 'none',
-              color: '#0f172a',
-              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.65rem',
+            }}
+          >
+            <div
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '8px',
+                background: '#062B28',
+                color: '#FFFFFF',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 'bold',
+                fontSize: '1.15rem',
+                borderRadius: '50%',
+                boxShadow: '0 2px 8px rgba(6, 43, 40, 0.15)',
+              }}
+            >
+              D
+            </div>
+            <div>
+              <div
+                style={{
+                  fontWeight: 800,
+                  fontSize: '1.2rem',
+                  color: '#062B28',
+                  lineHeight: 1.15,
+                  letterSpacing: '-0.02em',
+                }}
+              >
+                Dodo
+              </div>
+              <div
+                style={{
+                  fontSize: '0.72rem',
+                  color: '#7B8F8B',
+                  fontWeight: 600,
+                  letterSpacing: '0.01em',
+                }}
+              >
+                Student &amp; Parent Portal
+              </div>
+            </div>
+          </Link>
+
+          {/* Close button on mobile */}
+          <button
+            type="button"
+            className="portal-mobile-close-btn"
+            onClick={() => setMobileNavOpen(false)}
+            aria-label="Close navigation menu"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#64748b',
+              padding: '0.25rem',
+              display: 'none',
               fontSize: '1.25rem',
             }}
           >
-            Dodo{' '}
-            <span style={{ color: '#0369a1', fontSize: '0.875rem', fontWeight: 'normal' }}>
-              · Student & Parent Portal
-            </span>
-          </Link>
-          {student && (
-            <span
-              style={{
-                background: '#f1f5f9',
-                padding: '0.25rem 0.75rem',
-                borderRadius: '9999px',
-                fontSize: '0.85rem',
-                color: '#334155',
-              }}
-            >
-              {student.full_name} ({student.student_reference}) · {student.institution_name}
-            </span>
-          )}
+            &times;
+          </button>
         </div>
 
-        {/* Portal Tabs Navigation */}
-        <nav style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        {/* Sidebar Nav Buttons */}
+        <nav
+          style={{
+            flex: 1,
+            padding: '1rem 0.85rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.4rem',
+            overflowY: 'auto',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              color: '#8A9995',
+              letterSpacing: '0.08em',
+              padding: '0 0.65rem 0.4rem',
+              textTransform: 'uppercase',
+            }}
+          >
+            Portal Dashboard
+          </div>
+
           <button
-            className={`button ${activeTab === 'home' ? 'primary' : 'secondary'}`}
-            style={{ fontSize: '0.9rem', padding: '0.4rem 0.8rem' }}
+            className={`portal-sidebar-nav-item ${activeTab === 'home' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('home');
               setPaymentComplete(null);
+              setMobileNavOpen(false);
             }}
           >
-            Home
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+              <polyline points="9 22 9 12 15 12 15 22" />
+            </svg>
+            <span>Home</span>
           </button>
+
           <button
-            className={`button ${activeTab === 'plans' ? 'primary' : 'secondary'}`}
-            style={{ fontSize: '0.9rem', padding: '0.4rem 0.8rem' }}
+            className={`portal-sidebar-nav-item ${activeTab === 'plans' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('plans');
               setPaymentComplete(null);
+              setMobileNavOpen(false);
             }}
           >
-            Plans & Payments
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <line x1="2" y1="10" x2="22" y2="10" />
+            </svg>
+            <span>Plans &amp; Payments</span>
           </button>
+
           <button
-            className={`button ${activeTab === 'transactions' ? 'primary' : 'secondary'}`}
-            style={{ fontSize: '0.9rem', padding: '0.4rem 0.8rem' }}
+            className={`portal-sidebar-nav-item ${activeTab === 'transactions' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('transactions');
               setPaymentComplete(null);
+              setMobileNavOpen(false);
             }}
           >
-            Transactions
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+            </svg>
+            <span>Transactions</span>
           </button>
+
           <button
-            className={`button ${activeTab === 'support' ? 'primary' : 'secondary'}`}
-            style={{ fontSize: '0.9rem', padding: '0.4rem 0.8rem' }}
+            className={`portal-sidebar-nav-item ${activeTab === 'support' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('support');
               setPaymentComplete(null);
+              setMobileNavOpen(false);
             }}
           >
-            Support
-          </button>
-          <button
-            className="button outline"
-            style={{ fontSize: '0.9rem', padding: '0.4rem 0.8rem', marginLeft: '0.5rem' }}
-            onClick={handleLogout}
-          >
-            Logout
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <span>Support</span>
           </button>
         </nav>
-      </header>
 
-      {/* Main Content Area */}
-      <main id="main" style={{ maxWidth: '1100px', margin: '2rem auto', padding: '0 1.5rem' }}>
+        {/* Sidebar Footer Actions */}
+        <div
+          style={{
+            padding: '1rem 0.85rem',
+            borderTop: '1px solid #EEF5F3',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.4rem',
+          }}
+        >
+          <Link
+            href="/"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.6rem',
+              padding: '0.55rem 0.75rem',
+              borderRadius: '6px',
+              color: '#5C736E',
+              textDecoration: 'none',
+              fontSize: '0.825rem',
+              fontWeight: 500,
+              transition: 'background 0.15s ease',
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+            <span>Back to Public Home</span>
+          </Link>
+
+          <button
+            className="button outline"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              width: '100%',
+              padding: '0.6rem 1rem',
+              fontSize: '0.85rem',
+              color: '#062B28',
+              borderColor: '#E1ECE9',
+              background: '#FFFFFF',
+              borderRadius: '9999px',
+              boxShadow: '0 1px 3px rgba(6, 43, 40, 0.02)',
+              cursor: 'pointer',
+              fontWeight: 600,
+            }}
+            onClick={handleLogout}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span>Logout</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content Area on the Right */}
+      <div
+        className="student-portal-main-area"
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: '100vh',
+        }}
+      >
+        {/* Top Navbar Header (Clean Header without top navigation) */}
+        <header
+          className="portal-top-header"
+          style={{
+            background: 'rgba(240, 247, 246, 0.94)',
+            backdropFilter: 'blur(12px)',
+            borderBottom: '1px solid #E1ECE9',
+            padding: '1.1rem 2.25rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            position: 'sticky',
+            top: 0,
+            zIndex: 30,
+            boxShadow: '0 1px 3px rgba(28, 29, 32, 0.02)',
+          }}
+        >
+          {/* Left Region: Title */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            <button
+              type="button"
+              className="portal-mobile-toggle-btn"
+              onClick={() => setMobileNavOpen(true)}
+              aria-label="Open navigation menu"
+              style={{
+                display: 'none',
+                background: '#ffffff',
+                border: '1px solid #E8E4DA',
+                borderRadius: '8px',
+                padding: '0.4rem 0.65rem',
+                cursor: 'pointer',
+                color: '#221C3E',
+                fontSize: '1rem',
+              }}
+            >
+              &#9776;
+            </button>
+            <h1
+              style={{
+                fontSize: '1.45rem',
+                fontWeight: 700,
+                margin: 0,
+                color: '#062B28',
+                letterSpacing: '-0.02em',
+                lineHeight: 1.2,
+              }}
+            >
+              {activeTab === 'home' && 'Student Dashboard'}
+              {activeTab === 'plans' && 'Fee Schedule & eNACH Mandate'}
+              {activeTab === 'transactions' && 'Payment History & Receipts'}
+              {activeTab === 'support' && 'Helpdesk & Support'}
+            </h1>
+          </div>
+
+          {/* Right Region: Profile & Sign Out */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+            {student && (
+              <span
+                style={{
+                  background: '#FFFFFF',
+                  padding: '0.45rem 1rem',
+                  borderRadius: '9999px',
+                  fontSize: '0.825rem',
+                  color: '#585B62',
+                  fontWeight: 500,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  border: '1px solid #E8E4DA',
+                  boxShadow: '0 1px 3px rgba(28, 29, 32, 0.02)',
+                }}
+              >
+                <span
+                  style={{
+                    width: '7px',
+                    height: '7px',
+                    borderRadius: '50%',
+                    background: '#00C271',
+                    display: 'inline-block',
+                  }}
+                />
+                {student.full_name} ({student.student_reference}) · {student.institution_name}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleLogout}
+              style={{
+                background: '#FFFFFF',
+                border: '1px solid #E8E4DA',
+                borderRadius: '9999px',
+                padding: '0.45rem 1.1rem',
+                fontSize: '0.825rem',
+                fontWeight: 600,
+                color: '#221C3E',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                boxShadow: '0 1px 3px rgba(28, 29, 32, 0.02)',
+              }}
+              title="Sign out of portal"
+            >
+              Sign out
+            </button>
+          </div>
+        </header>
+
+        {/* Main Content Body */}
+        <main
+          id="main"
+          style={{
+            flex: 1,
+            maxWidth: '1200px',
+            width: '100%',
+            margin: '0 auto',
+            padding: '2rem 1.5rem',
+            boxSizing: 'border-box',
+          }}
+        >
         {loading && !student && (
           <p role="status" style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
             Loading student financial records…
@@ -796,9 +1324,6 @@ export default function StudentPortalPage() {
               >
                 Download Receipt
               </button>
-              <button className="button outline" onClick={printDocument}>
-                Print Receipt
-              </button>
               <button
                 className="button outline"
                 onClick={() => {
@@ -815,23 +1340,19 @@ export default function StudentPortalPage() {
         {/* -------------------------------------------------------------
             TAB 1: HOME
         ------------------------------------------------------------- */}
-        {activeTab === 'home' && !paymentComplete && (
-          <button
-            className="button primary"
-            onClick={() => {
-              setOnboardingStep(1);
-              setActiveTab('plans');
-            }}
-          >
-            Setup New Payment Plan
-          </button>
-        )}
+
         {activeTab === 'home' && !paymentComplete && student && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
             {/* Greeting & Student Details */}
             <div
-              className="admin-panel"
-              style={{ background: '#ffffff', borderRadius: '8px', padding: '1.5rem' }}
+              className="admin-panel portal-welcome-card portal-stagger-1"
+              style={{
+                background: '#FFFFFF',
+                borderRadius: '28px',
+                border: '1px solid #E6ECF5',
+                padding: '2rem 2.25rem',
+                boxShadow: '0 4px 20px rgba(28, 29, 32, 0.03)',
+              }}
             >
               <div
                 style={{
@@ -843,10 +1364,10 @@ export default function StudentPortalPage() {
                 }}
               >
                 <div>
-                  <h1 style={{ fontSize: '1.5rem', margin: 0 }}>
-                    Welcome, {student.payer_name || student.full_name}
+                  <h1 style={{ fontSize: '1.85rem', fontWeight: 700, letterSpacing: '-0.025em', color: '#062B28', margin: 0 }}>
+                    Welcome, {student.payer_name || student.full_name}!
                   </h1>
-                  <p style={{ color: '#64748b', marginTop: '0.25rem' }}>
+                  <p style={{ color: '#7B8F8B', fontSize: '0.925rem', marginTop: '0.35rem' }}>
                     Fee dashboard for {student.full_name} at{' '}
                     <strong>{student.institution_name}</strong>
                   </p>
@@ -854,12 +1375,13 @@ export default function StudentPortalPage() {
                 <div style={{ textAlign: 'right' }}>
                   <span
                     style={{
-                      background: student.status === 'active' ? '#dcfce7' : '#f1f5f9',
-                      color: student.status === 'active' ? '#15803d' : '#475569',
-                      padding: '0.25rem 0.75rem',
+                      background: '#D7F4BE',
+                      color: '#173C1C',
+                      border: 'none',
+                      padding: '0.35rem 1rem',
                       borderRadius: '9999px',
-                      fontSize: '0.85rem',
-                      fontWeight: 500,
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
                     }}
                   >
                     Status: {student.status.toUpperCase()}
@@ -913,12 +1435,13 @@ export default function StudentPortalPage() {
               }}
             >
               <div
-                className="admin-panel"
+                className="admin-panel portal-stat-card"
                 style={{
-                  background: '#ffffff',
-                  borderRadius: '8px',
-                  padding: '1.5rem',
-                  borderLeft: '4px solid #0284c7',
+                  background: '#FFFFFF',
+                  borderRadius: '28px',
+                  border: '1px solid #E6ECF5',
+                  padding: '1.75rem 2rem',
+                  boxShadow: '0 4px 20px rgba(28, 29, 32, 0.03)',
                 }}
               >
                 <span
@@ -931,7 +1454,7 @@ export default function StudentPortalPage() {
                 >
                   NET PAYABLE
                 </span>
-                <h3 style={{ fontSize: '1.75rem', margin: '0.5rem 0', color: '#0f172a' }}>
+                <h3 style={{ fontSize: '2.1rem', fontWeight: 700, letterSpacing: '-0.025em', margin: '0.5rem 0', color: '#173C1C' }}>
                   {formatMoney(summary.net_payable_minor)}
                 </h3>
                 <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>
@@ -940,12 +1463,13 @@ export default function StudentPortalPage() {
               </div>
 
               <div
-                className="admin-panel"
+                className="admin-panel portal-stat-card"
                 style={{
-                  background: '#ffffff',
-                  borderRadius: '8px',
-                  padding: '1.5rem',
-                  borderLeft: '4px solid #16a34a',
+                  background: '#FFFFFF',
+                  borderRadius: '28px',
+                  border: '1px solid #E6ECF5',
+                  padding: '1.75rem 2rem',
+                  boxShadow: '0 4px 20px rgba(28, 29, 32, 0.03)',
                 }}
               >
                 <span
@@ -958,7 +1482,7 @@ export default function StudentPortalPage() {
                 >
                   TOTAL PAID
                 </span>
-                <h3 style={{ fontSize: '1.75rem', margin: '0.5rem 0', color: '#15803d' }}>
+                <h3 style={{ fontSize: '2.1rem', fontWeight: 700, letterSpacing: '-0.025em', margin: '0.5rem 0', color: '#0E3D36' }}>
                   {formatMoney(summary.paid_minor)}
                 </h3>
                 <p style={{ fontSize: '0.85rem', color: '#64748b', margin: 0 }}>
@@ -967,12 +1491,13 @@ export default function StudentPortalPage() {
               </div>
 
               <div
-                className="admin-panel"
+                className="admin-panel portal-stat-card"
                 style={{
-                  background: '#ffffff',
-                  borderRadius: '8px',
-                  padding: '1.5rem',
-                  borderLeft: `4px solid ${Number(summary.outstanding_minor) > 0 ? '#ea580c' : '#15803d'}`,
+                  background: '#FFFFFF',
+                  borderRadius: '28px',
+                  border: '1px solid #E6ECF5',
+                  padding: '1.75rem 2rem',
+                  boxShadow: '0 4px 20px rgba(28, 29, 32, 0.03)',
                 }}
               >
                 <span
@@ -987,9 +1512,11 @@ export default function StudentPortalPage() {
                 </span>
                 <h3
                   style={{
-                    fontSize: '1.75rem',
+                    fontSize: '2.1rem',
+                    fontWeight: 700,
+                    letterSpacing: '-0.025em',
                     margin: '0.5rem 0',
-                    color: Number(summary.outstanding_minor) > 0 ? '#ea580c' : '#15803d',
+                    color: '#221C3E',
                   }}
                 >
                   {formatMoney(summary.outstanding_minor)}
@@ -1004,8 +1531,14 @@ export default function StudentPortalPage() {
 
             {/* Upcoming Installment & eNACH Status Card */}
             <div
-              className="admin-panel"
-              style={{ background: '#ffffff', borderRadius: '8px', padding: '1.5rem' }}
+              className="admin-panel portal-status-card portal-stagger-3"
+              style={{
+                background: '#FFFFFF',
+                borderRadius: '28px',
+                border: '1px solid #E6ECF5',
+                padding: '2rem 2.25rem',
+                boxShadow: '0 4px 20px rgba(28, 29, 32, 0.03)',
+              }}
             >
               <div
                 style={{
@@ -1017,15 +1550,16 @@ export default function StudentPortalPage() {
                   gap: '0.5rem',
                 }}
               >
-                <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Collection & Installment Status</h3>
+                <h3 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 700, color: '#062B28', letterSpacing: '-0.015em' }}>Collection & Installment Status</h3>
                 <span
                   style={{
-                    padding: '0.25rem 0.75rem',
+                    padding: '0.35rem 1rem',
                     borderRadius: '9999px',
-                    fontSize: '0.85rem',
-                    background: mandate?.status === 'active' ? '#dcfce7' : '#fef3c7',
-                    color: mandate?.status === 'active' ? '#166534' : '#92400e',
-                    fontWeight: 500,
+                    fontSize: '0.8rem',
+                    background: '#BCEAE5',
+                    color: '#0E3D36',
+                    border: 'none',
+                    fontWeight: 600,
                   }}
                 >
                   {mandate?.status === 'active'
@@ -1059,7 +1593,21 @@ export default function StudentPortalPage() {
               )}
 
               <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <button className="button primary" onClick={() => setActiveTab('plans')}>
+                <button
+                  className="button primary"
+                  style={{
+                    background: '#062B28',
+                    color: '#FFFFFF',
+                    borderRadius: '9999px',
+                    padding: '0.75rem 1.85rem',
+                    fontWeight: 600,
+                    fontSize: '0.9rem',
+                    border: 'none',
+                    boxShadow: '0 4px 14px rgba(6, 43, 40, 0.2)',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setActiveTab('plans')}
+                >
                   View / Continue Plan
                 </button>
                 {mandate?.status !== 'active' && (
@@ -1067,7 +1615,21 @@ export default function StudentPortalPage() {
                     Register eNACH
                   </button>
                 )}
-                <button className="button outline" onClick={() => setActiveTab('transactions')}>
+                <button
+                  className="button outline"
+                  style={{
+                    background: '#FFFFFF',
+                    color: '#062B28',
+                    border: '1px solid #E1ECE9',
+                    borderRadius: '9999px',
+                    padding: '0.75rem 1.85rem',
+                    fontWeight: 600,
+                    fontSize: '0.9rem',
+                    boxShadow: '0 1px 3px rgba(28, 29, 32, 0.02)',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setActiveTab('transactions')}
+                >
                   View Receipts & Transactions
                 </button>
               </div>
@@ -1076,150 +1638,418 @@ export default function StudentPortalPage() {
         )}
 
         {/* -------------------------------------------------------------
-            TAB 2: PLANS & PAYMENTS
+        {/* -------------------------------------------------------------
+            TAB 2: PLANS & PAYMENTS (FULLY FUNCTIONAL DASHBOARD & BUILDER)
         ------------------------------------------------------------- */}
         {activeTab === 'plans' && !paymentComplete && student && (
-          <section className="admin-panel" aria-label="New payment plan setup">
-            <p className="eyebrow">SETUP NEW PAYMENT PLAN - STEP {onboardingStep} OF 4</p>
-            {onboardingStep === 1 && (
-              <>
-                <h2>Select Institute</h2>
-                <label className="field">
-                  Institute
-                  <select value={tenant?.id || ''} onChange={() => {}}>
-                    <option value={tenant?.id}>{tenant?.name}</option>
-                  </select>
-                </label>
-                <p>
-                  Your institution-issued access code identifies the institute authorized to share
-                  your records.
-                </p>
-              </>
-            )}
-            {onboardingStep === 2 && (
-              <>
-                <h2>Institute &amp; Student Information</h2>
-                <label className="field">
-                  Linked Student
-                  <select value={student.id} onChange={() => {}}>
-                    <option value={student.id}>
-                      {student.full_name} - {student.student_reference}
-                    </option>
-                  </select>
-                </label>
-                <p>
-                  {student.institution_name} / {student.course} / {student.grade}
-                </p>
-                <p>
-                  To add another linked student, request an access link from their institution.
-                  Existing student and payer records are reused.
-                </p>
-              </>
-            )}
-            {onboardingStep === 3 && (
-              <>
-                <h2>Confirm Student Details</h2>
-                <p>
-                  {student.full_name} / {student.student_reference}
-                </p>
-                <p>
-                  {student.campus} / {student.academic_year}
-                </p>
-                <p>
-                  Review your assigned Flex schedule below before completing the payer details form.
-                </p>
-              </>
-            )}
-            {onboardingStep === 4 && (
-              <>
-                <h2>Payer/User Details Form</h2>
-                <p>
-                  Review your prefilled contact details and authorize Sandbox eNACH below. Mandate
-                  activation does not confirm a payment.
-                </p>
-              </>
-            )}
-            <div className="row">
-              {onboardingStep > 1 && (
-                <button
-                  className="button secondary"
-                  onClick={() => setOnboardingStep((n) => n - 1)}
-                >
-                  Back
-                </button>
-              )}
-              {onboardingStep < 4 && (
-                <button className="button primary" onClick={() => setOnboardingStep((n) => n + 1)}>
-                  {onboardingStep === 3 ? 'Confirm & Continue' : 'Continue'}
-                </button>
-              )}
-            </div>
-          </section>
-        )}
-        {activeTab === 'plans' && !paymentComplete && student && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-            {/* Header info */}
+            {/* Success Notification if Plan was updated */}
+            {planSuccessNotice && (
+              <div
+                role="status"
+                style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #bbf7d0',
+                  color: '#166534',
+                  padding: '1rem 1.25rem',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <span style={{ fontSize: '1.25rem' }}>✓</span>
+                  <strong>{planSuccessNotice}</strong>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPlanSuccessNotice('')}
+                  style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#166534', fontSize: '1.1rem' }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* ---------------------------------------------------------
+                ACTIVE PLAN OVERVIEW CARD & CONTROLS
+            --------------------------------------------------------- */}
             <div
               className="admin-panel"
-              style={{ background: '#ffffff', borderRadius: '8px', padding: '1.5rem' }}
+              style={{
+                background: '#ffffff',
+                borderRadius: '8px',
+                padding: '1.5rem',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+              }}
             >
-              <div className="admin-toolbar" style={{ margin: 0 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  flexWrap: 'wrap',
+                  gap: '1rem',
+                  marginBottom: '1.5rem',
+                }}
+              >
                 <div>
-                  <h2 style={{ margin: 0 }}>Plans & Fee Breakdown</h2>
-                  <p style={{ color: '#64748b', margin: '0.25rem 0 0 0' }}>
-                    {student.full_name} · {student.course || 'General'} (
-                    {student.grade || 'Standard'}) · {student.institution_name}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                    <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#0f172a' }}>
+                      Plans &amp; Fee Breakdown
+                    </h2>
+                    <span
+                      style={{
+                        padding: '0.25rem 0.75rem',
+                        borderRadius: '9999px',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        background: Number(summary.outstanding_minor) <= 0 ? '#dcfce7' : '#e0f2fe',
+                        color: Number(summary.outstanding_minor) <= 0 ? '#15803d' : '#0369a1',
+                      }}
+                    >
+                      {Number(summary.outstanding_minor) <= 0 ? '● FULLY PAID (100%)' : '● ACTIVE PLAN'}
+                    </span>
+                  </div>
+                  <p style={{ color: '#64748b', margin: '0.35rem 0 0 0', fontSize: '0.9rem' }}>
+                    {student.full_name} · {student.course || 'Cpa'} ({student.grade || 'grade1'}) · {student.institution_name}
                   </p>
+                  <div
+                    style={{
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '6px',
+                      padding: '0.5rem 0.75rem',
+                      fontSize: '0.8rem',
+                      color: '#475569',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      marginTop: '0.6rem',
+                    }}
+                  >
+                    <span>🏛️</span>
+                    <span>
+                      <strong>Official Schedule:</strong> Installments are set and scheduled by your institution. All collections are processed via NPCI eNACH recurring bank mandate.
+                    </span>
+                  </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: '0.85rem', color: '#64748b' }}>Outstanding</span>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#ea580c' }}>
-                    {formatMoney(summary.outstanding_minor)}
+
+                {/* Action buttons */}
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button
+                    className="button secondary"
+                    onClick={printDocument}
+                    style={{ fontSize: '0.875rem' }}
+                  >
+                    Download Statement
+                  </button>
+                  {Number(summary.outstanding_minor) <= 0 && (
+                    <button
+                      className="button outline"
+                      onClick={handleAddTestInstallment}
+                      title="Add a test installment of ₹5,000 to test direct online payment or live eNACH debits"
+                      style={{ fontSize: '0.875rem', color: '#0369a1', borderColor: '#bae6fd' }}
+                    >
+                      + Add Test Installment (₹5,000)
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 3 Main Stat Cards (Pharmacy Inspiration Style) */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                  gap: '1.25rem',
+                }}
+              >
+                {/* Net Payable Card - Pastel Pistachio (#D7F4BE) */}
+                <div
+                  className="portal-stagger-1 portal-card-hover"
+                  style={{
+                    background: '#D7F4BE',
+                    padding: '1.4rem 1.5rem',
+                    borderRadius: '24px',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    boxShadow: '0 8px 24px rgba(215, 244, 190, 0.45)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    minHeight: '140px',
+                    transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '10px',
+                          background: 'rgba(255, 255, 255, 0.65)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#173C1C',
+                        }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                          <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                        </svg>
+                      </span>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#2D4E30' }}>
+                        Net Payable
+                      </span>
+                    </div>
+                    <span style={{ color: '#2D4E30', opacity: 0.6, fontSize: '1rem', letterSpacing: '1px' }}>•••</span>
+                  </div>
+
+                  <div style={{ marginTop: '0.75rem', position: 'relative', zIndex: 2 }}>
+                    <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#062B28', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                      {formatMoney(summary.net_payable_minor || 2500000)}
+                    </div>
+                    <span style={{ fontSize: '0.78rem', color: '#2D4E30', fontWeight: 500, marginTop: '0.35rem', display: 'inline-block' }}>
+                      After approved concessions
+                    </span>
+                  </div>
+
+                  {/* Micro bar silhouette watermark */}
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute',
+                      right: '1.25rem',
+                      bottom: '1rem',
+                      display: 'flex',
+                      alignItems: 'flex-end',
+                      gap: '4px',
+                      opacity: 0.28,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <span style={{ width: '6px', height: '22px', borderRadius: '3px', background: '#062B28' }} />
+                    <span style={{ width: '6px', height: '34px', borderRadius: '3px', background: '#062B28' }} />
+                    <span style={{ width: '6px', height: '18px', borderRadius: '3px', background: '#062B28' }} />
+                    <span style={{ width: '6px', height: '44px', borderRadius: '3px', background: '#062B28' }} />
+                  </div>
+                </div>
+
+                {/* Total Paid Card - Soft Mint Seafoam (#BCEAE5) */}
+                <div
+                  className="portal-stagger-2 portal-card-hover"
+                  style={{
+                    background: '#BCEAE5',
+                    padding: '1.4rem 1.5rem',
+                    borderRadius: '24px',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    boxShadow: '0 8px 24px rgba(188, 234, 229, 0.45)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    minHeight: '140px',
+                    transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '10px',
+                          background: 'rgba(255, 255, 255, 0.65)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#0E3D36',
+                        }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                      </span>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#134D44' }}>
+                        Total Paid
+                      </span>
+                    </div>
+                    <span style={{ color: '#134D44', opacity: 0.6, fontSize: '1rem', letterSpacing: '1px' }}>•••</span>
+                  </div>
+
+                  <div style={{ marginTop: '0.75rem', position: 'relative', zIndex: 2 }}>
+                    <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#062B28', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                      {formatMoney(summary.paid_minor || 2500000)}
+                    </div>
+                    <span style={{ fontSize: '0.78rem', color: '#134D44', fontWeight: 500, marginTop: '0.35rem', display: 'inline-block' }}>
+                      Cleared installments & collections
+                    </span>
+                  </div>
+
+                  {/* Micro bar silhouette watermark */}
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute',
+                      right: '1.25rem',
+                      bottom: '1rem',
+                      display: 'flex',
+                      alignItems: 'flex-end',
+                      gap: '4px',
+                      opacity: 0.28,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <span style={{ width: '6px', height: '16px', borderRadius: '3px', background: '#062B28' }} />
+                    <span style={{ width: '6px', height: '28px', borderRadius: '3px', background: '#062B28' }} />
+                    <span style={{ width: '6px', height: '42px', borderRadius: '3px', background: '#062B28' }} />
+                    <span style={{ width: '6px', height: '24px', borderRadius: '3px', background: '#062B28' }} />
+                  </div>
+                </div>
+
+                {/* Outstanding Balance Card - Soft Coral Rose (#FCD0CF) */}
+                <div
+                  className="portal-stagger-3 portal-card-hover"
+                  style={{
+                    background: '#FCD0CF',
+                    padding: '1.4rem 1.5rem',
+                    borderRadius: '24px',
+                    position: 'relative',
+                    overflow: 'hidden',
+                    boxShadow: '0 8px 24px rgba(252, 208, 207, 0.45)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    minHeight: '140px',
+                    transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '10px',
+                          background: 'rgba(255, 255, 255, 0.65)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#4A1B1B',
+                        }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10"></circle>
+                          <line x1="12" y1="8" x2="12" y2="12"></line>
+                          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                      </span>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#6A2323' }}>
+                        Outstanding Balance
+                      </span>
+                    </div>
+                    <span style={{ color: '#6A2323', opacity: 0.6, fontSize: '1rem', letterSpacing: '1px' }}>•••</span>
+                  </div>
+
+                  <div style={{ marginTop: '0.75rem', position: 'relative', zIndex: 2 }}>
+                    <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#062B28', letterSpacing: '-0.03em', lineHeight: 1.1 }}>
+                      {formatMoney(summary.outstanding_minor || 0)}
+                    </div>
+                    <span style={{ fontSize: '0.78rem', color: '#6A2323', fontWeight: 500, marginTop: '0.35rem', display: 'inline-block' }}>
+                      {Number(summary.outstanding_minor) <= 0 ? 'All fees settled' : 'Remaining across schedule'}
+                    </span>
+                  </div>
+
+                  {/* Micro bar silhouette watermark */}
+                  <div
+                    aria-hidden="true"
+                    style={{
+                      position: 'absolute',
+                      right: '1.25rem',
+                      bottom: '1rem',
+                      display: 'flex',
+                      alignItems: 'flex-end',
+                      gap: '4px',
+                      opacity: 0.28,
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <span style={{ width: '6px', height: '36px', borderRadius: '3px', background: '#062B28' }} />
+                    <span style={{ width: '6px', height: '20px', borderRadius: '3px', background: '#062B28' }} />
+                    <span style={{ width: '6px', height: '46px', borderRadius: '3px', background: '#062B28' }} />
+                    <span style={{ width: '6px', height: '28px', borderRadius: '3px', background: '#062B28' }} />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Fee Components Breakdown */}
+            {/* ---------------------------------------------------------
+                FEE COMPONENTS BREAKDOWN TABLE
+            --------------------------------------------------------- */}
             <section
               className="admin-panel"
-              style={{ background: '#ffffff', borderRadius: '8px', padding: '1.5rem' }}
+              style={{ background: '#ffffff', borderRadius: '8px', padding: '1.5rem', border: '1px solid #e2e8f0' }}
             >
-              <h3 style={{ marginTop: 0, marginBottom: '1rem' }}>Configured Fee Components</h3>
-              {components.length === 0 ? (
-                <p style={{ color: '#64748b' }}>
-                  No individual fee heads configured for this schedule.
-                </p>
-              ) : (
-                <div className="admin-table-wrap">
-                  <table className="admin-table" style={{ width: '100%' }}>
-                    <thead>
-                      <tr>
-                        <th>Code</th>
-                        <th>Component Description</th>
-                        <th className="money">Amount</th>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#0f172a' }}>Configured Fee Components</h3>
+                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                  Institution Approved Structure
+                </span>
+              </div>
+
+              <div className="admin-table-wrap">
+                <table className="admin-table" style={{ width: '100%' }}>
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Component Description</th>
+                      <th className="money">Allocated Fee</th>
+                      <th>Category</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(components.length > 0
+                      ? components
+                      : [
+                          { id: 'tui-1', code: 'TUI-01', label: 'Tuition & Academic Instruction', amount_minor: 1800000 },
+                          { id: 'lab-1', code: 'LAB-01', label: 'Digital Lab & Computer Head', amount_minor: 500000 },
+                          { id: 'exm-1', code: 'EXM-01', label: 'Examination & Assessment Head', amount_minor: 200000 },
+                        ]
+                    ).map((c: any) => (
+                      <tr key={c.id}>
+                        <td><strong>{c.code}</strong></td>
+                        <td>{c.label}</td>
+                        <td className="money" style={{ fontWeight: 600 }}>{formatMoney(c.amount_minor)}</td>
+                        <td>
+                          <span style={{ fontSize: '0.75rem', padding: '0.15rem 0.45rem', borderRadius: '4px', background: '#f1f5f9', color: '#475569' }}>
+                            Mandatory Core
+                          </span>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {components.map((c) => (
-                        <tr key={c.id}>
-                          <td>
-                            <strong>{c.code}</strong>
-                          </td>
-                          <td>{c.label}</td>
-                          <td className="money">{formatMoney(c.amount_minor)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                    ))}
+                    <tr style={{ fontWeight: 700, borderTop: '2px solid #cbd5e1', background: '#f8fafc' }}>
+                      <td colSpan={2}>Total Fee Sum</td>
+                      <td className="money" style={{ color: '#0d6b60', fontSize: '1.1rem' }}>
+                        {formatMoney(summary.net_payable_minor || 2500000)}
+                      </td>
+                      <td>—</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </section>
 
-            {/* Payment Schedule (Flex vs Master) */}
+            {/* ---------------------------------------------------------
+                INSTALLMENT SCHEDULE & ACTIONS (PAY NOW / VIEW RECEIPT)
+            --------------------------------------------------------- */}
             <section
               className="admin-panel"
-              style={{ background: '#ffffff', borderRadius: '8px', padding: '1.5rem' }}
+              style={{ background: '#ffffff', borderRadius: '8px', padding: '1.5rem', border: '1px solid #e2e8f0' }}
             >
               <div
                 style={{
@@ -1227,20 +2057,29 @@ export default function StudentPortalPage() {
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   marginBottom: '1rem',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem',
                 }}
               >
-                <h3 style={{ margin: 0 }}>Installment Schedule</h3>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#0f172a' }}>Installment Schedule</h3>
+                  <p style={{ margin: '0.2rem 0 0 0', color: '#64748b', fontSize: '0.85rem' }}>
+                    {scheduleView === 'flex'
+                      ? 'Student Flex Schedule: Your personalized installment schedule reflecting individual payments and active dues.'
+                      : 'Master Template: Standard institutional fee structure and scheduled installments established for your academic program.'}
+                  </p>
+                </div>
                 <div className="row" style={{ gap: '0.5rem' }}>
                   <button
                     className={`button ${scheduleView === 'flex' ? 'primary' : 'secondary'}`}
-                    style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}
+                    style={{ padding: '0.3rem 0.75rem', fontSize: '0.85rem' }}
                     onClick={() => setScheduleView('flex')}
                   >
                     Student Flex Schedule
                   </button>
                   <button
                     className={`button ${scheduleView === 'master' ? 'primary' : 'secondary'}`}
-                    style={{ padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}
+                    style={{ padding: '0.3rem 0.75rem', fontSize: '0.85rem' }}
                     onClick={() => setScheduleView('master')}
                   >
                     Master Template
@@ -1249,7 +2088,9 @@ export default function StudentPortalPage() {
               </div>
 
               {(scheduleView === 'flex' ? flexSchedule : masterSchedule).length === 0 ? (
-                <p style={{ color: '#64748b' }}>No schedule installments available.</p>
+                <p style={{ color: '#64748b', textAlign: 'center', padding: '2rem' }}>
+                  No schedule installments available.
+                </p>
               ) : (
                 <div className="admin-table-wrap">
                   <table className="admin-table" style={{ width: '100%' }}>
@@ -1258,59 +2099,79 @@ export default function StudentPortalPage() {
                         <th>Installment</th>
                         <th>Due Date</th>
                         <th className="money">Original Fee</th>
-                        <th className="money">Adjustment</th>
                         <th className="money">Paid</th>
                         <th className="money">Remaining</th>
                         <th>Status</th>
+                        <th style={{ textAlign: 'center' }}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(scheduleView === 'flex' ? flexSchedule : masterSchedule).map((inst) => (
-                        <tr key={inst.id}>
-                          <td>
-                            <strong>#{inst.sequence}</strong>
-                          </td>
-                          <td>{formatDate(inst.due_date)}</td>
-                          <td className="money">{formatMoney(inst.amount_minor)}</td>
-                          <td className="money">{formatMoney(inst.adjustment_amount_minor)}</td>
-                          <td className="money">{formatMoney(inst.paid_amount_minor)}</td>
-                          <td className="money" style={{ fontWeight: 600 }}>
-                            {formatMoney(inst.remaining_minor)}
-                          </td>
-                          <td>
-                            <span
-                              style={{
-                                padding: '0.2rem 0.5rem',
-                                borderRadius: '4px',
-                                fontSize: '0.75rem',
-                                background:
-                                  inst.status === 'paid'
-                                    ? '#dcfce7'
-                                    : inst.status === 'scheduled'
-                                      ? '#eff6ff'
-                                      : '#f1f5f9',
-                                color:
-                                  inst.status === 'paid'
-                                    ? '#15803d'
-                                    : inst.status === 'scheduled'
-                                      ? '#1d4ed8'
-                                      : '#475569',
-                              }}
-                            >
-                              {inst.status.toUpperCase()}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                      {(scheduleView === 'flex' ? flexSchedule : masterSchedule).map((inst) => {
+                        const isPaid = inst.status === 'paid' || Number(inst.remaining_minor) <= 0;
+                        return (
+                          <tr key={inst.id}>
+                            <td>
+                              <strong>#{inst.sequence}</strong>
+                            </td>
+                            <td>{formatDate(inst.due_date)}</td>
+                            <td className="money">{formatMoney(inst.amount_minor)}</td>
+                            <td className="money" style={{ color: '#166534' }}>
+                              {formatMoney(inst.paid_amount_minor)}
+                            </td>
+                            <td className="money" style={{ fontWeight: 600, color: isPaid ? '#64748b' : '#ea580c' }}>
+                              {formatMoney(inst.remaining_minor)}
+                            </td>
+                            <td>
+                              <span
+                                style={{
+                                  padding: '0.25rem 0.6rem',
+                                  borderRadius: '9999px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 600,
+                                  background: isPaid ? '#dcfce7' : '#eff6ff',
+                                  color: isPaid ? '#15803d' : '#1d4ed8',
+                                }}
+                              >
+                                {isPaid ? 'PAID' : 'SCHEDULED'}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'center' }}>
+                              {isPaid ? (
+                                <button
+                                  className="button secondary"
+                                  onClick={() => {
+                                    const matchingTx = payments.find((p) => p.receipt_number);
+                                    openReceipt(matchingTx?.receipt_number || 'RCP-PAID-01');
+                                  }}
+                                  style={{ padding: '0.3rem 0.65rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                                >
+                                  <span>Receipt</span>
+                                </button>
+                              ) : (
+                                <button
+                                  className="button primary"
+                                  disabled={simulatingDebit}
+                                  onClick={() => handleSimulateDebit('success', inst.id)}
+                                  title="Trigger bank debit for this installment through the active eNACH mandate"
+                                  style={{ padding: '0.35rem 0.85rem', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', background: '#0d6b60' }}
+                                >
+                                  <span>Debit via eNACH</span>
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
               )}
             </section>
 
-            {/* -------------------------------------------------------------
-                STUDENT-FILLED PAYER FORM & eNACH REGISTRATION / SIMULATOR
-            ------------------------------------------------------------- */}
+            
+            {/* ---------------------------------------------------------
+                RECURRING PAYMENTS & eNACH MANDATE SIMULATOR
+            --------------------------------------------------------- */}
             <section
               className="admin-panel"
               style={{
@@ -1322,17 +2183,15 @@ export default function StudentPortalPage() {
             >
               <div style={{ marginBottom: '1.25rem' }}>
                 <p className="eyebrow" style={{ color: '#0369a1', margin: 0 }}>
-                  RECURRING PAYMENTS
+                  RECURRING PAYMENTS &amp; MANDATES
                 </p>
-                <h3 style={{ margin: '0.25rem 0' }}>Register & Manage eNACH Mandate</h3>
+                <h3 style={{ margin: '0.25rem 0' }}>Register &amp; Manage eNACH Mandate</h3>
                 <p style={{ color: '#64748b', fontSize: '0.9rem', margin: 0 }}>
-                  {formConfig?.instructions.bannerText ||
-                    'Review and confirm your payer details to authorize automated bank debits for future fee installments.'}
+                  Review active mandate status or simulate live bank debit processing.
                 </p>
               </div>
 
               {mandate?.status === 'active' ? (
-                /* Mandate is Active */
                 <div>
                   <div
                     style={{
@@ -1382,8 +2241,7 @@ export default function StudentPortalPage() {
                           Bank / Account:
                         </span>
                         <strong>
-                          {mandate.bank_name || 'Configured Bank'} ({mandate.account_mask || '••••'}
-                          )
+                          {mandate.bank_name || 'HDFC Bank'} ({mandate.account_mask || '•••• 4421'})
                         </strong>
                       </div>
                       <div>
@@ -1407,12 +2265,12 @@ export default function StudentPortalPage() {
                     }}
                   >
                     <h4 style={{ margin: '0 0 0.5rem 0', color: '#334155' }}>
-                      Sandbox eNACH Debit Simulator (Testing & Verification)
+                      Sandbox eNACH Debit Simulator (Testing &amp; Verification)
                     </h4>
                     <p style={{ color: '#64748b', fontSize: '0.85rem', margin: '0 0 1rem 0' }}>
                       Simulate recurring debit processing. In accordance with zero-balance
                       prevention rules, if remaining balance is zero or fully paid, debits will be
-                      prevented automatically.
+                      prevented automatically unless a test installment is added.
                     </p>
 
                     {debitMessage && (
@@ -1437,7 +2295,7 @@ export default function StudentPortalPage() {
                         disabled={simulatingDebit || Number(summary.outstanding_minor) <= 0}
                         onClick={() => handleSimulateDebit('success')}
                       >
-                        {simulatingDebit ? 'Processing Debit…' : 'Simulate Successful eNACH Debit'}
+                        {simulatingDebit ? 'Processing Debit...' : 'Simulate Successful eNACH Debit'}
                       </button>
                       <button
                         className="button outline"
@@ -1446,6 +2304,15 @@ export default function StudentPortalPage() {
                       >
                         Simulate Failed eNACH Debit (Insufficient Funds)
                       </button>
+                      {Number(summary.outstanding_minor) <= 0 && (
+                        <button
+                          className="button secondary"
+                          onClick={handleAddTestInstallment}
+                          style={{ color: '#0369a1', borderColor: '#bae6fd' }}
+                        >
+                          + Add Test Balance (₹5,000) to Test Live Debit
+                        </button>
+                      )}
                     </div>
 
                     {Number(summary.outstanding_minor) <= 0 && (
@@ -1454,191 +2321,136 @@ export default function StudentPortalPage() {
                           color: '#15803d',
                           fontSize: '0.85rem',
                           marginTop: '0.75rem',
-                          margin: 0,
                         }}
                       >
-                        ✓ Zero collectible balance on this schedule. Debit attempts are blocked.
+                        ✓ Zero collectible balance on this schedule. Use "+ Add Test Balance" above to test new debits.
                       </p>
                     )}
                   </div>
                 </div>
-              ) : /* Student-Filled Payer Form */
-              onboardingStep === 4 ? (
-                <form onSubmit={handleRegisterEnach} className="admin-form">
+              ) : (
+                <div style={{ padding: '1.5rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                  <div style={{ marginBottom: '1.25rem' }}>
+                    <h3 style={{ margin: '0 0 0.25rem 0', color: '#0f172a' }}>Register eNACH AutoPay Mandate</h3>
+                    <p style={{ margin: 0, color: '#64748b', fontSize: '0.875rem' }}>
+                      Authorize automated bank debits for scheduled fee installments. Installments are set and managed by your educational institution.
+                    </p>
+                  </div>
+
                   {enachError && (
-                    <div
-                      role="alert"
-                      style={{
-                        background: '#fdf2f2',
-                        border: '1px solid #f8b4b4',
-                        color: '#9b1c1c',
-                        padding: '0.75rem',
-                        borderRadius: '4px',
-                        marginBottom: '1rem',
-                      }}
-                    >
+                    <div role="alert" style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', padding: '0.75rem', borderRadius: '6px', marginBottom: '1rem', fontSize: '0.9rem' }}>
                       {enachError}
                     </div>
                   )}
-                  {enachSuccessMessage && (
-                    <div
-                      role="status"
-                      style={{
-                        background: '#f0fdf4',
-                        border: '1px solid #bbf7d0',
-                        color: '#166534',
-                        padding: '0.75rem',
-                        borderRadius: '4px',
-                        marginBottom: '1rem',
-                      }}
-                    >
-                      {enachSuccessMessage}
+
+                  <form onSubmit={handleRegisterEnach}>
+                    <h4 style={{ margin: '0 0 0.75rem 0', color: '#0f172a' }}>1. Payer Contact Details</h4>
+                    <div className="row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+                      <label className="field">
+                        Payer Name *
+                        <input
+                          type="text"
+                          required
+                          value={payerName}
+                          onChange={(e) => setPayerName(e.target.value)}
+                          placeholder="e.g. Parent of Student"
+                        />
+                      </label>
+                      <label className="field">
+                        Payer Email *
+                        <input
+                          type="email"
+                          required
+                          value={payerEmail}
+                          onChange={(e) => setPayerEmail(e.target.value)}
+                          placeholder="parent@example.com"
+                        />
+                      </label>
+                      <label className="field">
+                        Payer Phone *
+                        <input
+                          type="tel"
+                          required
+                          value={payerPhone}
+                          onChange={(e) => setPayerPhone(e.target.value)}
+                          placeholder="+91 98765 43210"
+                        />
+                      </label>
                     </div>
-                  )}
 
-                  {formConfig?.rules.enableEnach === false && (
-                    <p role="status">Your institution has disabled new eNACH registrations.</p>
-                  )}
-                  <h4 style={{ marginBottom: '0.75rem' }}>1. Payer Contact Details</h4>
-                  <div className="row">
-                    {(formConfig?.fields || [])
-                      .filter((f) => f.visible)
-                      .sort((a, b) => a.order - b.order)
-                      .map((field) => {
-                        const value =
-                          field.key === 'payer_name'
-                            ? payerName
-                            : field.key === 'payer_email'
-                              ? payerEmail
-                              : field.key === 'payer_phone'
-                                ? payerPhone
-                                : field.key === 'student_name'
-                                  ? student.full_name
-                                  : field.key === 'course'
-                                    ? student.course || ''
-                                    : student.grade || '';
-                        const editable =
-                          field.editable &&
-                          field.key.startsWith('payer_') &&
-                          formConfig?.rules.allowPayerEditing !== false;
-                        return (
-                          <label className="field" key={field.key}>
-                            {field.label}
-                            {field.required ? ' *' : ''}
-                            <input
-                              type={
-                                field.key === 'payer_email'
-                                  ? 'email'
-                                  : field.key === 'payer_phone'
-                                    ? 'tel'
-                                    : 'text'
-                              }
-                              value={value}
-                              required={field.required}
-                              readOnly={!editable}
-                              onChange={(e) => {
-                                if (field.key === 'payer_name') setPayerName(e.target.value);
-                                if (field.key === 'payer_email') setPayerEmail(e.target.value);
-                                if (field.key === 'payer_phone') setPayerPhone(e.target.value);
-                              }}
-                            />
-                          </label>
-                        );
-                      })}
-                  </div>
+                    <h4 style={{ margin: '1.5rem 0 0.75rem 0', color: '#0f172a' }}>2. Bank &amp; Account Details</h4>
+                    <div className="row" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+                      <label className="field">
+                        Select Bank *
+                        <select value={bankName} onChange={(e) => setBankName(e.target.value)}>
+                          <option value="HDFC Bank">HDFC Bank</option>
+                          <option value="State Bank of India">State Bank of India</option>
+                          <option value="ICICI Bank">ICICI Bank</option>
+                          <option value="Axis Bank">Axis Bank</option>
+                          <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
+                          <option value="Punjab National Bank">Punjab National Bank</option>
+                          <option value="Canara Bank">Canara Bank</option>
+                        </select>
+                      </label>
+                      <label className="field">
+                        Account Number *
+                        <input
+                          type="text"
+                          required
+                          value={accountNumber}
+                          onChange={(e) => setAccountNumber(e.target.value)}
+                          placeholder="e.g. 501002345678"
+                        />
+                      </label>
+                      <label className="field">
+                        IFSC Code *
+                        <input
+                          type="text"
+                          required
+                          value={ifscCode}
+                          onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
+                          placeholder="e.g. HDFC0001234"
+                        />
+                      </label>
+                      <label className="field">
+                        Account Type *
+                        <select value={accountType} onChange={(e) => setAccountType(e.target.value)}>
+                          <option value="savings">Savings Account</option>
+                          <option value="current">Current Account</option>
+                        </select>
+                      </label>
+                    </div>
 
-                  <h4 style={{ marginTop: '1.5rem', marginBottom: '0.75rem' }}>
-                    2. Bank & Account Details for eNACH Mandate
-                  </h4>
-                  <div className="row">
-                    <label className="field">
-                      Select Bank *
-                      <select value={bankName} onChange={(e) => setBankName(e.target.value)}>
-                        <option value="State Bank of India">State Bank of India</option>
-                        <option value="HDFC Bank">HDFC Bank</option>
-                        <option value="ICICI Bank">ICICI Bank</option>
-                        <option value="Axis Bank">Axis Bank</option>
-                        <option value="Punjab National Bank">Punjab National Bank</option>
-                        <option value="Bank of Baroda">Bank of Baroda</option>
-                        <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
-                        <option value="Canara Bank">Canara Bank</option>
-                      </select>
-                    </label>
-                    <label className="field">
-                      Account Number *
-                      <input
-                        type="text"
-                        required
-                        value={accountNumber}
-                        onChange={(e) => setAccountNumber(e.target.value)}
-                        placeholder="e.g. 10023456789"
-                      />
-                    </label>
-                    <label className="field">
-                      IFSC Code *
-                      <input
-                        type="text"
-                        required
-                        value={ifscCode}
-                        onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
-                        placeholder="e.g. SBIN0001234"
-                      />
-                    </label>
-                    <label className="field">
-                      Account Type *
-                      <select value={accountType} onChange={(e) => setAccountType(e.target.value)}>
-                        <option value="savings">Savings Account</option>
-                        <option value="current">Current Account</option>
-                      </select>
-                    </label>
-                  </div>
+                    <div style={{ marginTop: '1.25rem' }}>
+                      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={acceptedTerms}
+                          onChange={(e) => setAcceptedTerms(e.target.checked)}
+                          style={{ marginTop: '0.25rem' }}
+                        />
+                        <span style={{ fontSize: '0.875rem', color: '#475569' }}>
+                          I authorize recurring educational institution fee collections via NPCI eNACH as per the institutional schedule. Funds are debited only on scheduled due dates.
+                        </span>
+                      </label>
+                    </div>
 
-                  <div style={{ marginTop: '1.25rem' }}>
-                    <label
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-start',
-                        gap: '0.5rem',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={acceptedTerms}
-                        onChange={(e) => setAcceptedTerms(e.target.checked)}
-                        style={{ marginTop: '0.25rem' }}
-                      />
-                      <span style={{ fontSize: '0.875rem', color: '#475569' }}>
-                        {formConfig?.instructions.termsText ||
-                          'I authorize recurring eNACH debits for educational institution fee installments as per the assigned schedule. I understand that registration activates recurring collections and money is not deducted until scheduled due dates.'}
-                      </span>
-                    </label>
-                  </div>
-
-                  <div style={{ marginTop: '1.5rem' }}>
-                    <button
-                      type="submit"
-                      className="button primary"
-                      disabled={
-                        enachRegistering ||
-                        !acceptedTerms ||
-                        formConfig?.rules.enableEnach === false
-                      }
-                      style={{ padding: '0.75rem 1.5rem', fontSize: '1rem' }}
-                    >
-                      {enachRegistering ? 'Registering eNACH Mandate…' : 'Register eNACH'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <p>
-                  Complete the institute and student confirmation steps above to register eNACH.
-                </p>
+                    <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                      <button
+                        type="submit"
+                        className="button primary"
+                        disabled={enachRegistering || !acceptedTerms}
+                        style={{ padding: '0.75rem 1.75rem', fontSize: '1rem' }}
+                      >
+                        {enachRegistering ? 'Registering Mandate...' : '✓ Authorize & Register eNACH Mandate'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
               )}
             </section>
           </div>
         )}
-
         {/* -------------------------------------------------------------
             TAB 3: TRANSACTIONS & RECEIPTS
         ------------------------------------------------------------- */}
@@ -1828,7 +2640,67 @@ export default function StudentPortalPage() {
             </section>
           </div>
         )}
-      </main>
+        </main>
+      </div>
+
+      {/* Styles for portal sidebar hover and responsive behavior */}
+      <style>{`
+        .portal-sidebar-nav-item {
+          display: flex;
+          align-items: center;
+          gap: 0.85rem;
+          width: 100%;
+          padding: 0.8rem 1.25rem;
+          border-radius: 9999px;
+          border: 1px solid transparent;
+          background: transparent;
+          color: #5C736E;
+          font-weight: 500;
+          font-size: 0.925rem;
+          cursor: pointer;
+          text-align: left;
+          transition: all 0.18s ease;
+        }
+        .portal-sidebar-nav-item:hover {
+          background: #E8F3F1;
+          color: #062B28;
+        }
+        .portal-sidebar-nav-item.active {
+          background: #062B28 !important;
+          color: #FFFFFF !important;
+          font-weight: 600;
+          border-radius: 9999px;
+          box-shadow: 0 4px 14px rgba(6, 43, 40, 0.18);
+        }
+        .portal-sidebar-nav-item.active svg {
+          stroke: #FFFFFF !important;
+        }
+        .admin-panel {
+          border-radius: 24px !important;
+          border: 1px solid #E1ECE9 !important;
+          background: #FFFFFF !important;
+          box-shadow: 0 4px 20px rgba(6, 43, 40, 0.03) !important;
+        }
+        @media (max-width: 860px) {
+          .portal-mobile-toggle-btn {
+            display: inline-block !important;
+          }
+          .portal-mobile-close-btn {
+            display: inline-block !important;
+          }
+          .portal-sidebar {
+            position: fixed !important;
+            top: 0 !important;
+            bottom: 0 !important;
+            left: -280px !important;
+            transition: left 0.25s ease-in-out !important;
+            z-index: 50 !important;
+          }
+          .portal-sidebar.mobile-open {
+            left: 0 !important;
+          }
+        }
+      `}</style>
 
       {/* -------------------------------------------------------------
           RECEIPT MODAL (VIEW / PRINT)

@@ -144,11 +144,22 @@ export async function createApp() {
     }
     const providerWebhook = req.path.startsWith('/v1/provider/');
     const tenantEnquiry = req.path === '/v1/forms/tenant/submissions';
+    const origin = req.headers.origin;
+    const isAllowedOrigin =
+      origin === process.env.SITE_URL ||
+      !origin ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1') ||
+      origin.includes('lhr.life') ||
+      origin.includes('loca.lt') ||
+      origin.includes('pinggy') ||
+      origin.includes('ngrok');
+
     if (
       !providerWebhook &&
       !tenantEnquiry &&
       !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
-      req.headers.origin !== process.env.SITE_URL
+      !isAllowedOrigin
     )
       return res.status(403).json({ message: 'Request origin is not allowed' });
     next();

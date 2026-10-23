@@ -5,7 +5,9 @@ import { PublicPage } from '@core/contracts';
 import { previewPages, defaultNavigation, formDefinition } from '@core/site';
 
 const readonly = () =>
-  process.env.REFERENCE_READONLY_PREVIEW === 'true' && process.env.DEPLOYMENT_MODE !== 'production';
+  (process.env.REFERENCE_READONLY_PREVIEW === 'true' ||
+    process.env.JODO_READONLY_PREVIEW === 'true') &&
+  process.env.DEPLOYMENT_MODE !== 'production';
 
 export const baseUrl = () => process.env.SITE_URL || 'http://localhost:3000';
 

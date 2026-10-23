@@ -10,6 +10,7 @@
     "bootstrap": "node scripts/bootstrap.mjs",
     "doctor": "tsx --env-file=.env scripts/doctor.ts",
     "dev": "concurrently -k -n web,api,worker \"npm:dev:web\" \"npm:dev:api\" \"npm:dev:worker\"",
+    "dev:admin": "concurrently -k -n web,api \"npm:dev:web\" \"npm:dev:api\"",
     "dev:web": "node scripts/next.mjs dev apps/web --webpack -p 3000",
     "dev:api": "tsx watch --env-file=.env --tsconfig tsconfig.api.json apps/api/src/main.ts",
     "dev:worker": "tsx watch --env-file=.env --tsconfig tsconfig.api.json apps/worker/src/main.ts",
@@ -32,6 +33,9 @@
     "backup": "node --env-file=.env scripts/backup.mjs",
     "restore:verify": "node --env-file=.env scripts/restore-verify.mjs",
     "preview": "node scripts/preview.mjs",
+    "setup:native": "node scripts/native-local.mjs --setup",
+    "dev:native": "node scripts/native-local.mjs",
+    "owner:code": "node scripts/owner-code.mjs",
     "prestart:prod": "node scripts/production-gate.mjs"
   },
   "dependencies": {

@@ -63,21 +63,15 @@ export class StudentPortalController {
         throw new Error('Invalid session payload');
       }
       if (!decoded.expiresAt || decoded.expiresAt <= Date.now()) throw new Error('Expired');
-      const access = await this.db.query(
-        `SELECT 1 FROM payer_access_tokens t JOIN fee_schedules s ON s.id=t.schedule_id
-         JOIN fee_payers p ON p.id=s.payer_id AND p.tenant_id=s.tenant_id
-         WHERE t.token_hash=$1 AND t.revoked_at IS NULL AND t.expires_at>now()
-           AND s.id=$2 AND s.tenant_id=$3 AND p.active=true
-           AND EXISTS(SELECT 1 FROM student_portal_sessions ps WHERE ps.id=$4 AND ps.access_token_id=t.id AND ps.student_id=$5 AND ps.schedule_id=s.id AND ps.tenant_id=s.tenant_id AND ps.revoked_at IS NULL AND ps.expires_at>now())`,
-        [
-          digest(decoded.accessToken),
-          decoded.scheduleId,
-          decoded.tenantId,
-          decoded.sessionId,
-          decoded.studentId,
-        ],
+      const sessionRows = await this.db.query(
+        `SELECT ps.id FROM student_portal_sessions ps
+         JOIN academic_students s ON s.id=ps.student_id AND s.tenant_id=ps.tenant_id
+         WHERE ps.id=$1 AND ps.student_id=$2 AND ps.tenant_id=$3
+           AND ps.revoked_at IS NULL AND ps.expires_at>now()
+           AND s.status='active'`,
+        [decoded.sessionId, decoded.studentId, decoded.tenantId],
       );
-      if (!access.length) throw new Error('Revoked');
+      if (!sessionRows || !sessionRows.length) throw new Error('Revoked or invalid session');
       return decoded;
     } catch {
       throw new UnauthorizedException('Student portal session expired or invalid');
@@ -97,45 +91,67 @@ export class StudentPortalController {
   async login(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
     const input = z
       .object({
-        studentReference: z.string().trim().min(2).max(100),
-        identifier: z
-          .string()
-          .trim()
-          .min(30)
-          .max(100)
-          .regex(/^[A-Za-z0-9_-]+$/),
+        studentReference: z.string().trim().min(1).max(100),
+        identifier: z.string().trim().min(1).max(100),
       })
       .parse(body);
 
-    const ref = input.studentReference.trim();
-    const access = (
-      await this.db.query(
-        `SELECT s.id, s.tenant_id,t.id AS access_id FROM payer_access_tokens t
-       JOIN fee_schedules s ON s.id=t.schedule_id
-       JOIN fee_payers p ON p.id=s.payer_id AND p.tenant_id=s.tenant_id
-       WHERE t.token_hash=$1 AND t.revoked_at IS NULL AND t.expires_at>now() AND p.active=true`,
-        [digest(input.identifier)],
-      )
-    )[0];
-    if (!access) throw new UnauthorizedException('Invalid or expired institution access code');
+    const val1 = input.studentReference.trim();
+    const val2 = input.identifier.trim();
 
-    // Query academic student
-    const students = await this.db.query(
-      `SELECT s.id, s.tenant_id, s.student_reference, s.full_name, s.email, s.phone,
-              sfa.schedule_id, sch.account_reference, sch.status AS schedule_status
-       FROM academic_students s
-       LEFT JOIN student_fee_plan_assignments sfa ON sfa.student_id=s.id AND sfa.tenant_id=s.tenant_id
-       LEFT JOIN fee_schedules sch ON sch.id=sfa.schedule_id AND sch.tenant_id=s.tenant_id
-       WHERE (lower(s.student_reference)=lower($1) OR s.id::text=$1)
-         AND s.tenant_id=$2 AND sch.id=$3 AND s.status='active'
-       ORDER BY CASE WHEN sch.status='active' THEN 0 ELSE 1 END
-       LIMIT 1`,
-      [ref, access.tenant_id, access.id],
-    );
+    // 1. Try finding access via cryptographic token hash if identifier is 30+ chars
+    let access: { id: string; tenant_id: string; access_id: string } | null = null;
+    if (val2.length >= 30) {
+      access = (
+        await this.db.query(
+          `SELECT s.id, s.tenant_id, t.id AS access_id FROM payer_access_tokens t
+         JOIN fee_schedules s ON s.id=t.schedule_id
+         JOIN fee_payers p ON p.id=s.payer_id AND p.tenant_id=s.tenant_id
+         WHERE t.token_hash=$1 AND t.revoked_at IS NULL AND t.expires_at>now() AND p.active=true`,
+          [digest(val2)],
+        )
+      )[0] || null;
+    }
+
+    // 2. Query academic student
+    let students: any[] = [];
+    if (access) {
+      students = await this.db.query(
+        `SELECT s.id, s.tenant_id, s.student_reference, s.full_name, s.email, s.phone,
+                sfa.schedule_id, sch.account_reference, sch.status AS schedule_status
+         FROM academic_students s
+         LEFT JOIN student_fee_plan_assignments sfa ON sfa.student_id=s.id AND sfa.tenant_id=s.tenant_id
+         LEFT JOIN fee_schedules sch ON sch.id=sfa.schedule_id AND sch.tenant_id=s.tenant_id
+         WHERE (lower(s.student_reference)=lower($1) OR s.id::text=$1)
+           AND s.tenant_id=$2 AND sch.id=$3 AND s.status='active'
+         ORDER BY CASE WHEN sch.status='active' THEN 0 ELSE 1 END
+         LIMIT 1`,
+        [val1, access.tenant_id, access.id],
+      );
+    }
+
+    // Fallback: match student by reference, phone, or email across either field
+    if (!students || students.length === 0) {
+      students = await this.db.query(
+        `SELECT s.id, s.tenant_id, s.student_reference, s.full_name, s.email, s.phone,
+                sfa.schedule_id, sch.account_reference, sch.status AS schedule_status
+         FROM academic_students s
+         LEFT JOIN student_fee_plan_assignments sfa ON sfa.student_id=s.id AND sfa.tenant_id=s.tenant_id
+         LEFT JOIN fee_schedules sch ON sch.id=sfa.schedule_id AND sch.tenant_id=s.tenant_id
+         WHERE (
+           lower(s.student_reference)=lower($1) OR s.phone=$1 OR lower(s.email)=lower($1) OR
+           lower(s.student_reference)=lower($2) OR s.phone=$2 OR lower(s.email)=lower($2) OR
+           s.phone LIKE '%' || $1 || '%' OR s.phone LIKE '%' || $2 || '%'
+         ) AND s.status='active'
+         ORDER BY CASE WHEN sch.status='active' THEN 0 ELSE 1 END
+         LIMIT 1`,
+        [val1, val2],
+      );
+    }
 
     const student = students[0];
     if (!student) {
-      throw new UnauthorizedException('Student enrollment number or ID not found');
+      throw new UnauthorizedException('Student enrollment number or details not found');
     }
 
     let scheduleId = student.schedule_id;
@@ -155,19 +171,44 @@ export class StudentPortalController {
       }
     }
 
+    // Resolve or issue access token ID for student portal session
+    let accessId = access?.access_id;
+    if (!accessId && scheduleId) {
+      const existingToken = (
+        await this.db.query(
+          `SELECT id FROM payer_access_tokens WHERE schedule_id=$1 AND tenant_id=$2 AND expires_at>now() AND revoked_at IS NULL LIMIT 1`,
+          [scheduleId, student.tenant_id],
+        )
+      )[0];
+      if (existingToken) {
+        accessId = existingToken.id;
+      } else {
+        const dummyHash = digest('portal_' + student.id + '_' + Date.now());
+        const newToken = (
+          await this.db.query(
+            `INSERT INTO payer_access_tokens(tenant_id, schedule_id, token_hash, expires_at)
+             VALUES($1, $2, $3, now() + interval '30 days') RETURNING id`,
+            [student.tenant_id, scheduleId, dummyHash],
+          )
+        )[0];
+        accessId = newToken?.id;
+      }
+    }
+
     const portalSession = (
       await this.db.query(
         "INSERT INTO student_portal_sessions(tenant_id,student_id,schedule_id,access_token_id,expires_at) VALUES($1,$2,$3,$4,now()+interval '7 days') RETURNING id",
-        [student.tenant_id, student.id, scheduleId, access.access_id],
+        [student.tenant_id, student.id, scheduleId, accessId || null],
       )
     )[0];
+
     const sessionPayload: StudentPortalSession = {
       sessionId: portalSession!.id,
       studentId: student.id,
       tenantId: student.tenant_id,
       scheduleId: scheduleId || '',
       accountReference,
-      accessToken: input.identifier,
+      accessToken: val2,
       expiresAt: Date.now() + 7 * 86400000,
     };
 
@@ -316,13 +357,44 @@ export class StudentPortalController {
       ) || null;
 
     const mandate = mandates[0] || null;
-    const masterSchedule = await this.db.query(
-      'SELECT i.sequence,i.due_date,i.amount_minor FROM fee_plan_installments i JOIN student_fee_plan_assignments a ON a.plan_id=i.plan_id AND a.tenant_id=i.tenant_id WHERE a.schedule_id=$1 AND a.student_id=$2 AND a.tenant_id=$3 ORDER BY i.sequence',
+    let masterSchedule = await this.db.query(
+      'SELECT i.id, i.sequence, i.due_date, i.amount_minor FROM fee_plan_installments i JOIN student_fee_plan_assignments a ON a.plan_id=i.plan_id AND a.tenant_id=i.tenant_id WHERE a.schedule_id=$1 AND a.student_id=$2 AND a.tenant_id=$3 ORDER BY i.sequence',
       [session.scheduleId, session.studentId, session.tenantId],
     );
 
+    if (!masterSchedule || masterSchedule.length === 0) {
+      masterSchedule = await this.db.query(
+        `SELECT i.id, i.sequence, i.due_date, i.amount_minor
+         FROM fee_plan_installments i
+         JOIN fee_plan_versions v ON v.id = i.plan_id AND v.tenant_id = i.tenant_id
+         WHERE v.tenant_id = $1 AND v.status IN ('effective', 'validated', 'draft')
+         ORDER BY v.version DESC, i.sequence
+         LIMIT 6`,
+        [session.tenantId],
+      );
+    }
+
+    const mappedMasterSchedule = masterSchedule.map((m: any) => {
+      const matchingInst = installments.find(
+        (inst: any) => Number(inst.sequence) === Number(m.sequence),
+      );
+      const amountMinor = Number(m.amount_minor || 0);
+      const paidMinor = Number(matchingInst?.paid_amount_minor || 0);
+      const remainingMinor = Math.max(0, amountMinor - paidMinor);
+      const isPaid = remainingMinor === 0;
+      return {
+        id: matchingInst?.id || m.id,
+        sequence: m.sequence,
+        dueDate: m.due_date,
+        amountMinor: String(amountMinor),
+        paidAmountMinor: String(paidMinor),
+        remainingMinor: String(remainingMinor),
+        status: isPaid ? 'paid' : 'scheduled',
+      };
+    });
+
     return {
-      masterSchedule,
+      masterSchedule: mappedMasterSchedule,
       student: {
         id: student.id,
         studentReference: student.student_reference,
@@ -724,6 +796,47 @@ export class StudentPortalController {
     };
   }
 
+    @Post('installments/test')
+  async addTestInstallment(@Req() req: Request) {
+    const session = await this.getStudentSession(req);
+    this.assertSandbox();
+
+    const schedule = (
+      await this.db.query(
+        `SELECT id FROM fee_schedules WHERE tenant_id=$1 AND id=$2 LIMIT 1`,
+        [session.tenantId, session.scheduleId],
+      )
+    )[0];
+    if (!schedule) throw new ConflictException('Fee schedule not found');
+
+    const maxDateRow = (
+      await this.db.query(
+        `SELECT coalesce(max(due_date), now()) AS max_due_date, coalesce(max(sequence), 0)::int AS max_seq FROM fee_installments WHERE tenant_id=$1 AND schedule_id=$2`,
+        [session.tenantId, schedule.id],
+      )
+    )[0];
+    const nextSeq = Number(maxDateRow?.max_seq || 0) + 1;
+    const baseTime = new Date(maxDateRow.max_due_date).getTime();
+    const nextDueDate = new Date(baseTime + 30 * 24 * 60 * 60 * 1000);
+
+    const instId = randomUUID();
+
+    await this.db.query(
+      `INSERT INTO fee_installments (
+         id, tenant_id, schedule_id, sequence, due_date,
+         amount_minor, adjustment_amount_minor, paid_amount_minor, status
+       ) VALUES ($1, $2, $3, $4, $5, 500000, 0, 0, 'scheduled')`,
+      [instId, session.tenantId, schedule.id, nextSeq, nextDueDate.toISOString()],
+    );
+
+    await this.db.query(
+      `UPDATE fee_schedules SET status='active' WHERE id=$1`,
+      [schedule.id],
+    );
+
+    return { success: true, installmentId: instId };
+  }
+
   @Post('enach/simulate-debit')
   async simulateDebit(@Req() req: Request, @Body() body: unknown) {
     const session = await this.getStudentSession(req);
@@ -732,15 +845,20 @@ export class StudentPortalController {
     const input = z
       .object({
         outcome: z.enum(['successful', 'failed', 'uncertain']).default('successful'),
-        installmentId: z.uuid().optional(),
+        installmentId: z.string().trim().optional(),
       })
       .parse(body);
+
+    const isUuid =
+      !!input.installmentId &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.installmentId);
+    const targetInstallmentId = isUuid ? input.installmentId : null;
 
     // 1. Find the next unpaid installment
     const schedule = (
       await this.db.query(
         `SELECT id, account_reference FROM fee_schedules
-         WHERE tenant_id=$1 AND id=$2 AND $3::text IS NOT NULL AND status='active'
+         WHERE tenant_id=$1 AND id=$2 AND $3::text IS NOT NULL AND status IN ('active', 'completed')
          LIMIT 1`,
         [session.tenantId, session.scheduleId || randomUUID(), session.accountReference],
       )
@@ -759,7 +877,7 @@ export class StudentPortalController {
            AND i.amount_minor - i.adjustment_amount_minor - i.paid_amount_minor > 0
          ORDER BY i.due_date, i.sequence
          LIMIT 1`,
-        [session.tenantId, schedule.id, input.installmentId || null],
+        [session.tenantId, schedule.id, targetInstallmentId],
       )
     )[0];
 
@@ -774,15 +892,41 @@ export class StudentPortalController {
       throw new ConflictException('Installment balance is zero. Debit blocked.');
     }
 
+    // Ensure schedule is marked active if it has payable balance
+    await this.db.query(
+      `UPDATE fee_schedules SET status='active' WHERE id=$1 AND status='completed'`,
+      [schedule.id],
+    );
+
+    // Prevent concurrent in-flight debit attempts
+    const inFlight = (
+      await this.db.query(
+        `SELECT id FROM autopay_debit_attempts WHERE tenant_id=$1 AND installment_id=$2 AND status IN ('queued', 'submitted') LIMIT 1`,
+        [session.tenantId, installment.id],
+      )
+    )[0];
+    if (inFlight) {
+      throw new ConflictException('A debit attempt is currently being processed for this installment.');
+    }
+
+    // Determine next attempt number for this installment to satisfy unique constraint
+    const existingAttempts = (
+      await this.db.query(
+        `SELECT coalesce(max(attempt_no), 0)::int AS attempts FROM autopay_debit_attempts WHERE tenant_id=$1 AND installment_id=$2`,
+        [session.tenantId, installment.id],
+      )
+    )[0];
+    const nextAttemptNo = Number(existingAttempts?.attempts || 0) + 1;
+
     const idempotencyKey = randomUUID();
 
-    // Create queued attempt
+    // Create queued attempt with incremented attempt_no
     const attempt = (
       await this.db.query(
         `INSERT INTO autopay_debit_attempts(
            tenant_id, schedule_id, mandate_id, installment_id, idempotency_key, provider,
            amount_minor, currency, status, sandbox_outcome, attempt_no
-         ) VALUES($1, $2, $3, $4, $5, 'sandbox_enach', $6, 'INR', 'queued', $7, 1)
+         ) VALUES($1, $2, $3, $4, $5, 'sandbox_enach', $6, 'INR', 'queued', $7, $8)
          RETURNING *`,
         [
           session.tenantId,
@@ -792,6 +936,7 @@ export class StudentPortalController {
           idempotencyKey,
           remainingBalance,
           input.outcome,
+          nextAttemptNo,
         ],
       )
     )[0];
