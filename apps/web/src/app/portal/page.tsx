@@ -2245,10 +2245,10 @@ export default function StudentPortalPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(scheduleView === 'flex' ? flexSchedule : masterSchedule).map((inst) => {
+                      {(scheduleView === 'flex' ? flexSchedule : masterSchedule).map((inst, idx) => {
                         const isPaid = inst.status === 'paid' || Number(inst.remaining_minor) <= 0;
                         return (
-                          <tr key={inst.id}>
+                          <tr key={`${inst.id || 'inst'}-${inst.sequence}-${idx}`}>
                             <td>
                               <strong>#{inst.sequence}</strong>
                             </td>
