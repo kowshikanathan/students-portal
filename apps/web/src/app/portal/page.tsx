@@ -842,6 +842,8 @@ export default function StudentPortalPage() {
               padding: '0.25rem',
               display: 'none',
               fontSize: '1.25rem',
+              alignItems: 'center',
+              gap: '4px',
             }}
           >
             &times;

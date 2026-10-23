@@ -218,14 +218,14 @@ export function FinanceSettings() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    <div className="finance-settings-workspace">
       <div className="admin-toolbar">
         <div>
           <p className="eyebrow">INSTITUTE CONFIGURATION</p>
           <h2>Finance Settings</h2>
           <p>{session.tenant.name} · Customizable forms, receipts, and templates</p>
         </div>
-        <div className="row" style={{ gap: '0.5rem' }}>
+        <div className="finance-page-actions">
           <button
             className={`button ${tab === 'form' ? 'primary' : 'secondary'}`}
             onClick={() => setTab('form')}
@@ -251,46 +251,33 @@ export function FinanceSettings() {
           TAB 1: STUDENT PAYMENT FORM CONFIGURATION
       ------------------------------------------------------------- */}
       {tab === 'form' && (
-        <section
-          className="admin-panel"
-          style={{ background: '#ffffff', borderRadius: '8px', padding: '1.5rem' }}
-        >
-          <div style={{ marginBottom: '1.5rem' }}>
+        <section className="admin-panel">
+          <div style={{ marginBottom: '1.25rem' }}>
             <h3 style={{ margin: 0 }}>Student Payment Form Configuration</h3>
-            <p style={{ color: '#64748b', fontSize: '0.9rem', margin: '0.25rem 0 0 0' }}>
+            <p className="small" style={{ margin: '4px 0 0' }}>
               Configure which fields and fee components the Student / Parent sees on their portal
               form. Set field visibility, requirement, and read-only attributes.
             </p>
           </div>
 
           {formSavedNotice && (
-            <div
-              role="status"
-              style={{
-                background: '#f0fdf4',
-                border: '1px solid #bbf7d0',
-                color: '#166534',
-                padding: '0.75rem',
-                borderRadius: '4px',
-                marginBottom: '1.5rem',
-              }}
-            >
+            <div role="status" className="admin-feedback">
               {formSavedNotice}
             </div>
           )}
 
           {/* Form Fields Table */}
-          <h4 style={{ marginBottom: '0.5rem' }}>Payer Form Fields & Rules</h4>
-          <div className="admin-table-wrap" style={{ marginBottom: '1.5rem' }}>
-            <table className="admin-table" style={{ width: '100%' }}>
+          <h4 style={{ margin: '0 0 8px' }}>Payer Form Fields & Rules</h4>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
               <thead>
                 <tr>
                   <th>Field Key</th>
                   <th>Display Label</th>
-                  <th style={{ textAlign: 'center' }}>Visible</th>
-                  <th style={{ textAlign: 'center' }}>Required</th>
-                  <th style={{ textAlign: 'center' }}>Editable by Student</th>
-                  <th style={{ textAlign: 'center' }}>Field Order</th>
+                  <th className="center">Visible</th>
+                  <th className="center">Required</th>
+                  <th className="center">Editable by Student</th>
+                  <th className="center">Field Order</th>
                 </tr>
               </thead>
               <tbody>
@@ -302,6 +289,7 @@ export function FinanceSettings() {
                     <td>
                       <input
                         type="text"
+                        className="settings-table-input"
                         value={f.label}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -309,10 +297,9 @@ export function FinanceSettings() {
                             fields.map((item, i) => (i === idx ? { ...item, label: val } : item)),
                           );
                         }}
-                        style={{ padding: '0.25rem 0.5rem', width: '100%' }}
                       />
                     </td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td className="center">
                       <input
                         type="checkbox"
                         checked={f.visible}
@@ -326,7 +313,7 @@ export function FinanceSettings() {
                         }}
                       />
                     </td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td className="center">
                       <input
                         type="checkbox"
                         checked={f.required}
@@ -340,7 +327,7 @@ export function FinanceSettings() {
                         }}
                       />
                     </td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td className="center">
                       <input
                         type="checkbox"
                         checked={f.editable}
@@ -354,11 +341,12 @@ export function FinanceSettings() {
                         }}
                       />
                     </td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td className="center">
                       <input
                         type="number"
                         min="1"
                         max="20"
+                        className="settings-order-input"
                         value={f.order}
                         onChange={(e) => {
                           const num = Number(e.target.value);
@@ -366,7 +354,6 @@ export function FinanceSettings() {
                             fields.map((item, i) => (i === idx ? { ...item, order: num } : item)),
                           );
                         }}
-                        style={{ width: '60px', padding: '0.25rem' }}
                       />
                     </td>
                   </tr>
@@ -376,27 +363,27 @@ export function FinanceSettings() {
           </div>
 
           {/* Configurable Fee Components */}
-          <h4 style={{ marginBottom: '0.5rem' }}>Fee Component Availability</h4>
-          <div className="admin-table-wrap" style={{ marginBottom: '1.5rem' }}>
-            <table className="admin-table" style={{ width: '100%' }}>
+          <h4 style={{ margin: '1.5rem 0 8px' }}>Fee Component Availability</h4>
+          <div className="admin-table-wrap">
+            <table className="admin-table">
               <thead>
                 <tr>
                   <th>Code</th>
                   <th>Fee Component Label</th>
-                  <th style={{ textAlign: 'center' }}>Visible</th>
-                  <th style={{ textAlign: 'center' }}>Required</th>
-                  <th style={{ textAlign: 'center' }}>Selectable</th>
-                  <th style={{ textAlign: 'center' }}>Fixed Amount</th>
+                  <th className="center">Visible</th>
+                  <th className="center">Required</th>
+                  <th className="center">Selectable</th>
+                  <th className="center">Fixed Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {components.map((c, idx) => (
                   <tr key={c.code}>
                     <td>
-                      <strong>{c.code}</strong>
+                      <code>{c.code}</code>
                     </td>
                     <td>{c.label}</td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td className="center">
                       <input
                         type="checkbox"
                         checked={c.visible}
@@ -410,7 +397,7 @@ export function FinanceSettings() {
                         }}
                       />
                     </td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td className="center">
                       <input
                         type="checkbox"
                         checked={c.required}
@@ -424,7 +411,7 @@ export function FinanceSettings() {
                         }}
                       />
                     </td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td className="center">
                       <input
                         type="checkbox"
                         checked={c.selectable}
@@ -438,7 +425,7 @@ export function FinanceSettings() {
                         }}
                       />
                     </td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td className="center">
                       <input
                         type="checkbox"
                         checked={c.fixed}
@@ -459,16 +446,17 @@ export function FinanceSettings() {
           </div>
 
           {/* Payment Rules */}
-          <h4 style={{ marginBottom: '0.5rem' }}>Payment Rules & eNACH Scope</h4>
+          <h4 style={{ margin: '1.5rem 0 8px' }}>Payment Rules & eNACH Scope</h4>
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-              gap: '1rem',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: '12px',
               marginBottom: '1.5rem',
               background: '#f8fafc',
-              padding: '1rem',
-              borderRadius: '6px',
+              padding: '16px',
+              borderRadius: '8px',
+              border: '1px solid #e2e8f0',
             }}
           >
             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -557,30 +545,17 @@ export function FinanceSettings() {
           TAB 2: RECEIPT & EMAIL TEMPLATES
       ------------------------------------------------------------- */}
       {tab === 'receipts' && (
-        <section
-          className="admin-panel"
-          style={{ background: '#ffffff', borderRadius: '8px', padding: '1.5rem' }}
-        >
-          <div style={{ marginBottom: '1.5rem' }}>
+        <section className="admin-panel">
+          <div style={{ marginBottom: '1.25rem' }}>
             <h3 style={{ margin: 0 }}>Customizable Receipt & Email Templates</h3>
-            <p style={{ color: '#64748b', fontSize: '0.9rem', margin: '0.25rem 0 0 0' }}>
+            <p className="small" style={{ margin: '4px 0 0' }}>
               Customize receipt branding, headings, notes, and automated receipt email templates.
               Note: financial amounts and ledger balances are strictly protected from modification.
             </p>
           </div>
 
           {receiptsSavedNotice && (
-            <div
-              role="status"
-              style={{
-                background: '#f0fdf4',
-                border: '1px solid #bbf7d0',
-                color: '#166534',
-                padding: '0.75rem',
-                borderRadius: '4px',
-                marginBottom: '1.5rem',
-              }}
-            >
+            <div role="status" className="admin-feedback">
               {receiptsSavedNotice}
             </div>
           )}
@@ -588,8 +563,8 @@ export function FinanceSettings() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-              gap: '2rem',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+              gap: '24px',
             }}
           >
             {/* Receipt Styling Form */}

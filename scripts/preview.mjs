@@ -16,8 +16,8 @@ const child = spawn(
     stdio: 'inherit',
     env: {
       ...process.env,
-      REFERENCE_READONLY_PREVIEW: 'true',
       JODO_READONLY_PREVIEW: 'true',
+      REFERENCE_READONLY_PREVIEW: 'true',
       DEPLOYMENT_MODE: 'demo',
     },
   },

@@ -1,6 +1,7 @@
 export function financialStatusClass(status: unknown): string {
-  const value = String(status);
-  if (['failed', 'overdue', 'rejected', 'invalid'].includes(value)) return 'status-pill bad';
+  const value = String(status || '').toLowerCase().trim();
+  if (['failed', 'overdue', 'rejected', 'invalid', 'withdrawn', 'bad'].includes(value))
+    return 'status-pill bad';
   if (
     [
       'pending',
@@ -13,10 +14,25 @@ export function financialStatusClass(status: unknown): string {
       'unmatched',
       'open',
       'contacted',
+      'warn',
+      'warning',
     ].includes(value)
   )
     return 'status-pill warn';
-  if (['cancelled', 'revoked', 'paused', 'refunded', 'not_applied'].includes(value))
+  if (
+    [
+      'cancelled',
+      'revoked',
+      'paused',
+      'refunded',
+      'not_applied',
+      'inactive',
+      'not_registered',
+      'draft',
+      'graduated',
+      'neutral',
+    ].includes(value)
+  )
     return 'status-pill neutral';
-  return 'status-pill';
+  return 'status-pill success';
 }

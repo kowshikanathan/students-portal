@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useAdminApi } from './context';
+import { financialStatusClass } from './financial-status';
 
 type TenantOverview = {
   tenant: {
@@ -89,8 +90,9 @@ type TenantOverview = {
   workspaceRole: string;
 };
 
-export function TenancyStudio() {
+export function TenancyStudio({ initialTab = 'tenant' }: { initialTab?: 'tenant' | 'users' } = {}) {
   const { request, session } = useAdminApi();
+  const [tab, setTab] = useState<'tenant' | 'users'>(initialTab);
   const [data, setData] = useState<TenantOverview | null>(null);
   const [message, setMessage] = useState('');
   const [domainInstruction, setDomainInstruction] = useState<{
@@ -153,13 +155,28 @@ export function TenancyStudio() {
         <div className="admin-toolbar">
           <div>
             <p className="eyebrow">CAP-001 · CAP-006</p>
-            <h2>{data.tenant.display_name}</h2>
+            <h2>{tab === 'users' ? 'Users & Access Control' : data.tenant.display_name}</h2>
             <p>
               Workspace <strong>{data.tenant.slug}</strong> · tenant role{' '}
               <strong>{data.workspaceRole}</strong>
             </p>
           </div>
-          <span className="status-pill">{data.tenant.status}</span>
+          <div className="finance-page-actions">
+            <button
+              type="button"
+              className={`button ${tab === 'tenant' ? 'primary' : 'secondary'}`}
+              onClick={() => setTab('tenant')}
+            >
+              Institutes & Structure
+            </button>
+            <button
+              type="button"
+              className={`button ${tab === 'users' ? 'primary' : 'secondary'}`}
+              onClick={() => setTab('users')}
+            >
+              Users & Access
+            </button>
+          </div>
         </div>
         <div className="dashboard-stats">
           <div className="dashboard-stat">
@@ -187,8 +204,10 @@ export function TenancyStudio() {
         </p>
       </section>
 
-      <form
-        className="admin-panel admin-form"
+      {tab === 'tenant' && (
+        <>
+          <form
+            className="admin-panel admin-form"
         onSubmit={(event) =>
           submit(
             event,
@@ -521,7 +540,7 @@ export function TenancyStudio() {
           {data.domains.map((domain) => (
             <div className="record-row" key={domain.id}>
               <strong>{domain.hostname}</strong>
-              <span className="status-pill">{domain.status}</span>
+              <span className={financialStatusClass(domain.status)}>{domain.status}</span>
               {domain.status === 'pending' && owner ? (
                 <button
                   type="button"
@@ -545,7 +564,11 @@ export function TenancyStudio() {
           ))}
         </form>
       </section>
+        </>
+      )}
 
+      {tab === 'users' && (
+        <>
       <section className="admin-panel">
         <p className="eyebrow">TEN-06 · Workspace memberships</p>
         <h2>Team Access & Finance RBAC</h2>
@@ -639,7 +662,7 @@ export function TenancyStudio() {
                   </td>
                   <td>{member.branch_id ? 'Campus-scoped' : 'Workspace-wide'}</td>
                   <td>
-                    <span className="status-pill">{member.status}</span>
+                    <span className={financialStatusClass(member.status)}>{member.status}</span>
                   </td>
                   {owner && (
                     <td>
@@ -830,6 +853,8 @@ export function TenancyStudio() {
           ))}
         </section>
       </section>
+        </>
+      )}
     </>
   );
 }

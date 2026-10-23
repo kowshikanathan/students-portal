@@ -7,6 +7,12 @@ const config: NextConfig = {
   reactStrictMode: true,
   outputFileTracingRoot: path.resolve(__dirname, '../..'),
   async rewrites() {
+    const isPreview =
+      process.env.REFERENCE_READONLY_PREVIEW === 'true' ||
+      process.env.JODO_READONLY_PREVIEW === 'true';
+    if (isPreview) {
+      return [{ source: '/media/:path*', destination: `${api}/v1/media/:path*` }];
+    }
     return [
       { source: '/api/:path*', destination: `${api}/:path*` },
       { source: '/media/:path*', destination: `${api}/v1/media/:path*` },

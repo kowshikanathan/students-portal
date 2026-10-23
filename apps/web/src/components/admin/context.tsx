@@ -1,6 +1,7 @@
 'use client';
 import { createContext, useContext } from 'react';
 import { api } from '@/lib/client';
+import { financialStatusClass } from './financial-status';
 export type Session = {
   user: { id: string; email: string; role: string };
   tenant: {
@@ -78,7 +79,15 @@ export function DataTable({
             <tr key={r.id || r.key || n}>
               {columns.map(([k]) => (
                 <td key={k}>
-                  {typeof r[k] === 'object' ? JSON.stringify(r[k]) : String(r[k] ?? '—')}
+                  {k === 'status' || k.endsWith('_status') ? (
+                    <span className={financialStatusClass(r[k])}>
+                      {String(r[k] ?? '—').replaceAll('_', ' ')}
+                    </span>
+                  ) : typeof r[k] === 'object' ? (
+                    JSON.stringify(r[k])
+                  ) : (
+                    String(r[k] ?? '—')
+                  )}
                 </td>
               ))}
               {actions && <td>{actions(r)}</td>}

@@ -137,15 +137,34 @@ export function FeePlanStudio() {
   async function load() {
     try {
       const [overview, academic, payerRows, scheduleRows] = await Promise.all([
-        request<Overview>('admin/fee-plans/overview'),
-        request<any>('admin/academic/overview'),
-        request<any[]>('admin/payers'),
-        request<any[]>('admin/fees/schedules'),
+        request<Overview>('admin/fee-plans/overview').catch(() => null),
+        request<any>('admin/academic/overview').catch(() => null),
+        request<any>('admin/payers').catch(() => []),
+        request<any>('admin/fees/schedules').catch(() => []),
       ]);
-      setData(overview);
-      setStudents(academic.students || []);
-      setPayers(payerRows || []);
-      setSchedules(scheduleRows || []);
+      setData({
+        plans: Array.isArray(overview?.plans) ? overview.plans : [],
+        assignments: Array.isArray(overview?.assignments) ? overview.assignments : [],
+        adjustments: Array.isArray(overview?.adjustments) ? overview.adjustments : [],
+        credits: Array.isArray(overview?.credits) ? overview.credits : [],
+        changes: Array.isArray(overview?.changes) ? overview.changes : [],
+        ageing: Array.isArray(overview?.ageing) ? overview.ageing : [],
+      });
+      setStudents(Array.isArray(academic?.students) ? academic.students : []);
+      setPayers(
+        Array.isArray(payerRows)
+          ? payerRows
+          : Array.isArray(payerRows?.rows)
+            ? payerRows.rows
+            : [],
+      );
+      setSchedules(
+        Array.isArray(scheduleRows)
+          ? scheduleRows
+          : Array.isArray(scheduleRows?.rows)
+            ? scheduleRows.rows
+            : [],
+      );
     } catch (error) {
       setMessage((error as Error).message);
     }
@@ -156,7 +175,10 @@ export function FeePlanStudio() {
   }, [session.tenant.id]);
 
   const activeSchedules = useMemo(
-    () => schedules.filter((schedule) => ['active', 'completed'].includes(schedule.status)),
+    () =>
+      (Array.isArray(schedules) ? schedules : []).filter((schedule) =>
+        ['active', 'completed'].includes(schedule.status),
+      ),
     [schedules],
   );
 
